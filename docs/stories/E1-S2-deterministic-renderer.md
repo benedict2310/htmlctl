@@ -1,7 +1,7 @@
 # E1-S2 - Implement Deterministic Renderer
 
 **Epic:** Epic 1 - Foundations: Repo schema + local render
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0 (Critical Path)
 **Estimated Effort:** 3 days
 **Dependencies:** E1-S1
@@ -24,14 +24,14 @@ As an AI agent managing a website, I want to render a site directory into static
 
 - Base template implementation: a built-in `default` template providing the `<html><head>...</head><body><main>{{content}}</main>...</body></html>` structure
 - Style injection: inject `tokens.css` and `default.css` into `<head>` as `<link>` tags in a stable, deterministic order
-- Script injection: inject `scripts/site.js` at end of `<body>` as `<script>` tag, only if the file is present
+- Script injection: inject a `<script>` tag at end of `<body>` only if `scripts/site.js` exists; the injected `src` points to the content-addressed script output path
 - Component stitching: concatenate component HTML fragments into `<main>` in the order specified by the page's `spec.layout` includes
 - Page title and description injection into `<head>` via `<title>` and `<meta name="description">` tags
 - Output file generation: `/index.html` for route `/`, and `/<route>/index.html` for all other routes (e.g., `/product` produces `/product/index.html`)
-- Asset copying: copy files from `assets/` to the output directory preserving relative paths
-- Style copying: copy CSS files to output directory
-- Script copying: copy `scripts/site.js` to output directory if present
-- Determinism guarantees: stable ordering of all injections, normalized LF line endings, no timestamps or random values in output, content-addressed asset filenames (sha256-based)
+- Asset copying: emit both content-addressed asset files and original `assets/...` compatibility paths in the output directory
+- Style copying: emit content-addressed CSS files and inject those hashed paths in `<link>` tags
+- Script copying: emit content-addressed `site.js` output when present and inject that hashed path in `<script src>`
+- Determinism guarantees: stable ordering of all injections, normalized LF line endings, no timestamps or random values in output, content-addressed static filenames (sha256-based)
 - A `Render(site *model.Site, outputDir string) error` function that produces the complete output directory
 - Clean output: remove and recreate the output directory on each render to avoid stale files
 
@@ -93,13 +93,14 @@ As an AI agent managing a website, I want to render a site directory into static
 - [ ] AC-5: `<head>` contains `<meta name="description">` with the page's `spec.description` value
 - [ ] AC-6: `<head>` contains `<link>` tags for `tokens.css` and `default.css` in that stable order
 - [ ] AC-7: Component HTML fragments appear inside `<main>` in the exact order specified by the page's `spec.layout`
-- [ ] AC-8: `scripts/site.js` is injected as a `<script>` tag at the end of `<body>` when present in the site
+- [ ] AC-8: When `scripts/site.js` is present, a `<script>` tag is injected at the end of `<body>` and its `src` points to the content-addressed script path (`/scripts/site-<hash>.js`)
 - [ ] AC-9: When `scripts/site.js` is absent, no script tag is injected
 - [ ] AC-10: Running `Render()` twice on the same input produces byte-identical output (determinism)
 - [ ] AC-11: All output files use LF line endings (no CRLF)
 - [ ] AC-12: Asset files are copied to the output directory with content-addressed filenames (sha256-based)
 - [ ] AC-13: CSS files are copied to the output directory and link tags reference the correct paths
 - [ ] AC-14: Output directory is cleaned before each render (no stale files from previous runs)
+- [ ] AC-15: Asset files also exist at their original `assets/...` paths so existing component HTML references (for example `/assets/logo.svg`) remain valid without HTML rewriting
 
 ## 7. Verification Plan
 
@@ -110,10 +111,11 @@ As an AI agent managing a website, I want to render a site directory into static
 - [ ] Unit test: title and description injection into head
 - [ ] Unit test: style link injection order (tokens.css before default.css)
 - [ ] Unit test: component stitching order matches layout spec
-- [ ] Unit test: script injection present/absent based on site.js existence
+- [ ] Unit test: script injection present/absent based on site.js existence and injected path uses hashed filename
 - [ ] Determinism test: render same site twice to separate output dirs, compare all files byte-for-byte
 - [ ] Unit test: LF normalization strips CR characters
 - [ ] Unit test: content-addressed asset filename uses sha256 of file content
+- [ ] Integration test: original asset compatibility paths (for example `assets/logo.svg`) are present alongside hashed outputs
 - [ ] Integration test: multi-page site produces correct directory structure (index.html + route/index.html)
 
 ### Manual Tests

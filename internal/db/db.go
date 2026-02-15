@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -44,14 +45,19 @@ func Open(opts Options) (*sql.DB, error) {
 	}
 
 	cleanPath := filepath.Clean(opts.Path)
-	dsnParts := []string{
-		fmt.Sprintf("_pragma=foreign_keys(%d)", 1),
-		fmt.Sprintf("_pragma=busy_timeout(%d)", opts.BusyTimeoutMS),
-	}
+	values := url.Values{}
+	values.Add("_pragma", "foreign_keys(1)")
+	values.Add("_pragma", fmt.Sprintf("busy_timeout(%d)", opts.BusyTimeoutMS))
 	if opts.EnableWAL {
-		dsnParts = append(dsnParts, "_pragma=journal_mode(WAL)")
+		values.Add("_pragma", "journal_mode(WAL)")
 	}
-	dsn := fmt.Sprintf("file:%s?%s", cleanPath, strings.Join(dsnParts, "&"))
+
+	dsnURL := url.URL{
+		Scheme:   "file",
+		Path:     filepath.ToSlash(cleanPath),
+		RawQuery: values.Encode(),
+	}
+	dsn := dsnURL.String()
 
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {

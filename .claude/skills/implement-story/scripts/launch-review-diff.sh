@@ -3,7 +3,7 @@
 # Launches a code review subagent based on a specific commit range.
 # Use this when the feature branch is already merged or deleted.
 #
-# Usage: ./launch-review-diff.sh <story-path> <from-commit> <to-commit> [--agent pi|codex] [--quiet|--verbose]
+# Usage: ./launch-review-diff.sh <story-path> <from-commit> <to-commit> [--agent pi|codex] [--quiet|--verbose] [--timeout-seconds N]
 #
 # This script:
 # 1. Loads the code review prompt from references/
@@ -12,6 +12,51 @@
 # 4. Saves output to docs/review-logs/
 
 set -e
+set -o pipefail
+
+run_with_timeout() {
+    local timeout="$1"
+    shift
+
+    if [ "$timeout" -eq 0 ]; then
+        "$@"
+        return $?
+    fi
+
+    local timeout_marker
+    timeout_marker=$(mktemp)
+    rm -f "$timeout_marker"
+
+    "$@" &
+    local cmd_pid=$!
+
+    (
+        sleep "$timeout"
+        echo "timeout" > "$timeout_marker"
+        kill -TERM "$cmd_pid" 2>/dev/null || true
+        sleep 2
+        kill -KILL "$cmd_pid" 2>/dev/null || true
+    ) &
+    local timer_pid=$!
+
+    local cmd_status=0
+    set +e
+    wait "$cmd_pid"
+    cmd_status=$?
+    set -e
+
+    kill -TERM "$timer_pid" 2>/dev/null || true
+    wait "$timer_pid" 2>/dev/null || true
+
+    if [ -f "$timeout_marker" ]; then
+        rm -f "$timeout_marker"
+        echo "Error: review timed out after ${timeout}s; terminating agent process." >&2
+        return 124
+    fi
+
+    rm -f "$timeout_marker"
+    return "$cmd_status"
+}
 
 # Validate input
 STORY="$1"
@@ -19,6 +64,7 @@ FROM_COMMIT="$2"
 TO_COMMIT="$3"
 AGENT="pi"
 QUIET=0
+TIMEOUT_SECONDS="${REVIEW_TIMEOUT_SECONDS:-900}"
 
 shift 3 || true
 while [ $# -gt 0 ]; do
@@ -35,8 +81,12 @@ while [ $# -gt 0 ]; do
             QUIET=0
             shift
             ;;
+        --timeout-seconds)
+            TIMEOUT_SECONDS="$2"
+            shift 2
+            ;;
         -h|--help)
-            echo "Usage: $0 <story-path> <from-commit> <to-commit> [--agent pi|codex] [--quiet|--verbose]"
+            echo "Usage: $0 <story-path> <from-commit> <to-commit> [--agent pi|codex] [--quiet|--verbose] [--timeout-seconds N]"
             exit 0
             ;;
         *)
@@ -46,8 +96,13 @@ while [ $# -gt 0 ]; do
 done
 
 if [ -z "$STORY" ] || [ -z "$FROM_COMMIT" ] || [ -z "$TO_COMMIT" ]; then
-    echo "Usage: $0 <story-path> <from-commit> <to-commit> [--agent pi|codex] [--quiet|--verbose]"
+    echo "Usage: $0 <story-path> <from-commit> <to-commit> [--agent pi|codex] [--quiet|--verbose] [--timeout-seconds N]"
     echo "Example: $0 docs/stories/foundations/F.07-OVERLAY-WINDOW.md origin/main HEAD"
+    exit 1
+fi
+
+if ! [[ "$TIMEOUT_SECONDS" =~ ^[0-9]+$ ]]; then
+    echo "Error: --timeout-seconds must be a non-negative integer."
     exit 1
 fi
 
@@ -117,6 +172,7 @@ else
     echo "Range:   $FROM_COMMIT..$TO_COMMIT"
     echo "Files:   $FILES_CHANGED changed"
     echo "Log:     $LOG_FILE"
+    echo "Timeout: ${TIMEOUT_SECONDS}s (0 disables timeout)"
     echo "=========================================="
     echo ""
 fi
@@ -167,22 +223,31 @@ PROMPT_END
     echo "Story:     $STORY"
     echo "Range:     $FROM_COMMIT..$TO_COMMIT"
     echo "Files:     $FILES_CHANGED changed"
+    echo "Timeout:   ${TIMEOUT_SECONDS}s"
     echo "Timestamp: $(date)"
     echo "=========================================="
     echo ""
 } > "$LOG_FILE"
 
 if [ "$AGENT" = "pi" ]; then
-    if [ "$QUIET" -eq 1 ]; then
-        pi --model gemini-3-pro-high --print --no-session "@$TEMP_PROMPT" >> "$LOG_FILE" 2>&1
-    else
-        pi --model gemini-3-pro-high --print --no-session "@$TEMP_PROMPT" 2>&1 | tee -a "$LOG_FILE"
+    AGENT_CMD=(pi --model gemini-3-pro-high --print --no-session "@$TEMP_PROMPT")
+else
+    AGENT_CMD=(codex exec --sandbox danger-full-access "$(cat "$TEMP_PROMPT")")
+fi
+
+if [ "$QUIET" -eq 1 ]; then
+    if ! run_with_timeout "$TIMEOUT_SECONDS" "${AGENT_CMD[@]}" >> "$LOG_FILE" 2>&1; then
+        echo "Review failed or timed out. Check log: $LOG_FILE"
+        exit 1
     fi
-elif [ "$AGENT" = "codex" ]; then
-    if [ "$QUIET" -eq 1 ]; then
-        codex exec --sandbox danger-full-access "$(cat "$TEMP_PROMPT")" >> "$LOG_FILE" 2>&1
-    else
-        codex exec --sandbox danger-full-access "$(cat "$TEMP_PROMPT")" 2>&1 | tee -a "$LOG_FILE"
+else
+    if ! run_with_timeout "$TIMEOUT_SECONDS" "${AGENT_CMD[@]}" 2>&1 | tee -a "$LOG_FILE"; then
+        echo ""
+        echo "=========================================="
+        echo "Review Failed or Timed Out"
+        echo "=========================================="
+        echo "Check the review log: $LOG_FILE"
+        exit 1
     fi
 fi
 

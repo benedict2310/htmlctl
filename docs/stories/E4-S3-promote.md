@@ -26,10 +26,11 @@ As an operator or AI agent, I want to promote a verified staging release to prod
 - Server API endpoint: `POST /api/v1/websites/{name}/promote` with JSON body `{"from": "<env>", "to": "<env>"}`
 - Server promotion logic:
   - Resolve the active release in the source environment
-  - Copy release artifact directory from source env release store to target env release store (or hard-link if same filesystem)
+  - Copy/link release artifact content files from source env release store to target env release store (hard-link when same filesystem; byte-copy fallback otherwise)
+  - Regenerate target release metadata (new release ID, target env) and persist lineage fields (`source_release_id`, `source_env`) without hard-linking metadata files
   - Verify output hash equality between source and target copies (SHA-256 of all output files)
   - Atomically activate the promoted release in the target environment (symlink switch)
-- Hash verification: compute SHA-256 manifest of all files in the promoted release directory and compare against the source
+- Hash verification: compare against stored source manifest from E2-S4 when available; otherwise compute a deterministic source manifest on demand and compare
 - Audit log entry for promotion (actor, timestamp, source env, target env, release ID, hash)
 - CLI output: confirmation showing release ID, source env, target env, and hash verification result
 - Error handling: clear errors for missing source release, hash mismatch, target env not found
@@ -46,9 +47,9 @@ As an operator or AI agent, I want to promote a verified staging release to prod
 
 - **Server component (htmlservd):** New HTTP handler for the promote endpoint. Orchestrates the full promotion pipeline: resolve source release, copy/link artifacts, verify hashes, activate in target, write audit log.
 - **CLI component (htmlctl):** New `promote` command using the remote command framework from E3-S3. Sends HTTP POST and displays results.
-- **Storage:** Reads from source env's `releases/<id>/` directory. Writes to target env's `releases/<id>/` directory. Modifies target env's `current` symlink. On the same filesystem, `os.Link` (hard link) is preferred over `io.Copy` for performance and disk efficiency. Falls back to byte copy if hard link fails (cross-device).
+- **Storage:** Reads from source env's `releases/<id>/` directory. Writes to target env's `releases/<id>/` directory. Modifies target env's `current` symlink. On the same filesystem, `os.Link` is preferred for content files and falls back to byte copy on failure. Metadata files for the target release are always regenerated or copied+rewritten (never hard-linked) to avoid cross-environment mutation.
 - **Concurrency:** Must acquire per-environment locks on both source (read lock conceptually, but shared mutex suffices) and target (write lock) to prevent races. Lock ordering: always acquire source lock before target lock to prevent deadlocks.
-- **Hash verification:** After copy/link, walk the target release directory and compute SHA-256 for every file. Compare against the source release's hash manifest (stored during E2-S4 release build). This is the critical safety guarantee.
+- **Hash verification:** After copy/link, walk the target release directory and compute SHA-256 for every file. Compare against the stored source release manifest when available; otherwise recompute source manifest from source files and compare. This is the critical safety guarantee.
 - **Audit logging:** Required per PRD section 9. Entry includes: actor, timestamp, action (`promote`), source env, target env, release ID, output hash.
 
 ### References
@@ -111,6 +112,9 @@ As an operator or AI agent, I want to promote a verified staging release to prod
 - [ ] AC-9: Hard links are used when source and target are on the same filesystem; byte copy is used as fallback
 - [ ] AC-10: CLI output confirms promotion: displays release ID, source env, target env, file count, and hash verification status
 - [ ] AC-11: Concurrent promote and apply operations on the same target environment are serialized via per-environment locking
+- [ ] AC-12: Target release metadata is environment-specific (new target release ID + target env) and includes lineage fields `source_release_id` and `source_env`
+- [ ] AC-13: Promotion works when no precomputed source manifest is present by computing source/target manifests on demand before verification
+- [ ] AC-14: Target metadata files are not hard links to source metadata files
 
 ## 7. Verification Plan
 
@@ -128,6 +132,9 @@ As an operator or AI agent, I want to promote a verified staging release to prod
 - [ ] Unit test: HTTP handler returns 404 for unknown website or environment
 - [ ] Unit test: HTTP handler returns 409 when source has no active release
 - [ ] Integration test: Full round-trip — apply to staging, promote to prod, verify prod serves identical content
+- [ ] Unit test: target metadata includes `source_release_id`/`source_env` and target-specific release identifiers
+- [ ] Unit test: modifying target metadata does not modify source metadata (proves metadata is not hard-linked)
+- [ ] Unit test: promotion succeeds when stored source manifest is absent by recomputing manifests
 
 ### Manual Tests
 

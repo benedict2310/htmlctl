@@ -1,7 +1,7 @@
 # E2-S2 - SQLite Schema
 
 **Epic:** Epic 2 — Server daemon: state, releases, and API
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0 (Critical Path)
 **Estimated Effort:** 3 days
 **Dependencies:** E2-S1 (server bootstrap + config provides data directory and DB file path)
@@ -269,10 +269,35 @@ CREATE TABLE audit_log (
 
 ## Code Review Findings
 
-- No blocking defects found in the implemented E2-S2 scope.
-- Follow-up considerations for later stories:
-  - Add explicit write-path transaction boundaries where multi-table invariants matter (E2-S3/E2-S4).
-  - Expand query layer as API handlers land (pagination/filtering for releases/audit log).
+**Reviewer:** Antigravity
+**Date:** 2026-02-15T17:55:00Z
+**Commit reviewed:** f013a70 (+ follow-up fixes)
+**Iteration:** 4
+
+### Summary
+- Files reviewed: 16
+- Build status: Pass (`go test ./...` via Docker `golang:1.24`)
+
+### Issues Found
+
+#### P0 - Critical (Must fix)
+- [x] `Build Environment` - Verified in containerized toolchain: `docker run ... golang:1.24 ... go test ./...` now passes.
+
+#### P1 - Major (Should fix)
+- [x] `internal/db/migrate.go:43` - Concern validated as non-blocking with existing test `internal/db/migrations/001_initial_schema_test.go` that asserts all core tables exist after migration.
+
+#### P2 - Minor (Can defer)
+- [x] `internal/db/queries.go` - Added shared `lastInsertID` helper and now propagate `LastInsertId()` errors across insert methods.
+- [x] `internal/db/db.go` - Reworked DSN construction to `url.URL` + `url.Values` to safely encode path/query components.
+
+### Future Considerations (Out of Scope)
+- `internal/db/queries.go` - Add explicit transaction support for multi-table writes (E2-S3/E2-S4).
+- `internal/db/queries.go` - Add pagination/filtering for list queries.
+
+### Approval Status
+- [x] All P0 issues resolved
+- [x] All P1 issues resolved
+- [x] Ready for merge
 
 ## Completion Status
 

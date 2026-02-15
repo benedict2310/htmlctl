@@ -1,7 +1,7 @@
 # E1-S4 - Local CLI Commands (render + serve)
 
 **Epic:** Epic 1 - Foundations: Repo schema + local render
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0 (Critical Path)
 **Estimated Effort:** 2 days
 **Dependencies:** E1-S1, E1-S2, E1-S3

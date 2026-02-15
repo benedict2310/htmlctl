@@ -1,7 +1,7 @@
 # E1-S3 - Component Validation Engine
 
 **Epic:** Epic 1 - Foundations: Repo schema + local render
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0 (Critical Path)
 **Estimated Effort:** 2 days
 **Dependencies:** E1-S1
@@ -28,8 +28,9 @@ As an AI agent editing website components, I want clear validation errors when m
 - **Script disallow rule**: component HTML must not contain `<script>` tags anywhere in the tree; JavaScript is only permitted via `scripts/site.js`
 - **Validation result type**: a structured result containing the component name, pass/fail status, and a list of diagnostic messages with severity (error/warning)
 - **Batch validation**: validate all components in a site, collecting all errors before returning (not fail-fast on first error)
-- **A `ValidateComponent(component *model.Component) []ValidationError` function** for single-component validation
+- **A `ValidateComponent(component *model.Component, isNavigable bool) []ValidationError` function** for single-component validation with usage context
 - **A `ValidateAllComponents(site *model.Site) []ValidationError` function** for batch validation across the entire site
+- **Usage-aware batch validation**: `ValidateAllComponents` first computes component usage from page layouts to determine which components are anchor-navigable before applying anchor-ID rules
 - **Clear, actionable error messages** that include the component name, the rule violated, and what to fix
 
 ### Out of Scope
@@ -55,7 +56,7 @@ As an AI agent editing website components, I want clear validation errors when m
 
 ### 5.1 Files to Create
 
-- `pkg/validator/validator.go` - Core validation orchestration: ValidateComponent, ValidateAllComponents, ValidationError type
+- `pkg/validator/validator.go` - Core validation orchestration: ValidateComponent (with usage context), ValidateAllComponents, ValidationError type
 - `pkg/validator/rules.go` - Individual rule implementations: single root, tag allowlist, anchor ID, no scripts
 - `pkg/validator/config.go` - Default configuration (allowed root tags list) with option to override
 
@@ -94,26 +95,28 @@ As an AI agent editing website components, I want clear validation errors when m
 - [ ] AC-9: Error messages include the component name, the rule that was violated, and a human-readable description of how to fix it
 - [ ] AC-10: The root tag allowlist defaults to `section`, `header`, `footer`, `main`, `nav`, `article`, `div` and can be overridden programmatically
 - [ ] AC-11: Valid component HTML with nested elements, attributes, and whitespace passes all rules without false positives
+- [ ] AC-12: `ValidateAllComponents` derives navigability from `site.Pages[*].spec.layout[*].include` and only applies anchor-ID checks to referenced components
 
 ## 7. Verification Plan
 
 ### Automated Tests
 
 - [ ] Unit test: single root `<section>` passes validation
-- [ ] Unit test: single root `<div>` passes validation
+- [ ] Unit test: single root `<div>` passes validation when `isNavigable=false`
 - [ ] Unit test: single root `<header>` passes validation
 - [ ] Unit test: two sibling `<section>` elements fails with multi-root error
 - [ ] Unit test: root `<span>` fails with tag allowlist error
 - [ ] Unit test: root `<p>` fails with tag allowlist error
 - [ ] Unit test: nested `<script>` tag at depth 3 fails with script disallow error
 - [ ] Unit test: `<script>` as direct child of root fails with script disallow error
-- [ ] Unit test: component named "pricing" with root `<section id="pricing">` passes anchor ID check
-- [ ] Unit test: component named "pricing" with root `<section>` (no id) fails anchor ID check
-- [ ] Unit test: component named "pricing" with root `<section id="wrong">` fails with expected vs actual id
+- [ ] Unit test: component named "pricing" with root `<section id="pricing">` passes anchor ID check when `isNavigable=true`
+- [ ] Unit test: component named "pricing" with root `<section>` (no id) fails anchor ID check when `isNavigable=true`
+- [ ] Unit test: component named "pricing" with root `<section id="wrong">` fails with expected vs actual id when `isNavigable=true`
 - [ ] Unit test: empty HTML content fails with zero-root error
 - [ ] Unit test: whitespace-only HTML content fails with zero-root error
 - [ ] Unit test: HTML comments at root level are ignored (do not count as root elements)
 - [ ] Integration test: batch validate a site with 3 valid and 2 invalid components, verify 2 errors returned
+- [ ] Unit test: `ValidateAllComponents` computes usage index from page layouts and passes `isNavigable=true` only for referenced components
 - [ ] Unit test: custom allowlist overrides the default (e.g., adding `<aside>` to the list)
 
 ### Manual Tests

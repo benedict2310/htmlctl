@@ -19,8 +19,7 @@ func (q *Queries) InsertWebsite(ctx context.Context, in WebsiteRow) (int64, erro
 	if err != nil {
 		return 0, fmt.Errorf("insert website: %w", err)
 	}
-	id, _ := res.LastInsertId()
-	return id, nil
+	return lastInsertID("insert website", res)
 }
 
 func (q *Queries) GetWebsiteByName(ctx context.Context, name string) (WebsiteRow, error) {
@@ -38,8 +37,7 @@ func (q *Queries) InsertEnvironment(ctx context.Context, in EnvironmentRow) (int
 	if err != nil {
 		return 0, fmt.Errorf("insert environment: %w", err)
 	}
-	id, _ := res.LastInsertId()
-	return id, nil
+	return lastInsertID("insert environment", res)
 }
 
 func (q *Queries) InsertPage(ctx context.Context, in PageRow) (int64, error) {
@@ -47,8 +45,7 @@ func (q *Queries) InsertPage(ctx context.Context, in PageRow) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("insert page: %w", err)
 	}
-	id, _ := res.LastInsertId()
-	return id, nil
+	return lastInsertID("insert page", res)
 }
 
 func (q *Queries) InsertComponent(ctx context.Context, in ComponentRow) (int64, error) {
@@ -56,8 +53,7 @@ func (q *Queries) InsertComponent(ctx context.Context, in ComponentRow) (int64, 
 	if err != nil {
 		return 0, fmt.Errorf("insert component: %w", err)
 	}
-	id, _ := res.LastInsertId()
-	return id, nil
+	return lastInsertID("insert component", res)
 }
 
 func (q *Queries) InsertStyleBundle(ctx context.Context, in StyleBundleRow) (int64, error) {
@@ -65,8 +61,7 @@ func (q *Queries) InsertStyleBundle(ctx context.Context, in StyleBundleRow) (int
 	if err != nil {
 		return 0, fmt.Errorf("insert style bundle: %w", err)
 	}
-	id, _ := res.LastInsertId()
-	return id, nil
+	return lastInsertID("insert style bundle", res)
 }
 
 func (q *Queries) InsertAsset(ctx context.Context, in AssetRow) (int64, error) {
@@ -74,8 +69,7 @@ func (q *Queries) InsertAsset(ctx context.Context, in AssetRow) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("insert asset: %w", err)
 	}
-	id, _ := res.LastInsertId()
-	return id, nil
+	return lastInsertID("insert asset", res)
 }
 
 func (q *Queries) InsertRelease(ctx context.Context, in ReleaseRow) error {
@@ -91,6 +85,13 @@ func (q *Queries) InsertAuditLog(ctx context.Context, in AuditLogRow) (int64, er
 	if err != nil {
 		return 0, fmt.Errorf("insert audit log: %w", err)
 	}
-	id, _ := res.LastInsertId()
+	return lastInsertID("insert audit log", res)
+}
+
+func lastInsertID(op string, res sql.Result) (int64, error) {
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("%s last insert id: %w", op, err)
+	}
 	return id, nil
 }

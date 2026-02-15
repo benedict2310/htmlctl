@@ -29,6 +29,8 @@ This repository currently contains product and implementation specifications. Ru
 
 ## Contributor Workflow
 
+Prerequisite: install Go (1.24+ recommended) so `go`, `gofmt`, and tests are available in PATH.
+
 1. Read `docs/technical-spec.md` and the relevant story in `docs/stories/`.
 2. Validate story quality before implementation:
    - `python3 .claude/skills/write-story/scripts/story_lint.py <story-file> --strict`

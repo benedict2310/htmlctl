@@ -24,7 +24,7 @@ As an operator or AI agent, I want to instantly roll back an environment to its 
 
 - CLI command: `htmlctl rollout undo website/<name> --context <ctx>`
 - Server API endpoint: `POST /api/v1/websites/{name}/envs/{env}/rollback`
-- Server logic: resolve the previous release from history, atomically switch the `current` symlink to point to it
+- Server logic: resolve the previous release from history, atomically switch the `current` symlink to point to it, and persist the new active release in `environments.active_release_id`
 - Safety checks before rollback:
   - Verify a previous release exists (at least 2 releases in history)
   - Verify the previous release directory still exists on disk
@@ -43,9 +43,9 @@ As an operator or AI agent, I want to instantly roll back an environment to its 
 
 ## 4. Architecture Alignment
 
-- **Server component (htmlservd):** New HTTP handler for the rollback endpoint. Uses the release store to look up the previous release, then performs an atomic symlink switch on the filesystem. Writes an audit log entry via the audit log module from E2-S5.
+- **Server component (htmlservd):** New HTTP handler for the rollback endpoint. Uses the release store to look up the previous release from the currently active release, performs an atomic symlink switch on the filesystem, updates `environments.active_release_id`, and writes an audit log entry via E2-S5.
 - **CLI component (htmlctl):** New `rollout undo` subcommand using the remote command framework from E3-S3. Sends HTTP POST to the server and displays the result.
-- **Storage:** Reads from `releases` table to find the previous release. Modifies only the `current` symlink in `/var/lib/htmlservd/websites/{name}/envs/{env}/current`. No files are copied, moved, or rebuilt.
+- **Storage:** Reads from `releases` to find the release immediately before the currently active one and updates `environments.active_release_id` after a successful switch. Modifies the `current` symlink in `/var/lib/htmlservd/websites/{name}/envs/{env}/current`. No files are copied, moved, or rebuilt.
 - **Concurrency:** Rollback must acquire the same per-environment lock used by the release builder (E2-S4) to prevent races between concurrent apply and rollback operations. The lock is held only for the duration of the symlink switch (microseconds).
 - **Atomic symlink switch:** Create a temporary symlink (`current.tmp` -> target release), then `os.Rename("current.tmp", "current")`. On Linux/macOS, rename of a symlink is atomic.
 - **Audit logging:** Required per PRD section 9. Entry includes: actor, timestamp, environment, action (`rollback`), from-release ID, to-release ID.
@@ -68,19 +68,17 @@ As an operator or AI agent, I want to instantly roll back an environment to its 
 - `internal/cli/cmd/rollout_undo_test.go` — Unit tests for the CLI command
 - `internal/release/rollback.go` — Core rollback logic: resolve previous release, atomic symlink switch, audit log
 - `internal/release/rollback_test.go` — Unit tests for rollback logic
-- `internal/release/symlink.go` — Atomic symlink switch helper (shared with release builder)
-- `internal/release/symlink_test.go` — Tests for atomic symlink operations
 
 ### 5.2 Files to Modify
 
 - `internal/server/routes.go` — Register the rollback endpoint
 - `internal/cli/cmd/rollout.go` — Register `undo` as a subcommand of `rollout`
-- `internal/store/release_store.go` — Add `GetPreviousRelease(websiteName, envName string) (*Release, error)` method (returns the release before the currently active one)
+- `internal/store/release_store.go` — Add `GetPreviousRelease(websiteName, envName string) (*Release, error)` method (must resolve predecessor of the currently active release) and `SetActiveRelease(websiteName, envName, releaseID string) error`
+- `internal/release/symlink.go` — Reuse existing atomic symlink helper from E2-S4 (extend only if required)
 
 ### 5.3 Tests to Add
 
-- `internal/release/rollback_test.go` — Test successful rollback switches symlink, test rollback with no previous release returns error, test rollback with missing release directory returns error
-- `internal/release/symlink_test.go` — Test atomic symlink switch creates correct target, test concurrent symlink switches do not corrupt state
+- `internal/release/rollback_test.go` — Test successful rollback switches symlink, test rollback with no previous release returns error, test rollback with missing release directory returns error, and repeated rollback (`V3 -> V2 -> V1`) with DB/symlink active-state consistency checks
 - `internal/server/handler_rollback_test.go` — Test 200 response on successful rollback, test 409 when no previous release, test 404 for unknown website/env
 - `internal/cli/cmd/rollout_undo_test.go` — Test output formatting, error handling
 
@@ -103,6 +101,8 @@ As an operator or AI agent, I want to instantly roll back an environment to its 
 - [ ] AC-7: The symlink switch is atomic — concurrent readers never see a broken or intermediate state
 - [ ] AC-8: Rollback acquires the per-environment lock, preventing races with concurrent apply operations
 - [ ] AC-9: CLI output confirms the rollback: displays the old active release ID and the new active release ID
+- [ ] AC-10: After rollback, `environments.active_release_id` is updated to the same release targeted by the `current` symlink
+- [ ] AC-11: Repeated rollback commands follow active state (`V3 -> V2 -> V1`) rather than oscillating on stale history reads
 
 ## 7. Verification Plan
 
@@ -116,6 +116,8 @@ As an operator or AI agent, I want to instantly roll back an environment to its 
 - [ ] Unit test: HTTP handler returns 200 with release IDs on success
 - [ ] Unit test: HTTP handler returns 409 Conflict when no previous release exists
 - [ ] Integration test: Full round-trip — apply two releases, rollback, verify `current` symlink target
+- [ ] Integration test: apply three releases, run rollback twice, verify state transitions `V3 -> V2 -> V1`
+- [ ] Integration test: after each rollback, `environments.active_release_id` equals the release currently targeted by `current`
 
 ### Manual Tests
 

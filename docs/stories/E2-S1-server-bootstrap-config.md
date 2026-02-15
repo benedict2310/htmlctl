@@ -1,7 +1,7 @@
 # E2-S1 - htmlservd Bootstrap + Config
 
 **Epic:** Epic 2 — Server daemon: state, releases, and API
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0 (Critical Path)
 **Estimated Effort:** 3 days
 **Dependencies:** E1-S1 (shared resource model / schemas)

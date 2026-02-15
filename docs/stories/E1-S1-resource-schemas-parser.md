@@ -1,7 +1,7 @@
 # E1-S1 - Define Resource Schemas and Parser
 
 **Epic:** Epic 1 - Foundations: Repo schema + local render
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0 (Critical Path)
 **Estimated Effort:** 2 days
 **Dependencies:** None
@@ -23,18 +23,19 @@ As an AI agent operating via CLI, I want a site directory parsed into strongly-t
 ### In Scope
 
 - Go structs for `Website` resource with fields: `apiVersion`, `kind`, `metadata.name`, `spec.defaultStyleBundle`, `spec.baseTemplate`
-- Go structs for `Page` resource with fields: `apiVersion`, `kind`, `metadata.name`, `spec.route`, `spec.title`, `spec.description`, `spec.layout` (ordered list of `include` references)
-- Go struct for `Component` with fields: `name`, `scope` (default: global), `html` (file content as string)
+- Go structs for `Page` resource with fields: `apiVersion`, `kind`, `metadata.name`, `spec.route`, `spec.title`, `spec.description`, `spec.layout` (ordered list of objects shaped as `[{include: string}]`)
+- Go struct for `Component` with fields: `name`, `scope` (hardcoded to `global` in v1), `html` (file content as string)
 - Go struct for `StyleBundle` representing `styles/tokens.css` and `styles/default.css`
 - YAML parsing of `website.yaml` and `pages/*.page.yaml` using `gopkg.in/yaml.v3`
 - Component file discovery: read all `.html` files from `components/` directory, map by filename (without extension) to Component structs
 - Style file discovery: read `styles/tokens.css` and `styles/default.css`
 - Script file discovery: check for optional `scripts/site.js`
-- Asset file discovery: list files in `assets/` directory
+- Asset file discovery: recursively list files in `assets/` directory
 - A `Site` aggregate struct that holds the parsed Website, all Pages, all Components, StyleBundle, optional script path, and asset list
 - A `LoadSite(dirPath string) (*Site, error)` function that orchestrates full parsing of a site directory
 - Validation that mandatory files exist: `website.yaml`, at least one page file, referenced components exist
 - Validation that all `include` references in page layouts resolve to known components
+- Validation that page routes are normalized deterministically (leading slash required, no trailing slash except `/`)
 
 ### Out of Scope
 
@@ -87,7 +88,7 @@ As an AI agent operating via CLI, I want a site directory parsed into strongly-t
 ## 6. Acceptance Criteria
 
 - [ ] AC-1: `Website` struct correctly deserializes from `website.yaml` with fields `metadata.name`, `spec.defaultStyleBundle`, `spec.baseTemplate`
-- [ ] AC-2: `Page` struct correctly deserializes from `*.page.yaml` files with fields `spec.route`, `spec.title`, `spec.description`, `spec.layout` (list of include references)
+- [ ] AC-2: `Page` struct correctly deserializes from `pages/*.page.yaml` files with fields `spec.route`, `spec.title`, `spec.description`, `spec.layout` (list of objects with `include` key)
 - [ ] AC-3: `Component` structs are populated by reading `.html` files from `components/` directory, with `name` derived from filename and `html` containing file content
 - [ ] AC-4: `StyleBundle` is populated from `styles/tokens.css` and `styles/default.css`
 - [ ] AC-5: `LoadSite()` returns error if `website.yaml` is missing
@@ -96,6 +97,8 @@ As an AI agent operating via CLI, I want a site directory parsed into strongly-t
 - [ ] AC-8: `LoadSite()` successfully parses the sample `futurelab`-style site directory into a complete `Site` struct
 - [ ] AC-9: Scripts (`scripts/site.js`) are detected as optional; missing script does not cause an error
 - [ ] AC-10: Assets in `assets/` directory are discovered and listed with original filenames
+- [ ] AC-11: `LoadSite()` returns error if `pages/` contains no valid `*.page.yaml` files
+- [ ] AC-12: `LoadSite()` normalizes routes (leading `/`, trailing slash removed except root `/`) for deterministic downstream matching
 
 ## 7. Verification Plan
 
@@ -103,12 +106,16 @@ As an AI agent operating via CLI, I want a site directory parsed into strongly-t
 
 - [ ] Unit test: parse valid `website.yaml` into Website struct, assert all fields
 - [ ] Unit test: parse valid `*.page.yaml` into Page struct, assert layout includes are ordered correctly
+- [ ] Unit test: parse `spec.layout` as object entries (`- include: header`) rather than plain string list
 - [ ] Unit test: load components from directory, verify name mapping matches filenames
+- [ ] Unit test: asset discovery includes nested files under `assets/` (recursive scan)
 - [ ] Integration test: `LoadSite()` on valid testdata fixture returns fully populated Site with no error
 - [ ] Integration test: `LoadSite()` on fixture with missing component reference returns descriptive error
 - [ ] Integration test: `LoadSite()` on fixture with malformed YAML returns error mentioning the filename
 - [ ] Integration test: `LoadSite()` on fixture missing `website.yaml` returns specific error
 - [ ] Unit test: optional `scripts/site.js` is nil/empty when file does not exist
+- [ ] Integration test: `LoadSite()` fails when `pages/` exists but has no valid `*.page.yaml` files
+- [ ] Unit test: route normalization converts `about/` -> `/about` and preserves `/`
 
 ### Manual Tests
 

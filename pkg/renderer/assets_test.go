@@ -36,5 +36,8 @@ func TestRenderStaticsWritesContentAddressedAssets(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(outDir, rewritten[1:])); err != nil {
 			t.Fatalf("rewritten asset file missing: %s (%v)", rewritten, err)
 		}
+		if _, err := os.Stat(filepath.Join(outDir, original)); err != nil {
+			t.Fatalf("original-path asset file missing: %s (%v)", original, err)
+		}
 	}
 }

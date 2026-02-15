@@ -162,12 +162,21 @@ As an AI agent managing a website, I want to render a site directory into static
 
 ## Implementation Summary
 
-(TBD after implementation.)
+- Implemented deterministic renderer in `pkg/renderer` with:
+  - deterministic page rendering order,
+  - base template composition,
+  - stable stylesheet/script injection,
+  - LF-normalized, atomic output writes.
+- Implemented content-addressed static outputs (styles, script, assets).
+- Compatibility fix: assets are now written in two forms:
+  - hashed path (for deterministic/cache-friendly outputs), and
+  - original path under `assets/` (so existing component HTML references like `/assets/logo.svg` keep working without HTML rewriting).
 
 ## Code Review Findings
 
-(TBD by review agent.)
+- Initial implementation wrote only hashed asset names, which could break hardcoded component asset URLs.
+- Fixed by preserving original asset paths in output while retaining hashed copies.
 
 ## Completion Status
 
-(TBD after merge.)
+- Implemented and validated with renderer unit/integration tests.

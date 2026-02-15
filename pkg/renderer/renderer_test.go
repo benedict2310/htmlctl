@@ -57,6 +57,9 @@ spec:
 	if _, err := os.Stat(filepath.Join(outDir, "product", "index.html")); err != nil {
 		t.Fatalf("missing /product/index.html: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(outDir, "assets", "logo.svg")); err != nil {
+		t.Fatalf("missing original-path asset file: %v", err)
+	}
 
 	rootHTML := readFile(t, filepath.Join(outDir, "index.html"))
 	if !strings.Contains(rootHTML, "<!DOCTYPE html>") || !strings.Contains(rootHTML, "<main>") {

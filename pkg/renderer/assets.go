@@ -65,9 +65,12 @@ func renderStatics(site *model.Site, outputDir string) (renderedStatics, error) 
 		if err != nil {
 			return statics, err
 		}
+		originalRel := filepath.ToSlash(filepath.Join("assets", asset.Path))
+		if err := writeOriginalBytesFile(outputDir, originalRel, content); err != nil {
+			return statics, err
+		}
 
-		originalKey := filepath.ToSlash(filepath.Join("assets", asset.Path))
-		statics.AssetMap[originalKey] = "/" + filepath.ToSlash(assetRel)
+		statics.AssetMap[originalRel] = "/" + filepath.ToSlash(assetRel)
 	}
 
 	return statics, nil
@@ -86,4 +89,12 @@ func writeContentAddressedBytesFile(outputDir, relDir, canonicalName string, con
 		return "", fmt.Errorf("write file %s: %w", path, err)
 	}
 	return relPath, nil
+}
+
+func writeOriginalBytesFile(outputDir, relPath string, content []byte) error {
+	path := filepath.Join(outputDir, filepath.FromSlash(relPath))
+	if err := writeFileAtomic(path, content); err != nil {
+		return fmt.Errorf("write original file %s: %w", path, err)
+	}
+	return nil
 }

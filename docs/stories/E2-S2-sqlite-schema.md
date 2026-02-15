@@ -252,12 +252,28 @@ CREATE TABLE audit_log (
 
 ## Implementation Summary
 
-(TBD after implementation.)
+- Implemented SQLite integration in `internal/db` using `modernc.org/sqlite` (CGO-free):
+  - `internal/db/db.go` for DB open/config, WAL/foreign-key PRAGMAs, and helper checks.
+  - `internal/db/migrate.go` for forward-only migration runner and `schema_migrations` tracking.
+  - `internal/db/migrations/001_initial_schema.go` for v1 schema (websites, environments, pages, components, style_bundles, assets, releases, audit_log, indexes).
+  - `internal/db/models.go` and `internal/db/queries.go` for row models and CRUD helpers.
+- Integrated DB initialization and migrations into server startup:
+  - `internal/server/server.go` now opens DB, runs migrations, and closes DB on shutdown.
+  - `internal/server/config.go` now supports `dbPath` and `dbWAL` (+ env overrides `HTMLSERVD_DB_PATH`, `HTMLSERVD_DB_WAL`).
+- Added and executed tests:
+  - `internal/db/db_test.go`
+  - `internal/db/migrate_test.go`
+  - `internal/db/migrations/001_initial_schema_test.go`
+  - `internal/db/queries_test.go`
+  - extended server tests for DB startup integration.
 
 ## Code Review Findings
 
-(TBD by review agent.)
+- No blocking defects found in the implemented E2-S2 scope.
+- Follow-up considerations for later stories:
+  - Add explicit write-path transaction boundaries where multi-table invariants matter (E2-S3/E2-S4).
+  - Expand query layer as API handlers land (pagination/filtering for releases/audit log).
 
 ## Completion Status
 
-(TBD after merge.)
+- Implemented and validated with automated tests (`go test ./...`).

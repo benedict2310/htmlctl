@@ -2,12 +2,15 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"time"
+
+	dbpkg "github.com/benedict2310/htmlctl/internal/db"
 )
 
 const shutdownTimeout = 10 * time.Second
@@ -17,6 +20,7 @@ type Server struct {
 	logger     *slog.Logger
 	version    string
 	dataPaths  DataPaths
+	db         *sql.DB
 	listener   net.Listener
 	httpServer *http.Server
 	errCh      chan error
@@ -59,8 +63,30 @@ func (s *Server) Start() error {
 	}
 	s.dataPaths = paths
 
+	dbPath := s.cfg.DBPath
+	if dbPath == "" {
+		dbPath = paths.DBPath
+	}
+	sqlDB, err := dbpkg.Open(dbpkg.Options{
+		Path:          dbPath,
+		EnableWAL:     s.cfg.DBWAL,
+		BusyTimeoutMS: 5000,
+		MaxOpenConns:  5,
+		MaxIdleConns:  5,
+	})
+	if err != nil {
+		return err
+	}
+	if err := dbpkg.RunMigrations(context.Background(), sqlDB); err != nil {
+		_ = sqlDB.Close()
+		return err
+	}
+	s.db = sqlDB
+
 	ln, err := net.Listen("tcp", s.cfg.ListenAddr())
 	if err != nil {
+		_ = s.db.Close()
+		s.db = nil
 		return fmt.Errorf("listen on %s: %w", s.cfg.ListenAddr(), err)
 	}
 	s.listener = ln
@@ -72,6 +98,7 @@ func (s *Server) Start() error {
 	s.logger.Info("htmlservd starting",
 		"listen_addr", ln.Addr().String(),
 		"data_dir", s.cfg.DataDir,
+		"db_path", dbPath,
 		"version", s.version,
 	)
 
@@ -105,20 +132,27 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
-	if s.listener == nil {
+	if s.listener == nil && s.db == nil {
 		return nil
 	}
 
 	s.logger.Info("htmlservd shutting down")
-	if err := s.httpServer.Shutdown(ctx); err != nil {
-		return fmt.Errorf("shutdown http server: %w", err)
-	}
+	if s.listener != nil {
+		if err := s.httpServer.Shutdown(ctx); err != nil {
+			return fmt.Errorf("shutdown http server: %w", err)
+		}
 
-	if err, ok := <-s.errCh; ok && err != nil {
-		return fmt.Errorf("http server failed: %w", err)
+		if err, ok := <-s.errCh; ok && err != nil {
+			return fmt.Errorf("http server failed: %w", err)
+		}
+		s.listener = nil
 	}
-
-	s.listener = nil
+	if s.db != nil {
+		if err := s.db.Close(); err != nil {
+			return fmt.Errorf("close sqlite db: %w", err)
+		}
+		s.db = nil
+	}
 	return nil
 }
 

@@ -21,6 +21,8 @@ type Config struct {
 	Port     int    `yaml:"port"`
 	DataDir  string `yaml:"dataDir"`
 	LogLevel string `yaml:"logLevel"`
+	DBPath   string `yaml:"dbPath"`
+	DBWAL    bool   `yaml:"dbWAL"`
 }
 
 func DefaultConfig() Config {
@@ -29,6 +31,8 @@ func DefaultConfig() Config {
 		Port:     DefaultPort,
 		DataDir:  DefaultDataDir,
 		LogLevel: DefaultLogLevel,
+		DBPath:   "",
+		DBWAL:    true,
 	}
 }
 
@@ -60,6 +64,16 @@ func LoadConfig(configPath string) (Config, error) {
 	}
 	if v := strings.TrimSpace(os.Getenv("HTMLSERVD_LOG_LEVEL")); v != "" {
 		cfg.LogLevel = strings.ToLower(v)
+	}
+	if v := strings.TrimSpace(os.Getenv("HTMLSERVD_DB_PATH")); v != "" {
+		cfg.DBPath = v
+	}
+	if v := strings.TrimSpace(os.Getenv("HTMLSERVD_DB_WAL")); v != "" {
+		parsed, err := strconv.ParseBool(v)
+		if err != nil {
+			return cfg, fmt.Errorf("parse HTMLSERVD_DB_WAL=%q: %w", v, err)
+		}
+		cfg.DBWAL = parsed
 	}
 
 	if err := cfg.Validate(); err != nil {

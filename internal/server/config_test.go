@@ -15,6 +15,9 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.BindAddr != DefaultBindAddr || cfg.Port != DefaultPort || cfg.DataDir != DefaultDataDir || cfg.LogLevel != DefaultLogLevel {
 		t.Fatalf("unexpected defaults: %#v", cfg)
 	}
+	if !cfg.DBWAL {
+		t.Fatalf("expected DBWAL default true")
+	}
 }
 
 func TestLoadConfigFromFile(t *testing.T) {
@@ -44,12 +47,14 @@ func TestLoadConfigEnvOverridesFile(t *testing.T) {
 	t.Setenv("HTMLSERVD_PORT", "9700")
 	t.Setenv("HTMLSERVD_DATA_DIR", "/tmp/override")
 	t.Setenv("HTMLSERVD_LOG_LEVEL", "warn")
+	t.Setenv("HTMLSERVD_DB_PATH", "/tmp/override/db.sqlite")
+	t.Setenv("HTMLSERVD_DB_WAL", "false")
 
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	if cfg.BindAddr != "127.0.0.3" || cfg.Port != 9700 || cfg.DataDir != "/tmp/override" || cfg.LogLevel != "warn" {
+	if cfg.BindAddr != "127.0.0.3" || cfg.Port != 9700 || cfg.DataDir != "/tmp/override" || cfg.LogLevel != "warn" || cfg.DBPath != "/tmp/override/db.sqlite" || cfg.DBWAL {
 		t.Fatalf("unexpected overridden config: %#v", cfg)
 	}
 }
@@ -76,6 +81,17 @@ func TestLoadConfigInvalidEnvPort(t *testing.T) {
 		t.Fatalf("expected port parse error")
 	}
 	if !strings.Contains(err.Error(), "HTMLSERVD_PORT") {
+		t.Fatalf("expected env var mention in error, got %v", err)
+	}
+}
+
+func TestLoadConfigInvalidEnvDBWAL(t *testing.T) {
+	t.Setenv("HTMLSERVD_DB_WAL", "not-a-bool")
+	_, err := LoadConfig("")
+	if err == nil {
+		t.Fatalf("expected db wal parse error")
+	}
+	if !strings.Contains(err.Error(), "HTMLSERVD_DB_WAL") {
 		t.Fatalf("expected env var mention in error, got %v", err)
 	}
 }

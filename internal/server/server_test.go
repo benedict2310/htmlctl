@@ -66,6 +66,30 @@ func TestServerHealthAndVersion(t *testing.T) {
 	}
 }
 
+func TestServerStartCreatesDBAndMigrations(t *testing.T) {
+	cfg := Config{BindAddr: "127.0.0.1", Port: 0, DataDir: t.TempDir(), LogLevel: "info", DBWAL: true}
+	srv, err := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), "v-test")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = srv.Shutdown(ctx)
+	}()
+
+	var count int
+	if err := srv.db.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&count); err != nil {
+		t.Fatalf("query schema_migrations: %v", err)
+	}
+	if count < 1 {
+		t.Fatalf("expected at least one migration applied, got %d", count)
+	}
+}
+
 func TestServerRunGracefulShutdownOnContextCancel(t *testing.T) {
 	cfg := Config{BindAddr: "127.0.0.1", Port: 0, DataDir: t.TempDir(), LogLevel: "info"}
 	srv, err := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), "v-test")
@@ -204,5 +228,39 @@ func TestShutdownBeforeStartIsNoop(t *testing.T) {
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		t.Fatalf("Shutdown() before Start() should be no-op, got %v", err)
+	}
+}
+
+func TestRunReturnsServeErrorWhenListenerClosedUnexpectedly(t *testing.T) {
+	cfg := Config{BindAddr: "127.0.0.1", Port: 0, DataDir: t.TempDir(), LogLevel: "info", DBWAL: true}
+	srv, err := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), "v-test")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- srv.Run(context.Background())
+	}()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for srv.Addr() == "" && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if srv.listener == nil {
+		t.Fatalf("server did not start listener in time")
+	}
+
+	_ = srv.listener.Close()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatalf("expected run to return serve error")
+		}
+		if !strings.Contains(err.Error(), "http server failed") {
+			t.Fatalf("unexpected run error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for Run() error")
 	}
 }

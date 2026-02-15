@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -59,5 +60,15 @@ spec:
 	}
 	if page.Spec.Layout[0].Include != "header" || page.Spec.Layout[1].Include != "pricing" {
 		t.Fatalf("layout includes are not preserved in order: %#v", page.Spec.Layout)
+	}
+}
+
+func TestPageLayoutItemJSONMarshaling(t *testing.T) {
+	b, err := json.Marshal([]PageLayoutItem{{Include: "header"}})
+	if err != nil {
+		t.Fatalf("marshal layout: %v", err)
+	}
+	if string(b) != `[{"include":"header"}]` {
+		t.Fatalf("unexpected json output: %s", string(b))
 	}
 }

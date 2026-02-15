@@ -18,7 +18,7 @@ type Website struct {
 }
 
 type PageLayoutItem struct {
-	Include string `yaml:"include"`
+	Include string `yaml:"include" json:"include"`
 }
 
 type PageSpec struct {

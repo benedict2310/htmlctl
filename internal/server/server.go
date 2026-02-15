@@ -8,8 +8,11 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
+	"github.com/benedict2310/htmlctl/internal/audit"
+	"github.com/benedict2310/htmlctl/internal/blob"
 	dbpkg "github.com/benedict2310/htmlctl/internal/db"
 )
 
@@ -21,9 +24,13 @@ type Server struct {
 	version    string
 	dataPaths  DataPaths
 	db         *sql.DB
+	blobStore  *blob.Store
 	listener   net.Listener
 	httpServer *http.Server
 	errCh      chan error
+
+	auditLogger      audit.Logger
+	applyLockStripes [256]sync.Mutex
 }
 
 func New(cfg Config, logger *slog.Logger, version string) (*Server, error) {
@@ -37,21 +44,22 @@ func New(cfg Config, logger *slog.Logger, version string) (*Server, error) {
 		version = "dev"
 	}
 
-	mux := http.NewServeMux()
-	registerHealthRoutes(mux, version)
-
 	srv := &Server{
 		cfg:     cfg,
 		logger:  logger,
 		version: version,
 		errCh:   make(chan error, 1),
-		httpServer: &http.Server{
-			Addr:         cfg.ListenAddr(),
-			Handler:      mux,
-			ReadTimeout:  5 * time.Second,
-			WriteTimeout: 10 * time.Second,
-			IdleTimeout:  60 * time.Second,
-		},
+	}
+
+	mux := http.NewServeMux()
+	registerHealthRoutes(mux, version)
+	registerAPIRoutes(mux, srv)
+	srv.httpServer = &http.Server{
+		Addr:         cfg.ListenAddr(),
+		Handler:      mux,
+		ReadTimeout:  60 * time.Second,
+		WriteTimeout: 120 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 	return srv, nil
 }
@@ -62,6 +70,7 @@ func (s *Server) Start() error {
 		return err
 	}
 	s.dataPaths = paths
+	s.blobStore = blob.NewStore(paths.BlobsSHA256)
 
 	dbPath := s.cfg.DBPath
 	if dbPath == "" {
@@ -82,6 +91,15 @@ func (s *Server) Start() error {
 		return err
 	}
 	s.db = sqlDB
+	baseAuditLogger, err := audit.NewSQLiteLogger(sqlDB)
+	if err != nil {
+		_ = s.db.Close()
+		s.db = nil
+		return fmt.Errorf("initialize audit logger: %w", err)
+	}
+	s.auditLogger = audit.NewAsyncLogger(baseAuditLogger, 512, func(err error) {
+		s.logger.Error("asynchronous audit write failed", "error", err)
+	})
 
 	ln, err := net.Listen("tcp", s.cfg.ListenAddr())
 	if err != nil {
@@ -147,12 +165,19 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		}
 		s.listener = nil
 	}
+	if closer, ok := s.auditLogger.(interface{ Close(context.Context) error }); ok {
+		if err := closer.Close(ctx); err != nil {
+			return fmt.Errorf("close audit logger: %w", err)
+		}
+	}
 	if s.db != nil {
 		if err := s.db.Close(); err != nil {
 			return fmt.Errorf("close sqlite db: %w", err)
 		}
 		s.db = nil
 	}
+	s.blobStore = nil
+	s.auditLogger = nil
 	return nil
 }
 

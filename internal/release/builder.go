@@ -1,0 +1,628 @@
+package release
+
+import (
+	"context"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
+	"log/slog"
+	"os"
+	"path"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/benedict2310/htmlctl/internal/blob"
+	"github.com/benedict2310/htmlctl/internal/bundle"
+	dbpkg "github.com/benedict2310/htmlctl/internal/db"
+	"github.com/benedict2310/htmlctl/pkg/loader"
+	"github.com/benedict2310/htmlctl/pkg/model"
+	"github.com/benedict2310/htmlctl/pkg/renderer"
+	"gopkg.in/yaml.v3"
+)
+
+type NotFoundError struct {
+	msg string
+}
+
+func (e *NotFoundError) Error() string { return e.msg }
+
+type BuildResult struct {
+	ReleaseID         string
+	EnvironmentID     int64
+	PreviousReleaseID *string
+	ManifestJSON      string
+	OutputHashes      map[string]string
+	BuildLog          string
+}
+
+type Builder struct {
+	db           *sql.DB
+	blobs        *blob.Store
+	websitesRoot string
+	logger       *slog.Logger
+	nowFn        func() time.Time
+	idFn         func(time.Time) (string, error)
+}
+
+const (
+	styleTokensFile  = "tokens.css"
+	styleDefaultFile = "default.css"
+)
+
+func NewBuilder(db *sql.DB, blobs *blob.Store, websitesRoot string, logger *slog.Logger) (*Builder, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database is required")
+	}
+	if blobs == nil {
+		return nil, fmt.Errorf("blob store is required")
+	}
+	if strings.TrimSpace(websitesRoot) == "" {
+		return nil, fmt.Errorf("websites root is required")
+	}
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &Builder{
+		db:           db,
+		blobs:        blobs,
+		websitesRoot: websitesRoot,
+		logger:       logger,
+		nowFn:        time.Now,
+		idFn:         NewReleaseID,
+	}, nil
+}
+
+func (b *Builder) Build(ctx context.Context, websiteName, envName string) (out BuildResult, err error) {
+	q := dbpkg.NewQueries(b.db)
+	websiteName = strings.TrimSpace(websiteName)
+	envName = strings.TrimSpace(envName)
+	if websiteName == "" || envName == "" {
+		return out, fmt.Errorf("website and environment are required")
+	}
+
+	readTx, err := b.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return out, fmt.Errorf("begin release read transaction: %w", err)
+	}
+	readTxDone := false
+	defer func() {
+		if !readTxDone {
+			_ = readTx.Rollback()
+		}
+	}()
+	readQ := dbpkg.NewQueries(readTx)
+
+	website, err := readQ.GetWebsiteByName(ctx, websiteName)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return out, &NotFoundError{msg: fmt.Sprintf("website %q not found", websiteName)}
+		}
+		return out, fmt.Errorf("load website %q: %w", websiteName, err)
+	}
+	env, err := readQ.GetEnvironmentByName(ctx, website.ID, envName)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return out, &NotFoundError{msg: fmt.Sprintf("environment %q not found", envName)}
+		}
+		return out, fmt.Errorf("load environment %q: %w", envName, err)
+	}
+
+	releaseID, err := b.idFn(b.nowFn())
+	if err != nil {
+		return out, err
+	}
+	out.ReleaseID = releaseID
+	out.EnvironmentID = env.ID
+	out.PreviousReleaseID = env.ActiveReleaseID
+
+	log := newBuildLog()
+	log.Addf("starting release build website=%s env=%s release=%s", website.Name, env.Name, releaseID)
+
+	snapshot, err := b.loadDesiredState(ctx, readQ, website, env)
+	if err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, "{}", err)
+	}
+	if err := readTx.Commit(); err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, "{}", fmt.Errorf("commit release read transaction: %w", err))
+	}
+	readTxDone = true
+
+	manifestJSONBytes, err := json.MarshalIndent(snapshot.Manifest(), "", "  ")
+	if err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, "{}", fmt.Errorf("marshal release manifest snapshot: %w", err))
+	}
+	manifestJSON := string(manifestJSONBytes)
+	out.ManifestJSON = manifestJSON
+
+	envDir := filepath.Join(b.websitesRoot, website.Name, "envs", env.Name)
+	releasesRoot := filepath.Join(envDir, "releases")
+	tmpReleaseDir := filepath.Join(releasesRoot, releaseID+".tmp")
+	finalReleaseDir := filepath.Join(releasesRoot, releaseID)
+	buildRoot := filepath.Join(envDir, "build")
+	sourceDir := filepath.Join(buildRoot, releaseID)
+
+	if err := os.MkdirAll(releasesRoot, 0o755); err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, fmt.Errorf("create releases directory %s: %w", releasesRoot, err))
+	}
+	if err := os.MkdirAll(buildRoot, 0o755); err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, fmt.Errorf("create build directory %s: %w", buildRoot, err))
+	}
+	if _, err := os.Stat(finalReleaseDir); err == nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, fmt.Errorf("release directory already exists: %s", finalReleaseDir))
+	} else if err != nil && !os.IsNotExist(err) {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, fmt.Errorf("stat release directory %s: %w", finalReleaseDir, err))
+	}
+
+	_ = os.RemoveAll(tmpReleaseDir)
+	_ = os.RemoveAll(sourceDir)
+	prevTarget, hadPrevTarget, err := ReadCurrentSymlinkTarget(envDir)
+	if err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
+	}
+	switchedCurrent := false
+	defer func() {
+		_ = os.RemoveAll(sourceDir)
+		if err != nil {
+			_ = os.RemoveAll(tmpReleaseDir)
+			if switchedCurrent {
+				restoreTarget := ""
+				if hadPrevTarget {
+					restoreTarget = prevTarget
+				}
+				if restoreErr := SetCurrentSymlinkTarget(envDir, restoreTarget); restoreErr != nil {
+					b.logger.Error("failed to restore current symlink after release failure", "env_dir", envDir, "error", restoreErr)
+				}
+			}
+		}
+	}()
+
+	log.Addf("materializing source state from sqlite + blob store")
+	if err := b.materializeSource(ctx, sourceDir, snapshot); err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
+	}
+
+	site, err := loader.LoadSite(sourceDir)
+	if err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, fmt.Errorf("load source site: %w", err))
+	}
+
+	log.Addf("rendering static output")
+	if err := renderer.Render(site, tmpReleaseDir); err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, fmt.Errorf("render release output: %w", err))
+	}
+
+	if err := b.copyOriginalStyles(sourceDir, tmpReleaseDir); err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
+	}
+	if err := b.copyOriginalAssets(ctx, snapshot.Assets, tmpReleaseDir); err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
+	}
+
+	buildLogText := log.String()
+	if err := writeFile(filepath.Join(tmpReleaseDir, ".manifest.json"), []byte(manifestJSON)); err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, fmt.Errorf("write release manifest snapshot: %w", err))
+	}
+	if err := writeFile(filepath.Join(tmpReleaseDir, ".build-log.txt"), []byte(buildLogText)); err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, fmt.Errorf("write release build log: %w", err))
+	}
+
+	hashes, err := computeOutputHashes(tmpReleaseDir)
+	if err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
+	}
+	hashesJSONBytes, err := json.MarshalIndent(hashes, "", "  ")
+	if err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, fmt.Errorf("marshal output hashes: %w", err))
+	}
+	if err := writeFile(filepath.Join(tmpReleaseDir, ".output-hashes.json"), hashesJSONBytes); err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, fmt.Errorf("write output hashes file: %w", err))
+	}
+
+	log.Addf("finalizing release directory")
+	if err := os.Rename(tmpReleaseDir, finalReleaseDir); err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, fmt.Errorf("finalize release directory: %w", err))
+	}
+
+	log.Addf("switching current symlink")
+	if err := SwitchCurrentSymlink(envDir, releaseID); err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
+	}
+	switchedCurrent = true
+
+	tx, err := b.db.BeginTx(ctx, nil)
+	if err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, fmt.Errorf("begin release commit transaction: %w", err))
+	}
+	txDone := false
+	defer func() {
+		if !txDone {
+			_ = tx.Rollback()
+		}
+	}()
+
+	out.BuildLog = log.String()
+	out.OutputHashes = hashes
+
+	txq := dbpkg.NewQueries(tx)
+	if err := txq.InsertRelease(ctx, dbpkg.ReleaseRow{
+		ID:            releaseID,
+		EnvironmentID: env.ID,
+		ManifestJSON:  manifestJSON,
+		OutputHashes:  string(hashesJSONBytes),
+		BuildLog:      out.BuildLog,
+		Status:        "active",
+	}); err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, fmt.Errorf("insert active release row: %w", err))
+	}
+	if err := txq.UpdateEnvironmentActiveRelease(ctx, env.ID, &releaseID); err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, fmt.Errorf("set environment active release: %w", err))
+	}
+	if err := tx.Commit(); err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, fmt.Errorf("commit release transaction: %w", err))
+	}
+	txDone = true
+	switchedCurrent = false
+
+	log.Addf("release build completed")
+	out.BuildLog = log.String()
+	return out, nil
+}
+
+func (b *Builder) recordFailedAndReturn(ctx context.Context, q *dbpkg.Queries, out BuildResult, log *buildLog, manifestJSON string, cause error) (BuildResult, error) {
+	log.Addf("release build failed: %v", cause)
+	if out.ReleaseID != "" && out.EnvironmentID != 0 {
+		hashesJSON := "{}"
+		if _, err := q.GetReleaseByID(ctx, out.ReleaseID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				insertErr := q.InsertRelease(ctx, dbpkg.ReleaseRow{
+					ID:            out.ReleaseID,
+					EnvironmentID: out.EnvironmentID,
+					ManifestJSON:  manifestJSON,
+					OutputHashes:  hashesJSON,
+					BuildLog:      log.String(),
+					Status:        "failed",
+				})
+				if insertErr != nil {
+					b.logger.Error("failed to persist failed release row", "release_id", out.ReleaseID, "error", insertErr)
+				}
+			}
+		}
+	}
+	return out, cause
+}
+
+type desiredState struct {
+	Website      dbpkg.WebsiteRow
+	Environment  dbpkg.EnvironmentRow
+	Pages        []dbpkg.PageRow
+	Components   []dbpkg.ComponentRow
+	StyleBundles []dbpkg.StyleBundleRow
+	Assets       []dbpkg.AssetRow
+}
+
+type manifestSnapshot struct {
+	APIVersion  string                 `json:"apiVersion"`
+	Kind        string                 `json:"kind"`
+	Website     string                 `json:"website"`
+	Environment string                 `json:"environment"`
+	GeneratedAt string                 `json:"generatedAt"`
+	Resources   map[string]interface{} `json:"resources"`
+}
+
+func (s desiredState) Manifest() manifestSnapshot {
+	pages := make([]map[string]any, 0, len(s.Pages))
+	for _, row := range s.Pages {
+		pages = append(pages, map[string]any{
+			"name":        row.Name,
+			"route":       row.Route,
+			"title":       row.Title,
+			"description": row.Description,
+			"contentHash": row.ContentHash,
+		})
+	}
+	components := make([]map[string]any, 0, len(s.Components))
+	for _, row := range s.Components {
+		components = append(components, map[string]any{
+			"name":        row.Name,
+			"scope":       row.Scope,
+			"contentHash": row.ContentHash,
+		})
+	}
+	styleBundles := make([]map[string]any, 0, len(s.StyleBundles))
+	for _, row := range s.StyleBundles {
+		styleBundles = append(styleBundles, map[string]any{
+			"name":  row.Name,
+			"files": json.RawMessage(row.FilesJSON),
+		})
+	}
+	assets := make([]map[string]any, 0, len(s.Assets))
+	for _, row := range s.Assets {
+		assets = append(assets, map[string]any{
+			"filename":    row.Filename,
+			"contentType": row.ContentType,
+			"sizeBytes":   row.SizeBytes,
+			"contentHash": row.ContentHash,
+		})
+	}
+	return manifestSnapshot{
+		APIVersion:  "htmlctl.dev/v1",
+		Kind:        "ReleaseSnapshot",
+		Website:     s.Website.Name,
+		Environment: s.Environment.Name,
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339Nano),
+		Resources: map[string]any{
+			"pages":        pages,
+			"components":   components,
+			"styleBundles": styleBundles,
+			"assets":       assets,
+		},
+	}
+}
+
+func (b *Builder) loadDesiredState(ctx context.Context, q *dbpkg.Queries, website dbpkg.WebsiteRow, env dbpkg.EnvironmentRow) (desiredState, error) {
+	pages, err := q.ListPagesByWebsite(ctx, website.ID)
+	if err != nil {
+		return desiredState{}, fmt.Errorf("load pages for release build: %w", err)
+	}
+	components, err := q.ListComponentsByWebsite(ctx, website.ID)
+	if err != nil {
+		return desiredState{}, fmt.Errorf("load components for release build: %w", err)
+	}
+	styleBundles, err := q.ListStyleBundlesByWebsite(ctx, website.ID)
+	if err != nil {
+		return desiredState{}, fmt.Errorf("load style bundles for release build: %w", err)
+	}
+	assets, err := q.ListAssetsByWebsite(ctx, website.ID)
+	if err != nil {
+		return desiredState{}, fmt.Errorf("load assets for release build: %w", err)
+	}
+	if len(pages) == 0 {
+		return desiredState{}, fmt.Errorf("website %q has no pages to build", website.Name)
+	}
+	return desiredState{
+		Website:      website,
+		Environment:  env,
+		Pages:        pages,
+		Components:   components,
+		StyleBundles: styleBundles,
+		Assets:       assets,
+	}, nil
+}
+
+func (b *Builder) materializeSource(ctx context.Context, sourceDir string, state desiredState) error {
+	if err := os.MkdirAll(sourceDir, 0o755); err != nil {
+		return fmt.Errorf("create source directory %s: %w", sourceDir, err)
+	}
+	websiteDoc := model.Website{
+		APIVersion: model.APIVersionV1,
+		Kind:       model.KindWebsite,
+		Metadata:   model.Metadata{Name: state.Website.Name},
+		Spec: model.WebsiteSpec{
+			DefaultStyleBundle: state.Website.DefaultStyleBundle,
+			BaseTemplate:       state.Website.BaseTemplate,
+		},
+	}
+	websiteBytes, err := yaml.Marshal(websiteDoc)
+	if err != nil {
+		return fmt.Errorf("marshal website yaml: %w", err)
+	}
+	if err := writeFile(filepath.Join(sourceDir, "website.yaml"), websiteBytes); err != nil {
+		return fmt.Errorf("write website.yaml: %w", err)
+	}
+
+	for _, row := range state.Components {
+		content, err := b.readBlob(ctx, row.ContentHash)
+		if err != nil {
+			return fmt.Errorf("load component %q blob: %w", row.Name, err)
+		}
+		if err := writeFile(filepath.Join(sourceDir, "components", row.Name+".html"), content); err != nil {
+			return fmt.Errorf("write component %q: %w", row.Name, err)
+		}
+	}
+
+	for _, row := range state.Pages {
+		layout := []model.PageLayoutItem{}
+		if strings.TrimSpace(row.LayoutJSON) != "" {
+			if err := json.Unmarshal([]byte(row.LayoutJSON), &layout); err != nil {
+				return fmt.Errorf("parse layout json for page %q: %w", row.Name, err)
+			}
+		}
+		pageDoc := model.Page{
+			APIVersion: model.APIVersionV1,
+			Kind:       model.KindPage,
+			Metadata:   model.Metadata{Name: row.Name},
+			Spec: model.PageSpec{
+				Route:       row.Route,
+				Title:       row.Title,
+				Description: row.Description,
+				Layout:      layout,
+			},
+		}
+		pageBytes, err := yaml.Marshal(pageDoc)
+		if err != nil {
+			return fmt.Errorf("marshal page %q yaml: %w", row.Name, err)
+		}
+		if err := writeFile(filepath.Join(sourceDir, "pages", row.Name+".page.yaml"), pageBytes); err != nil {
+			return fmt.Errorf("write page %q file: %w", row.Name, err)
+		}
+	}
+
+	styleRefs, err := resolveDefaultStyleRefs(state.Website.DefaultStyleBundle, state.StyleBundles)
+	if err != nil {
+		return err
+	}
+	for name, hash := range styleRefs {
+		content, err := b.readBlob(ctx, hash)
+		if err != nil {
+			return fmt.Errorf("load style file %q blob: %w", name, err)
+		}
+		if err := writeFile(filepath.Join(sourceDir, "styles", name), content); err != nil {
+			return fmt.Errorf("write style file %q: %w", name, err)
+		}
+	}
+
+	for _, row := range state.Assets {
+		rel, err := sanitizeRelPath(row.Filename)
+		if err != nil {
+			return fmt.Errorf("invalid asset filename %q: %w", row.Filename, err)
+		}
+		content, err := b.readBlob(ctx, row.ContentHash)
+		if err != nil {
+			return fmt.Errorf("load asset %q blob: %w", row.Filename, err)
+		}
+		if err := writeFile(filepath.Join(sourceDir, filepath.FromSlash(rel)), content); err != nil {
+			return fmt.Errorf("write asset source file %q: %w", row.Filename, err)
+		}
+	}
+
+	return nil
+}
+
+func resolveDefaultStyleRefs(defaultName string, bundles []dbpkg.StyleBundleRow) (map[string]string, error) {
+	name := strings.TrimSpace(defaultName)
+	if name == "" {
+		name = "default"
+	}
+	var selected *dbpkg.StyleBundleRow
+	for i := range bundles {
+		if bundles[i].Name == name {
+			selected = &bundles[i]
+			break
+		}
+	}
+	if selected == nil {
+		return nil, fmt.Errorf("default style bundle %q not found", name)
+	}
+	refs := []bundle.FileRef{}
+	if err := json.Unmarshal([]byte(selected.FilesJSON), &refs); err != nil {
+		return nil, fmt.Errorf("parse style bundle %q files: %w", selected.Name, err)
+	}
+	files := map[string]string{}
+	for _, ref := range refs {
+		base := path.Base(ref.File)
+		switch base {
+		case styleTokensFile, styleDefaultFile:
+			files[base] = ref.Hash
+		}
+	}
+	if files[styleTokensFile] == "" || files[styleDefaultFile] == "" {
+		return nil, fmt.Errorf("style bundle %q must include tokens.css and default.css", selected.Name)
+	}
+	return files, nil
+}
+
+func (b *Builder) readBlob(ctx context.Context, contentHash string) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	hashHex, err := bundle.HashHex(contentHash)
+	if err != nil {
+		return nil, fmt.Errorf("invalid content hash %q: %w", contentHash, err)
+	}
+	blobPath := b.blobs.Path(hashHex)
+	content, err := os.ReadFile(blobPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("blob %s not found", hashHex)
+		}
+		return nil, fmt.Errorf("read blob file %s: %w", blobPath, err)
+	}
+	return content, nil
+}
+
+func (b *Builder) copyOriginalStyles(sourceDir, releaseDir string) error {
+	for _, name := range []string{styleTokensFile, styleDefaultFile} {
+		src := filepath.Join(sourceDir, "styles", name)
+		content, err := os.ReadFile(src)
+		if err != nil {
+			return fmt.Errorf("read source style file %s: %w", src, err)
+		}
+		if err := writeFile(filepath.Join(releaseDir, "styles", name), content); err != nil {
+			return fmt.Errorf("write release style file %s: %w", name, err)
+		}
+	}
+	return nil
+}
+
+func (b *Builder) copyOriginalAssets(ctx context.Context, assets []dbpkg.AssetRow, releaseDir string) error {
+	for _, row := range assets {
+		rel, err := sanitizeRelPath(row.Filename)
+		if err != nil {
+			return fmt.Errorf("invalid asset filename %q: %w", row.Filename, err)
+		}
+		content, err := b.readBlob(ctx, row.ContentHash)
+		if err != nil {
+			return fmt.Errorf("copy release asset %q: %w", row.Filename, err)
+		}
+		if err := writeFile(filepath.Join(releaseDir, filepath.FromSlash(rel)), content); err != nil {
+			return fmt.Errorf("write release asset file %q: %w", row.Filename, err)
+		}
+	}
+	return nil
+}
+
+func writeFile(path string, content []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create directory %s: %w", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		return fmt.Errorf("write file %s: %w", path, err)
+	}
+	return nil
+}
+
+func computeOutputHashes(root string) (map[string]string, error) {
+	entries := []string{}
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		if rel == ".output-hashes.json" {
+			return nil
+		}
+		entries = append(entries, rel)
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("walk release output files: %w", err)
+	}
+	sort.Strings(entries)
+	out := make(map[string]string, len(entries))
+	for _, rel := range entries {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			return nil, fmt.Errorf("read output file %s: %w", rel, err)
+		}
+		sum := sha256.Sum256(content)
+		out[rel] = "sha256:" + hex.EncodeToString(sum[:])
+	}
+	return out, nil
+}
+
+func sanitizeRelPath(p string) (string, error) {
+	clean := path.Clean(strings.TrimSpace(strings.ReplaceAll(p, "\\", "/")))
+	if clean == "." || clean == "" {
+		return "", fmt.Errorf("empty path")
+	}
+	if strings.HasPrefix(clean, "/") {
+		return "", fmt.Errorf("path must be relative")
+	}
+	if clean == ".." || strings.HasPrefix(clean, "../") || strings.Contains(clean, "/../") {
+		return "", fmt.Errorf("path traversal is not allowed")
+	}
+	return clean, nil
+}

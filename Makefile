@@ -4,6 +4,7 @@ VERSION ?= dev
 
 build:
 	go build -ldflags "-X main.version=$(VERSION)" -o bin/htmlctl ./cmd/htmlctl
+	go build -ldflags "-X main.version=$(VERSION)" -o bin/htmlservd ./cmd/htmlservd
 
 test:
 	go test ./...

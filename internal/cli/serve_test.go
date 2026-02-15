@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -121,6 +123,46 @@ func TestServeCommandMissingDirectoryFails(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "stat serve directory") {
 		t.Fatalf("expected stat error, got: %v", err)
+	}
+}
+
+func TestServeDirectoryPathNotDirectoryFails(t *testing.T) {
+	root := t.TempDir()
+	filePath := filepath.Join(root, "file.txt")
+	if err := os.WriteFile(filePath, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	err := serveDirectory(context.Background(), filePath, 0, &lockedBuffer{})
+	if err == nil {
+		t.Fatalf("expected non-directory error")
+	}
+	if !strings.Contains(err.Error(), "not a directory") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestServeDirectoryPortInUseFails(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+
+	_, portStr, err := net.SplitHostPort(ln.Addr().String())
+	if err != nil {
+		t.Fatalf("split host port: %v", err)
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		t.Fatalf("atoi: %v", err)
+	}
+
+	err = serveDirectory(context.Background(), t.TempDir(), port, &lockedBuffer{})
+	if err == nil {
+		t.Fatalf("expected listen error when port is in use")
+	}
+	if !strings.Contains(err.Error(), "listen on") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

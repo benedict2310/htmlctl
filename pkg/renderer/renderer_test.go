@@ -191,6 +191,67 @@ func TestRouteToOutputPath(t *testing.T) {
 	}
 }
 
+func TestRenderErrorBranches(t *testing.T) {
+	if err := Render(nil, t.TempDir()); err == nil {
+		t.Fatalf("expected error for nil site")
+	}
+	if err := Render(&model.Site{}, ""); err == nil {
+		t.Fatalf("expected error for empty output dir")
+	}
+}
+
+func TestRenderFailsWhenComponentMissing(t *testing.T) {
+	site := &model.Site{
+		Website: model.Website{Metadata: model.Metadata{Name: "x"}},
+		Pages: map[string]model.Page{
+			"index": {
+				Metadata: model.Metadata{Name: "index"},
+				Spec: model.PageSpec{
+					Route:  "/",
+					Layout: []model.PageLayoutItem{{Include: "missing"}},
+				},
+			},
+		},
+		Components: map[string]model.Component{},
+		Styles: model.StyleBundle{
+			Name:       "default",
+			TokensCSS:  ":root{}",
+			DefaultCSS: "body{}",
+		},
+	}
+	err := Render(site, t.TempDir())
+	if err == nil {
+		t.Fatalf("expected missing component error")
+	}
+}
+
+func TestRenderFailsWhenRouteEmpty(t *testing.T) {
+	site := &model.Site{
+		Website: model.Website{Metadata: model.Metadata{Name: "x"}},
+		Pages: map[string]model.Page{
+			"index": {
+				Metadata: model.Metadata{Name: "index"},
+				Spec: model.PageSpec{
+					Route:  "",
+					Layout: []model.PageLayoutItem{{Include: "header"}},
+				},
+			},
+		},
+		Components: map[string]model.Component{
+			"header": {Name: "header", HTML: "<section></section>"},
+		},
+		Styles: model.StyleBundle{
+			Name:       "default",
+			TokensCSS:  ":root{}",
+			DefaultCSS: "body{}",
+		},
+	}
+	err := Render(site, t.TempDir())
+	if err == nil {
+		t.Fatalf("expected empty route error")
+	}
+}
+
 func readFile(t *testing.T, path string) string {
 	t.Helper()
 	b := mustReadBytes(t, path)

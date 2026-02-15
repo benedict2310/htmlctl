@@ -41,3 +41,15 @@ func TestRenderStaticsWritesContentAddressedAssets(t *testing.T) {
 		}
 	}
 }
+
+func TestWriteOriginalBytesFileError(t *testing.T) {
+	root := t.TempDir()
+	blocker := filepath.Join(root, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write blocker file: %v", err)
+	}
+	err := writeOriginalBytesFile(blocker, "assets/logo.svg", []byte("data"))
+	if err == nil {
+		t.Fatalf("expected writeOriginalBytesFile to fail when output root is a file")
+	}
+}

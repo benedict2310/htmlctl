@@ -137,12 +137,29 @@ As a self-hosted operator, I want `htmlservd` to start reliably from a config fi
 
 ## Implementation Summary
 
-(TBD after implementation.)
+- Implemented `htmlservd` daemon bootstrap and lifecycle:
+  - `cmd/htmlservd/main.go` for flag parsing (`--config`), config loading, logger init, and signal-driven run loop.
+  - `internal/server/server.go` for HTTP server startup, `/healthz` + `/version` route wiring, graceful shutdown, and port bind handling.
+- Implemented config pipeline in `internal/server/config.go`:
+  - defaults (`127.0.0.1:9400`, `/var/lib/htmlservd`, `info`),
+  - YAML file overlay,
+  - environment variable override precedence (`HTMLSERVD_*`),
+  - validation and listen-address helpers.
+- Implemented data-dir bootstrap in `internal/server/datadir.go`:
+  - creates `blobs/sha256/`, `websites/`, and `db.sqlite` placeholder file.
+- Implemented structured JSON logging via `log/slog` with configurable levels.
+- Updated `Makefile` build target to produce both `bin/htmlctl` and `bin/htmlservd`.
 
 ## Code Review Findings
 
-(TBD by review agent.)
+- No critical issues found during implementation pass.
+- Added explicit tests for:
+  - config precedence and invalid env/file input,
+  - data-dir creation/idempotency/error handling,
+  - server health/version endpoints,
+  - graceful cancellation shutdown path,
+  - occupied-port startup failures.
 
 ## Completion Status
 
-(TBD after merge.)
+- Implemented and validated with automated tests (`go test ./...`).

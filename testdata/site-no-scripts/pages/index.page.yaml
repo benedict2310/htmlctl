@@ -1,0 +1,10 @@
+apiVersion: htmlctl.dev/v1
+kind: Page
+metadata:
+  name: index
+spec:
+  route: /
+  title: No Script
+  description: no js
+  layout:
+    - include: header

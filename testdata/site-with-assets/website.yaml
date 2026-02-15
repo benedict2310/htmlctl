@@ -1,0 +1,7 @@
+apiVersion: htmlctl.dev/v1
+kind: Website
+metadata:
+  name: with-assets
+spec:
+  defaultStyleBundle: default
+  baseTemplate: default

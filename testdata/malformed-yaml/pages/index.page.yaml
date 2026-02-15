@@ -1,0 +1,10 @@
+apiVersion: htmlctl.dev/v1
+kind: Page
+metadata:
+  name: index
+spec:
+  route: /
+  title: "Malformed"
+  description: "Should fail website parse first"
+  layout:
+    - include: header

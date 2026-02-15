@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# Go build artifacts
+bin/
+dist/
+*.test
+*.out
+
+# Local temp/work files
+tmp/
+.artifacts/

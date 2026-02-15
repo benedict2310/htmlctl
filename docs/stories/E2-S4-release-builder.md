@@ -1,7 +1,7 @@
 # E2-S4 - Release Builder
 
 **Epic:** Epic 2 — Server daemon: state, releases, and API
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0 (Critical Path)
 **Estimated Effort:** 4 days
 **Dependencies:** E1-S2 (deterministic renderer), E2-S2 (SQLite schema for release records), E2-S3 (ingested desired state and blob store)
@@ -181,12 +181,29 @@ As an operator, after applying changes to an environment, I want the server to b
 
 ## Implementation Summary
 
-(TBD after implementation.)
+- Added `internal/release/` implementation:
+  - `builder.go` orchestrates snapshot load, source materialization from SQLite + blob store, deterministic rendering, output hashing, immutable release finalization, and DB activation.
+  - `ulid.go` generates release IDs with `github.com/oklog/ulid/v2`.
+  - `symlink.go` provides atomic `current` symlink switching plus safe read/restore helpers.
+  - `buildlog.go` captures structured build-log lines with UTC timestamps.
+- Added release API endpoint in `internal/server/release.go`:
+  - `POST /api/v1/websites/{website}/environments/{env}/releases` returns HTTP 201 with release metadata.
+  - Serializes release/apply operations at website scope to match website-scoped desired state in v1.
+- Added route dispatcher in `internal/server/routes.go` to unify `/apply`, `/releases`, and `/logs` API routing under `/api/v1/websites/...`.
+- Extended DB query layer in `internal/db/queries.go`:
+  - Added `GetReleaseByID`, `ListReleasesByEnvironment`, and `UpdateEnvironmentActiveRelease`.
+- Added tests:
+  - `internal/release/builder_test.go`, `internal/release/ulid_test.go`, `internal/release/symlink_test.go`
+  - `internal/server/release_test.go` (success + failure paths including failed-release row persistence).
 
 ## Code Review Findings
 
-(TBD by review agent.)
+- Ran `pi` review for E2-S4 (`docs/review-logs/E2-S4-review-pi-*.log`) and addressed core findings:
+  - Snapshot consistency: release reads now run in one read-only SQLite transaction.
+  - Apply/release concurrency: both paths now share website-scoped locking.
+  - FS/DB split-brain risk: release activation now restores previous symlink target if a post-switch DB step fails.
+- One medium optimization note (streaming hash computation vs `os.ReadFile`) remains as a future perf hardening item; current implementation is acceptable for v1 bundle size expectations.
 
 ## Completion Status
 
-(TBD after merge.)
+- Implemented and verified with automated tests (`go test ./...` in Docker `golang:1.24`).

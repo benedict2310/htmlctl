@@ -1,7 +1,7 @@
 # E2-S5 - Audit Log
 
 **Epic:** Epic 2 — Server daemon: state, releases, and API
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1 (High)
 **Estimated Effort:** 2 days
 **Dependencies:** E2-S2 (audit_log table in SQLite schema), E2-S4 (release events to log)
@@ -189,12 +189,32 @@ As an operator, I want every state-changing operation recorded in a structured a
 
 ## Implementation Summary
 
-(TBD after implementation.)
+- Added `internal/audit/` subsystem:
+  - `entry.go` defines audit entry/filter/result contracts and operation constants.
+  - `logger.go` implements SQLite-backed insert/query logic with filtering (`operation`, `since`, `until`) and pagination (`limit`, `offset`).
+  - `async.go` adds bounded async write buffering, graceful close, idle-wait support, and concurrency-safe shutdown behavior.
+- Integrated audit writes into state-changing APIs:
+  - `internal/server/apply.go` writes `apply` audit entries (non-dry-run) with actor, resource summary, and metadata.
+  - `internal/server/release.go` writes `release.build` and `release.activate` entries with release IDs.
+  - Actor is sourced from `X-Actor` (default: `local`).
+- Added log retrieval APIs in `internal/server/logs.go`:
+  - `GET /api/v1/websites/{website}/environments/{env}/logs`
+  - `GET /api/v1/websites/{website}/logs`
+  - Supports `limit`, `offset`, `operation`, `since`, and `until`.
+- Added/extended tests:
+  - `internal/audit/logger_test.go`
+  - `internal/server/logs_test.go`
+  - Existing apply/release endpoint tests exercise audit integration paths.
 
 ## Code Review Findings
 
-(TBD by review agent.)
+- Ran `pi` review for E2-S5 (`docs/review-logs/E2-S5-review-pi-*.log`) and fixed reported high-severity issues:
+  - Fixed async logger shutdown race (`send on closed channel`) with explicit lock-guarded close/send semantics.
+  - Fixed timestamp ordering risk by storing fixed-width UTC timestamp strings for lexicographic sort stability.
+- Additional design notes accepted for v1 scope:
+  - Audit events are environment-scoped in current schema/API (no website-global audit rows without `environment_id`).
+  - Async mode is intentionally best-effort under sustained DB contention (drops are surfaced in server logs; primary operations still succeed).
 
 ## Completion Status
 
-(TBD after merge.)
+- Implemented and verified with automated tests (`go test ./...` in Docker `golang:1.24`).

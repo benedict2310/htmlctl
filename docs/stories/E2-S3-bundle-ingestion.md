@@ -1,7 +1,7 @@
 # E2-S3 - Bundle Ingestion (Apply)
 
 **Epic:** Epic 2 — Server daemon: state, releases, and API
-**Status:** Not Started
+**Status:** Done
 **Priority:** P0 (Critical Path)
 **Estimated Effort:** 4 days
 **Dependencies:** E2-S1 (server bootstrap + config), E2-S2 (SQLite schema for resource metadata)
@@ -56,7 +56,7 @@ As an operator using `htmlctl apply`, I want the server to accept my bundle of r
 - **Storage layout (Tech Spec Section 5):** Blobs stored at `<data-dir>/blobs/sha256/<hash>`. Database stores metadata with hash references. This story creates blobs and updates DB.
 - **Validation (Tech Spec Section 6):** Bundle validation requires verifying hashes from the client bundle manifest. This story implements hash verification. Component/page/asset validation rules are applied here if the validation engine is available.
 - **Agent-friendly partial apply (Tech Spec Section 9.3):** The server merges partial applies into the last known desired state. The manifest includes a `mode` field to distinguish full vs. partial.
-- **Concurrency:** Apply operations for the same environment must be serialized. Use a per-environment mutex to prevent concurrent applies from corrupting state.
+- **Concurrency:** Apply operations for the same website must be serialized because desired-state resources are website-scoped in v1. Use a per-website mutex to prevent concurrent applies from corrupting shared state.
 - **Security model (Tech Spec Section 7):** Endpoint is only accessible on localhost. No auth in v1.
 
 ## 5. Implementation Plan (Draft)
@@ -199,12 +199,41 @@ As an operator using `htmlctl apply`, I want the server to accept my bundle of r
 
 ## Implementation Summary
 
-(TBD after implementation.)
+- Added bundle parsing and validation in `internal/bundle/`:
+  - `manifest.go` validates `mode`, resource schema, file paths, and sha256 hash format.
+  - `bundle.go` reads tar streams, requires `manifest.json`, verifies referenced file hashes, and reports missing/mismatched files.
+- Added content-addressed blob storage in `internal/blob/store.go`:
+  - Stores blobs under `<data-dir>/blobs/sha256/<hash>`.
+  - Deduplicates writes when blobs already exist.
+- Added state merge logic in `internal/state/merge.go`:
+  - Auto-creates website/environment rows.
+  - Supports `partial` upsert behavior and `full` replace behavior (deletes resources not present in manifest).
+  - Supports `dry_run` via transaction rollback.
+- Added apply endpoint in `internal/server/apply.go`:
+  - `POST /api/v1/websites/{website}/environments/{env}/apply`
+  - Enforces 50MB request limit, validates bundle, serializes applies per website, and returns structured JSON.
+- Extended DB query layer in `internal/db/queries.go`:
+  - Added environment lookup, upsert/list/delete helpers for pages, components, style bundles, and assets.
+- Added tests:
+  - `internal/bundle/*_test.go` for manifest + tar/hash validation.
+  - `internal/blob/store_test.go` for blob write/dedupe behavior.
+  - `internal/server/apply_test.go` for success path, hash mismatch, dry-run no-persist, full-mode deletion, partial asset deletion, and hash normalization.
+  - `internal/db/queries_test.go` for large keep-list deletion behavior (SQLite variable-limit safe path).
 
 ## Code Review Findings
 
-(TBD by review agent.)
+- Ran `pi` review three times during implementation (`docs/review-logs/E2-S3-review-pi-*.log`) and addressed reported high-severity issues:
+  - Fixed Asset/Script partial deletion identity mismatch by enforcing canonical `name == file` and requiring `file` on deleted Asset/Script resources.
+  - Replaced unbounded per-environment lock map with bounded striped locks to avoid unbounded memory growth.
+  - Expanded locking scope to website-level (not environment-level) to prevent cross-environment races on shared website resources.
+  - Added missing partial deletion test coverage (`deleted: true` in partial mode).
+  - Hardened website/environment auto-create against concurrent insert races by re-reading after insert conflict.
+  - Added large keep-list deletion fallback to avoid SQLite variable-limit failures in full apply.
+  - Normalized stored content hashes to canonical `sha256:<hex>` format.
+  - Added deterministic MIME fallback mapping for common web asset extensions when host MIME database is missing.
+  - Tightened manifest schema: `Component`/`Page`/`Asset`/`Script` resources must reference exactly one file entry.
+- Remaining low-priority review notes were either accepted as intentional for v1 scope or are tracked for later stories (e.g., blob permission policy and blob GC lifecycle).
 
 ## Completion Status
 
-(TBD after merge.)
+- Implemented and validated with automated tests (`go test ./...` in Docker `golang:1.24`).

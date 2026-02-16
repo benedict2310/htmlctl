@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"hash/fnv"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -155,14 +154,8 @@ func parseApplyPath(pathValue string) (website string, env string, ok bool) {
 	if parts[0] != "api" || parts[1] != "v1" || parts[2] != "websites" || parts[4] != "environments" || parts[6] != "apply" {
 		return "", "", false
 	}
-	website, err := url.PathUnescape(parts[3])
-	if err != nil {
-		return "", "", false
-	}
-	env, err = url.PathUnescape(parts[5])
-	if err != nil {
-		return "", "", false
-	}
+	website = strings.TrimSpace(parts[3])
+	env = strings.TrimSpace(parts[5])
 	if strings.TrimSpace(website) == "" || strings.TrimSpace(env) == "" {
 		return "", "", false
 	}

@@ -1,0 +1,37 @@
+==========================================
+Code Review Log
+==========================================
+Story:     docs/stories/E3-S1-context-config.md
+Agent:     pi
+Branch:    main
+Commit:    07ee38a
+Timestamp: Mon Feb 16 07:52:11 CET 2026
+==========================================
+
+This is a strict code review of the uncommitted E3-S1 implementation. The implementation is generally high-quality and aligns well with the specifications, but I found one critical dependency omission and one strict validation constraint worth noting.
+
+### Code Review Findings
+
+**P1: Missing `go.mod` dependency updates**
+**File:** `go.mod` (missing from patch)
+**Issue:** The implementation introduces a dependency on `gopkg.in/yaml.v3` in `internal/config/loader.go` and `internal/cli/config_cmd.go`, but the patch does not include the corresponding `go.mod` and `go.sum` updates. The build will fail without these dependencies.
+**Fix:** Run `go get gopkg.in/yaml.v3` and commit the updated `go.mod` and `go.sum`.
+
+**P2: Strict validation prevents "empty" config state**
+**File:** `internal/config/types.go:44`
+**Issue:** `Validate()` enforces `len(c.Contexts) > 0` and is called during `Load()`. This prevents users from creating a skeleton config file (e.g., just `apiVersion: htmlctl.dev/v1`) or using `config view` to verify a clean install. While consistent with "remote commands require a context," it makes bootstrapping slightly more rigid (users must manually edit valid YAML with at least one context before the CLI accepts the file).
+**Fix:** Consider relaxing `Validate()` to allow 0 contexts, or handle the specific case of `Load()` for `config view` differently. However, given AC-5 requirements, the current behavior is acceptable but strict.
+
+**P2: Atomic `Save` behavior on file permissions**
+**File:** `internal/config/loader.go:119`
+**Issue:** When saving config (e.g., `use-context`), if the file didn't previously exist (unlikely for `use-context` but possible if we add `set-context`), `os.CreateTemp` creates it with 0600 permissions. If the user intends to share the config group-wide, this resets permissions.
+**Fix:** None required for v1 (0600 is secure default for SSH-related configs), but worth documenting if multi-user config sharing is ever a requirement.
+
+### Residual Risks & Testing Gaps
+
+- **Risk (Documented):** `use-context` writes the parsed `Config` struct back to disk, which will strip any comments or formatting from the original manual YAML file. This is an accepted risk for v1.
+- **Testing:** The test suite is comprehensive (`loader_test.go`, `resolve_test.go`, `config_cmd_test.go`) and covers all acceptance criteria including error states and env var overrides. No significant testing gaps found.
+- **Scope:** The `render` and `serve` commands correctly remain untouched and do not require config in this iteration, preserving existing functionality.
+
+### Summary
+The implementation is solid. Once `go.mod` is updated, it is ready for merge. The strict validation on context count is a minor UX choice but safe for a v1 release.

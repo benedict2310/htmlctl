@@ -1,0 +1,10 @@
+The patch implements the core remote commands (`get`, `status`, `apply`, `logs`) and the corresponding server-side endpoints and client logic. The implementation is comprehensive, covering the requested acceptance criteria including output formatting (table/json/yaml), bundle creation with checksums, and proper CLI structure.
+
+No critical issues found.
+
+### Minor Observations (Non-Blocking)
+
+1.  **Race Condition in Bundle Creation**: In `internal/bundle/build.go`, files are read twice: once for hashing/sizing, and again for writing to the tar archive. If a file changes size between these operations, `tar.Writer` will fail with "write too long" or produce a malformed header. For a CLI tool, this is an acceptable "fail-fast" behavior.
+2.  **Asset/Script Overlap**: If `ScriptPath` refers to a file also included in `Assets` (e.g., both point to `assets/main.js`), the resource will be listed twice in the manifest (once as `Script`, once as `Asset`). The tarball will contain it once (due to map de-duplication). This is a known edge case in the spec but handled safely by the map logic.
+
+CLEAN

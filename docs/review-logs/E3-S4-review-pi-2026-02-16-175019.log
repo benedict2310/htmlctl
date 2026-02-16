@@ -1,7 +1,16 @@
+==========================================
+Code Review Log
+==========================================
+Story:     docs/stories/E3-S4-diff-engine.md
+Agent:     pi
+Timestamp: Mon Feb 16 17:50:19 CET 2026
+==========================================
+
+## Story
 # E3-S4 - Diff Engine
 
 **Epic:** Epic 3 — Remote transport + kubectl UX
-**Status:** Done
+**Status:** Not Started
 **Priority:** P2 (High)
 **Estimated Effort:** 3 days
 **Dependencies:** E3-S1 (context config), E3-S2 (SSH tunnel transport), E2-S3 (server state API)
@@ -143,43 +152,342 @@ As an operator or AI agent, I want to run `htmlctl diff -f ./site --context stag
 
 ## Implementation Summary
 
-Implemented end-to-end diff support for remote desired-state workflows:
-- Added `internal/diff` package with deterministic file-hash comparison (`added`, `modified`, `removed`, `unchanged` summary), grouping by resource type, color-aware table rendering, and machine-readable report types.
-- Added `htmlctl diff -f <site-dir> [--output table|json|yaml]` in `internal/cli/diff_cmd.go`, including exit code behavior via `ExitError`:
-  - `0`: no changes
-  - `1`: changes detected
-  - `2`: command error
-- Added server desired-state manifest endpoint:
-  - `GET /api/v1/websites/{website}/environments/{env}/manifest`
-  - Implemented in `internal/server/resources.go` and routed in `internal/server/routes.go`.
-- Added client API method and types:
-  - `GetDesiredStateManifest()` in `internal/client/client.go`
-  - `DesiredStateManifestResponse` in `internal/client/types.go`
-- Updated `htmlctl apply --dry-run` to delegate to diff computation instead of upload/release:
-  - No bundle upload
-  - No release creation
-  - Prints diff + `Dry run: no changes applied`
-- Hardened server path parsing by removing double-unescape behavior from path parsers in:
-  - `internal/server/apply.go`
-  - `internal/server/logs.go`
-  - `internal/server/release.go`
-  - `internal/server/resources.go`
+(TBD after implementation.)
 
 ## Code Review Findings
 
-`pi` review logs:
-- `docs/review-logs/E3-S4-review-pi-2026-02-16-175416.log` (single-pass broad review)
-- `docs/review-logs/E3-S4-review-pi-2026-02-16-175737-core.log` (core API/diff split review)
-- `docs/review-logs/E3-S4-review-pi-2026-02-16-175956-cli.log` (CLI split review)
-- `docs/review-logs/E3-S4-review-pi-2026-02-16-180607-core2.log` (post-fix re-review)
-
-Addressed review-driven hardening:
-- Fixed path parser robustness for decoded `%` characters by removing double `url.PathUnescape` calls in server parser functions.
-- Added dedicated parser regression coverage in `internal/server/path_parse_test.go`.
-
-Residual note from `pi`:
-- One review run flagged release-list endpoint test coverage outside this story’s diff scope. No E3-S4 blocking issues remain.
+(TBD by review agent.)
 
 ## Completion Status
 
-Implemented, tested, and reviewed.
+(TBD after merge.)
+
+## Diff
+diff --git a/cmd/htmlctl/main.go b/cmd/htmlctl/main.go
+index 3d2bd33..c62f29b 100644
+--- a/cmd/htmlctl/main.go
++++ b/cmd/htmlctl/main.go
+@@ -10,7 +10,7 @@ var version = "dev"
+ 
+ func main() {
+ 	if err := run(os.Args[1:]); err != nil {
+-		os.Exit(1)
++		os.Exit(cli.ExitCode(err))
+ 	}
+ }
+ 
+diff --git a/internal/cli/root.go b/internal/cli/root.go
+index 86e6395..12b0eb1 100644
+--- a/internal/cli/root.go
++++ b/internal/cli/root.go
+@@ -1,20 +1,165 @@
+ package cli
+ 
+-import "github.com/spf13/cobra"
++import (
++	"context"
++	"fmt"
++	"strings"
++
++	"github.com/benedict2310/htmlctl/internal/config"
++	"github.com/benedict2310/htmlctl/internal/transport"
++	"github.com/spf13/cobra"
++)
++
++const requiresConfigAnnotation = "htmlctl.dev/requires-config"
++const requiresTransportAnnotation = "htmlctl.dev/requires-transport"
++
++var buildTransportForContext = func(ctx context.Context, info config.ContextInfo, cfg transport.SSHConfig) (transport.Transport, error) {
++	return transport.NewSSHTransportFromContext(ctx, info, cfg)
++}
++
++type rootOptions struct {
++	contextOverride string
++}
++
++type runtimeContextKey struct{}
++
++type commandRuntime struct {
++	ContextOverride string
++	ResolvedContext config.ContextInfo
++	Config          config.Config
++	ConfigPath      string
++	Transport       transport.Transport
++}
+ 
+ // NewRootCmd builds the htmlctl root command tree.
+ func NewRootCmd(version string) *cobra.Command {
++	opts := &rootOptions{}
++
+ 	cmd := &cobra.Command{
+ 		Use:   "htmlctl",
+ 		Short: "CLI control plane for static HTML websites",
++		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
++			needsConfig := commandRequiresConfig(cmd) || commandRequiresTransport(cmd)
++			if !needsConfig {
++				return nil
++			}
++
++			cfg, path, err := config.Load("")
++			if err != nil {
++				return err
++			}
++
++			ctx := cmd.Context()
++			if ctx == nil {
++				ctx = context.Background()
++			}
++			rt := &commandRuntime{
++				ContextOverride: strings.TrimSpace(opts.contextOverride),
++				Config:          cfg,
++				ConfigPath:      path,
++			}
++			if commandRequiresTransport(cmd) {
++				resolved, err := config.ResolveContext(cfg, rt.ContextOverride)
++				if err != nil {
++					return err
++				}
++				tr, err := buildTransportForContext(ctx, resolved, transport.SSHConfig{})
++				if err != nil {
++					return err
++				}
++				rt.ResolvedContext = resolved
++				rt.Transport = tr
++			}
++
++			ctx = context.WithValue(ctx, runtimeContextKey{}, rt)
++			cmd.SetContext(ctx)
++			return nil
++		},
++		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
++			rt := runtimeFromCommandIfExists(cmd)
++			if rt == nil || rt.Transport == nil {
++				return nil
++			}
++			return rt.Transport.Close()
++		},
+ 		RunE: func(cmd *cobra.Command, args []string) error {
+ 			return cmd.Help()
+ 		},
+ 	}
+ 
++	cmd.PersistentFlags().StringVar(&opts.contextOverride, "context", "", "Context name from htmlctl config")
++
++	cmd.AddCommand(newConfigCmd())
+ 	cmd.AddCommand(newRenderCmd())
+ 	cmd.AddCommand(newServeCmd())
++	cmd.AddCommand(newGetCmd())
++	cmd.AddCommand(newStatusCmd())
++	cmd.AddCommand(newDiffCmd())
++	cmd.AddCommand(newApplyCmd())
++	cmd.AddCommand(newLogsCmd())
+ 	cmd.AddCommand(newVersionCmd(version))
+ 
+ 	return cmd
+ }
++
++func markRequiresConfig(cmd *cobra.Command) {
++	if cmd.Annotations == nil {
++		cmd.Annotations = make(map[string]string)
++	}
++	cmd.Annotations[requiresConfigAnnotation] = "true"
++}
++
++func markRequiresTransport(cmd *cobra.Command) {
++	if cmd.Annotations == nil {
++		cmd.Annotations = make(map[string]string)
++	}
++	cmd.Annotations[requiresTransportAnnotation] = "true"
++}
++
++func commandRequiresConfig(cmd *cobra.Command) bool {
++	for c := cmd; c != nil; c = c.Parent() {
++		if c.Annotations != nil && c.Annotations[requiresConfigAnnotation] == "true" {
++			return true
++		}
++	}
++	return false
++}
++
++func commandRequiresTransport(cmd *cobra.Command) bool {
++	for c := cmd; c != nil; c = c.Parent() {
++		if c.Annotations != nil && c.Annotations[requiresTransportAnnotation] == "true" {
++			return true
++		}
++	}
++	return false
++}
++
++func runtimeFromCommand(cmd *cobra.Command) (*commandRuntime, error) {
++	rt := runtimeFromCommandIfExists(cmd)
++	if rt == nil {
++		return nil, fmt.Errorf("internal: command runtime is not initialized")
++	}
++	return rt, nil
++}
++
++func runtimeFromCommandIfExists(cmd *cobra.Command) *commandRuntime {
++	if cmd == nil || cmd.Context() == nil {
++		return nil
++	}
++	rt, ok := cmd.Context().Value(runtimeContextKey{}).(*commandRuntime)
++	if !ok {
++		return nil
++	}
++	return rt
++}
++
++func runtimeTransportFromCommand(cmd *cobra.Command) (transport.Transport, error) {
++	rt, err := runtimeFromCommand(cmd)
++	if err != nil {
++		return nil, err
++	}
++	if rt.Transport == nil {
++		return nil, fmt.Errorf("internal: transport is not initialized")
++	}
++	return rt.Transport, nil
++}
+diff --git a/internal/cli/root_test.go b/internal/cli/root_test.go
+index 89845c1..c63bda8 100644
+--- a/internal/cli/root_test.go
++++ b/internal/cli/root_test.go
+@@ -2,8 +2,16 @@ package cli
+ 
+ import (
+ 	"bytes"
++	"context"
++	"io"
++	"net/http"
++	"path/filepath"
+ 	"strings"
+ 	"testing"
++
++	"github.com/benedict2310/htmlctl/internal/config"
++	"github.com/benedict2310/htmlctl/internal/transport"
++	"github.com/spf13/cobra"
+ )
+ 
+ func TestRootCommandNoArgsPrintsUsage(t *testing.T) {
+@@ -22,9 +30,92 @@ func TestRootCommandNoArgsPrintsUsage(t *testing.T) {
+ 	if !strings.Contains(help, "Usage:") {
+ 		t.Fatalf("expected usage output, got: %s", help)
+ 	}
+-	for _, sub := range []string{"render", "serve", "version"} {
++	for _, sub := range []string{"config", "render", "serve", "get", "status", "diff", "apply", "logs", "version"} {
+ 		if !strings.Contains(help, sub) {
+ 			t.Fatalf("expected help output to include %q", sub)
+ 		}
+ 	}
+ }
++
++func TestRootPersistentConfigLoadOnlyAppliesToConfigCommands(t *testing.T) {
++	t.Setenv("HTMLCTL_CONFIG", filepath.Join(t.TempDir(), "missing-config.yaml"))
++
++	cmd := NewRootCmd("test-version")
++	out := &bytes.Buffer{}
++	errOut := &bytes.Buffer{}
++	cmd.SetOut(out)
++	cmd.SetErr(errOut)
++	cmd.SetArgs([]string{"version"})
++
++	if err := cmd.Execute(); err != nil {
++		t.Fatalf("version command should not require config: %v", err)
++	}
++	if strings.TrimSpace(out.String()) != "test-version" {
++		t.Fatalf("unexpected version output: %q", out.String())
++	}
++}
++
++func TestRootPersistentTransportLifecycleForAnnotatedCommand(t *testing.T) {
++	configPath := writeTestConfigFile(t, "staging")
++	t.Setenv(config.EnvConfigPath, configPath)
++
++	mock := &mockRuntimeTransport{}
++	prevFactory := buildTransportForContext
++	buildTransportForContext = func(ctx context.Context, info config.ContextInfo, cfg transport.SSHConfig) (transport.Transport, error) {
++		if info.Name != "staging" {
++			t.Fatalf("expected resolved staging context, got %#v", info)
++		}
++		return mock, nil
++	}
++	defer func() { buildTransportForContext = prevFactory }()
++
++	cmd := NewRootCmd("test")
++	remoteCmd := &cobra.Command{
++		Use: "fake-remote",
++		RunE: func(cmd *cobra.Command, args []string) error {
++			tr, err := runtimeTransportFromCommand(cmd)
++			if err != nil {
++				return err
++			}
++			if tr == nil {
++				t.Fatalf("expected runtime transport")
++			}
++			_, _ = cmd.OutOrStdout().Write([]byte("ok\n"))
++			return nil
++		},
++	}
++	markRequiresTransport(remoteCmd)
++	cmd.AddCommand(remoteCmd)
++
++	out := &bytes.Buffer{}
++	errOut := &bytes.Buffer{}
++	cmd.SetOut(out)
++	cmd.SetErr(errOut)
++	cmd.SetArgs([]string{"fake-remote"})
++
++	if err := cmd.Execute(); err != nil {
++		t.Fatalf("Execute() error = %v", err)
++	}
++	if strings.TrimSpace(out.String()) != "ok" {
++		t.Fatalf("unexpected output: %q", out.String())
++	}
++	if !mock.closed {
++		t.Fatalf("expected transport to be closed in PersistentPostRunE")
++	}
++}
++
++type mockRuntimeTransport struct {
++	closed bool
++}
++
++func (m *mockRuntimeTransport) Do(ctx context.Context, req *http.Request) (*http.Response, error) {
++	return &http.Response{
++		StatusCode: http.StatusOK,
++		Body:       io.NopCloser(strings.NewReader("ok")),
++	}, nil
++}
++
++func (m *mockRuntimeTransport) Close() error {
++	m.closed = true
++	return nil
++}
+diff --git a/internal/server/routes.go b/internal/server/routes.go
+index 3fd3bc7..e420317 100644
+--- a/internal/server/routes.go
++++ b/internal/server/routes.go
+@@ -6,6 +6,7 @@ import (
+ )
+ 
+ func registerAPIRoutes(mux *http.ServeMux, srv *Server) {
++	mux.HandleFunc("/api/v1/websites", srv.handleWebsites)
+ 	mux.HandleFunc("/api/v1/websites/", srv.handleWebsiteAPI)
+ }
+ 
+@@ -15,8 +16,14 @@ func (s *Server) handleWebsiteAPI(w http.ResponseWriter, r *http.Request) {
+ 		s.handleApply(w, r)
+ 	case strings.HasSuffix(r.URL.Path, "/releases"):
+ 		s.handleRelease(w, r)
++	case strings.HasSuffix(r.URL.Path, "/manifest"):
++		s.handleManifest(w, r)
+ 	case strings.HasSuffix(r.URL.Path, "/logs"):
+ 		s.handleLogs(w, r)
++	case strings.HasSuffix(r.URL.Path, "/status"):
++		s.handleStatus(w, r)
++	case strings.HasSuffix(r.URL.Path, "/environments"):
++		s.handleEnvironments(w, r)
+ 	default:
+ 		http.NotFound(w, r)
+ 	}
+
+## Review

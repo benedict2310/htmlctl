@@ -6,6 +6,7 @@ import (
 )
 
 func registerAPIRoutes(mux *http.ServeMux, srv *Server) {
+	mux.HandleFunc("/api/v1/websites", srv.handleWebsites)
 	mux.HandleFunc("/api/v1/websites/", srv.handleWebsiteAPI)
 }
 
@@ -15,8 +16,14 @@ func (s *Server) handleWebsiteAPI(w http.ResponseWriter, r *http.Request) {
 		s.handleApply(w, r)
 	case strings.HasSuffix(r.URL.Path, "/releases"):
 		s.handleRelease(w, r)
+	case strings.HasSuffix(r.URL.Path, "/manifest"):
+		s.handleManifest(w, r)
 	case strings.HasSuffix(r.URL.Path, "/logs"):
 		s.handleLogs(w, r)
+	case strings.HasSuffix(r.URL.Path, "/status"):
+		s.handleStatus(w, r)
+	case strings.HasSuffix(r.URL.Path, "/environments"):
+		s.handleEnvironments(w, r)
 	default:
 		http.NotFound(w, r)
 	}

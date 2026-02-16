@@ -1,0 +1,21 @@
+The provided diff for `internal/server/routes.go` enables several new API endpoints required for the diff engine and environment management. However, there are critical issues with how these routes interact with the underlying handlers (specifically regarding URL decoding) and API consistency.
+
+**Status: NEEDS_FIXES**
+
+### Findings
+
+**[Critical] Logic Bug: Double URL Decoding**
+The handlers being routed to (`handleManifest`, `handleStatus`, `handleEnvironments` in `internal/server/resources.go`) use `url.PathUnescape` on path segments derived from `r.URL.Path`. In Go's `net/http`, `r.URL.Path` is **already decoded**.
+*   **Impact**: Names containing `+` will be corrupted (converted to spaces), and names containing `%` will cause errors.
+*   **Fix**: Modify `internal/server/resources.go` to remove `url.PathUnescape` calls in `parseManifestPath`, `parseStatusPath`, and `parseEnvironmentsPath`. Use the path segments directly.
+
+**[Major] API Inconsistency (Trailing Slash)**
+*   `GET /api/v1/websites` is handled by `handleWebsites` (returns 200).
+*   `GET /api/v1/websites/` (with trailing slash) is routed to `handleWebsiteAPI`, which falls through to `default: http.NotFound` (returns 404).
+*   **Fix**: Update `handleWebsiteAPI` in `internal/server/routes.go` (or the handler itself) to handle the empty suffix case by delegating to `handleWebsites` or redirecting.
+
+**[Minor] Future Extensibility**
+The `strings.HasSuffix` routing pattern in `handleWebsiteAPI` limits the ability to add standard REST endpoints ending in variables (e.g., `GET /api/v1/websites/{name}`). While sufficient for the current specific endpoints, this pattern may need refactoring if resource-level retrieval is added later.
+
+**[Info] Scope Check**
+This diff only implements the server-side routing. The user story `E3-S4` also requires the client-side `htmlctl diff` command implementation. Ensure the client code is present in a related change.

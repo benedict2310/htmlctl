@@ -1,0 +1,10 @@
+The code diff provided mostly contains the wiring for the new commands (`diff`, `apply`, etc.) in `root.go` and `routes.go`, but lacks the actual implementation files required by the story. While the wiring logic itself is sound, the diff is incomplete regarding the story objectives.
+
+VERDICT: MISSING IMPLEMENTATION
+
+1. **Critical / Missing Files / internal/diff/**: The story "E3-S4-diff-engine" requires implementing the diff engine (`internal/diff/`), but these files are missing from the diff. The command `newDiffCmd` is referenced but its implementation (`internal/cli/diff_cmd.go`) is not included.
+2. **Critical / Missing Files / internal/cli/apply_cmd.go**: The story requires adding a `--dry-run` flag to `apply`, but `internal/cli/apply_cmd.go` is missing from the diff.
+3. **Critical / Missing Tests / internal/diff/**: The story explicitly lists tests to add (`diff_test.go`, `display_test.go`, `diff_cmd_test.go`, `apply_cmd_test.go`). None are present in the diff.
+4. **Minor / internal/server/routes.go / Use strict routing**: The route `strings.HasSuffix(r.URL.Path, "/manifest")` is loose and relies on `handleManifest` to validate the full path structure. If `handleManifest` is not strict, this could match unintended paths (e.g. `/api/v1/websites/foo/bar/manifest`).
+   *Fix:* Ensure `handleManifest` validates the path structure (verified on disk: it does), or use a more specific router pattern if available.
+5. **Info / internal/cli/root.go**: The `PersistentPreRunE` logic for loading config and initializing transport is correctly implemented and handles resource cleanup via `PersistentPostRunE`.

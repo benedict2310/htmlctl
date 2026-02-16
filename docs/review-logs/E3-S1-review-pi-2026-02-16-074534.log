@@ -1,0 +1,47 @@
+==========================================
+Code Review Log
+==========================================
+Story:     docs/stories/E3-S1-context-config.md
+Agent:     pi
+Branch:    main
+Commit:    07ee38a
+Timestamp: Mon Feb 16 07:45:34 CET 2026
+==========================================
+
+Here are the code review findings for the provided diff based on the E3-S1 story requirements.
+
+### Severity P0 (Blocking / Critical)
+
+**1. Missing Core Implementation Files (AC-1, AC-2)**
+*   **File:** `internal/config/` (entire package missing)
+*   **Impact:** The story requires creating `types.go`, `loader.go`, and `resolve.go` to handle config parsing and context resolution. The provided diff contains only the CLI entry point modifications. Without these files, the feature functionality is non-existent.
+*   **Fix:** Implement the `internal/config` package as specified in the Implementation Plan (5.1).
+
+**2. Undefined Symbol `newConfigCmd` (AC-8, AC-9, AC-10)**
+*   **File:** `internal/cli/root.go`, line 19
+*   **Impact:** The code calls `newConfigCmd()`, but this function is not defined in the provided diff. This results in a compilation error and missing subcommands (`view`, `current-context`, `use-context`).
+*   **Fix:** Create `internal/cli/config_cmd.go` (or `cmd/htmlctl/config_cmd.go` per plan) implementing `newConfigCmd` and the required subcommands.
+
+**3. Inaccessible and Unused Flag Variable (AC-3)**
+*   **File:** `internal/cli/root.go`, line 7 and 17
+*   **Impact:** `var contextName string` is declared locally within `NewRootCmd`. While Go handles the heap allocation, the variable is inaccessible to any command logic (execution phase) after `NewRootCmd` returns. The flag value will be captured but never read/used.
+*   **Fix:** Move `contextName` to a package-level struct (e.g., `ConfigOptions`) or use `cmd.Flags().GetString("context")` inside the command execution logic.
+
+**4. Missing Config Loading Logic (AC-1, AC-4)**
+*   **File:** `internal/cli/root.go`
+*   **Impact:** There is no `PersistentPreRunE` or similar hook configured on the root command to actually trigger the config loading process. The CLI will run without loading `~/.htmlctl/config.yaml`.
+*   **Fix:** Add a `PersistentPreRunE` to the root command that calls the (missing) config loader and sets up the context before subcommands execute.
+
+### Severity P1 (Major / Logic)
+
+**1. Test Coverage Gaps (AC-1 thru AC-11)**
+*   **File:** `internal/cli/root_test.go`
+*   **Impact:** The updated test only checks that "config" appears in the help text. There are no tests for:
+    *   Config file loading (valid/invalid/missing).
+    *   Context resolution logic.
+    *   `--context` flag overriding behavior.
+*   **Fix:** Add unit tests in `internal/config/` and integration tests in `internal/cli/` verifying the behavior defined in the Acceptance Criteria.
+
+### Residual Risks
+*   **Architecture Deviation:** The diff modifies `internal/cli/root.go`, whereas the plan references `cmd/htmlctl/root.go`. Ensure the project structure is consistent (it appears the project uses an `internal/cli` pattern which is good, but the plan might need updating).
+*   **SSH Transport:** AC-11 requires preserving the SSH URL. Since the config types are missing, this cannot be verified yet.

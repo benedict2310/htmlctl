@@ -1,0 +1,37 @@
+==========================================
+Code Review Log
+==========================================
+Story:     docs/stories/E3-S1-context-config.md
+Agent:     pi
+Branch:    main
+Commit:    07ee38a
+Timestamp: Mon Feb 16 07:46:29 CET 2026
+==========================================
+
+This is a strict code review of the E3-S1 patch for `htmlctl`.
+
+### Summary
+The patch implements the core configuration loading, parsing, and context resolution logic correctly, covering most acceptance criteria. However, there are two critical issues: the dependency update is missing (P0), and the CLI flag wiring is structurally defective (P1), rendering the `--context` flag unusable for future remote commands.
+
+### Findings
+
+**P0: Missing `go.mod` dependency updates**
+- **File:** `go.mod`, `go.sum` (missing from patch)
+- **Impact:** The code imports `gopkg.in/yaml.v3`, but the patch does not include the corresponding `go.mod` and `go.sum` updates. This will cause the build to fail immediately.
+- **Fix:** Run `go get gopkg.in/yaml.v3` and include the updated `go.mod` and `go.sum` files in the commit.
+
+**P1: `--context` flag is defined but inaccessible (Wiring Gap)**
+- **File:** `internal/cli/root.go` (inside `NewRootCmd`)
+- **Impact:** The `--context` flag is bound to a local variable `contextName` inside `NewRootCmd`. This variable goes out of scope and is not stored or exported. Consequently, the flag satisfies the "existence" requirement but violates the "wiring" requirement; future remote commands (and the transport layer) have no way to access the user's override value, blocking AC-3 ("flag overrides current-context").
+- **Fix:** Move `contextName` to a package-level variable (e.g., `var contextFlag string`) or define a `ConfigFlags` struct shared with subcommands, ensuring the value can be read by the config loader or commands when needed.
+
+**P2: Strict validation blocks viewing empty configs**
+- **File:** `internal/config/types.go` (lines 44-46, `Validate` method)
+- **Impact:** `Validate()` returns an error if `len(c.Contexts) == 0`. This causes `htmlctl config view` to fail if the user has created a skeletal config file (e.g., just `apiVersion`) but hasn't added contexts yet. While remote commands *should* fail, `view` and `config` management commands should likely tolerate an empty list to allow for initial setup.
+- **Fix:** Remove the `len(c.Contexts) == 0` check from `Validate()`. The `ResolveContext` function already correctly handles the case where no contexts exist or the requested context is missing.
+
+### Residual Risks & Testing Gaps
+- **Integration Testing for Flag Override:** Because the flag wiring is broken and no remote commands exist yet, AC-3 ("`--context` flag overrides...") cannot be fully verified via integration tests in this patch.
+- **Windows Compatibility:** `Save` uses `0o600` permissions. On Windows, `Chmod` has limited effect, but this is generally acceptable for a v1 CLI.
+
+**Recommendation:** Fix P0 and P1 before merging. P2 is optional but recommended for better UX.

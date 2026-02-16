@@ -1,0 +1,10 @@
+NEEDS_FIXES
+
+**Findings:**
+
+*   **Missing Tests (High)**: The diff introduces `handleListReleases` (GET support for releases) in `internal/server/release.go`, but there are no corresponding tests added to `internal/server/release_test.go`. The existing tests only cover release creation (POST).
+    *   *Action*: Add a test case in `internal/server/release_test.go` that creates multiple releases and verifies the GET endpoint returns them correctly with the expected `active` status.
+
+*   **API Contract / URL Decoding (Verified Clean)**: The removal of `url.PathUnescape` from `apply.go`, `logs.go`, and `release.go` is correct. `r.URL.Path` is already decoded by Go's HTTP server, so calling `PathUnescape` again caused double-decoding errors for names with `%` characters. This behavior is covered by `TestParsePathsAllowPercentInDecodedSegments` in `internal/server/path_parse_test.go`.
+
+*   **Routing Logic (Note)**: The usage of `strings.HasSuffix` in `routes.go` relies on the handlers (`handleManifest`, etc.) to strictly validate the path structure. I verified that `parseManifestPath` and others in `internal/server/resources.go` perform strict length and segment checks, so this routing approach is safe.

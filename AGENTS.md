@@ -17,6 +17,13 @@ When Go implementation files are added, follow story-defined targets:
 - `make test` (or `go test ./...`) to run unit/integration tests.
 - `make lint` to run static checks.
 
+Preferred automated test environment is Docker (`golang:1.24`) to keep toolchains consistent:
+- `docker run --rm -it -v "$PWD":/work -w /work golang:1.24 bash -lc 'go test ./...'`
+
+Notes:
+- Use the container command above for standard verification and CI-like reproducibility.
+- For manual SSH-tunnel end-to-end checks (`htmlctl` -> SSH -> `htmlservd`), prefer host execution unless the container is explicitly configured with SSH agent forwarding, `known_hosts`, and a reachable SSH server.
+
 ## Coding Style & Naming Conventions
 - Story docs should keep the established numbered section format (`## 1. Objective` through `## 7. Verification Plan`) and checkbox acceptance criteria.
 - For Go code, use `gofmt` defaults, lowercase package names, and `_test.go` suffixes.

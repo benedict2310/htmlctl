@@ -1,0 +1,43 @@
+To: Developer
+From: Antigravity
+Subject: Code Review - E3-S3 core remote commands
+
+I have reviewed the patch for story E3-S3. The implementation of the CLI commands, client transport, and server endpoints is generally solid and adheres to the acceptance criteria. However, there are significant scalability and performance concerns regarding bundle creation and server-side status reporting that should be addressed before general availability.
+
+### Critical Findings (P0/P1)
+*None. The code appears functionally correct and safe for typical small-scale usage.*
+
+### Major Findings (P2)
+
+**1. Scalability: In-memory bundle creation (OOM Risk)**
+*   **File:** `internal/bundle/build.go`
+*   **Issue:** `BuildTarFromDir` reads all site files into a `files` map (`map[string][]byte`) and then writes them into a `bytes.Buffer`. This double-buffers the entire site content in RAM. For sites with large assets (e.g., video, high-res images), this could easily cause an OOM crash.
+*   **Recommendation:** Refactor to verify files and compute hashes in a first pass, then stream file contents directly to the `tar.Writer` (piped to the HTTP request) without holding the full bundle in memory.
+
+**2. Performance: Inefficient resource counting in Status API**
+*   **File:** `internal/server/resources.go` (`handleStatus`)
+*   **Issue:** The status endpoint calls `q.ListPagesByWebsite`, `q.ListAssetsByWebsite`, etc., fetching **all** rows and columns just to calculate `len()`. This is an O(N) operation that wastes database I/O and server memory as the site grows.
+*   **Recommendation:** Implement and use `COUNT(*)` queries (e.g., `CountPagesByWebsite`) in the database layer.
+
+### Minor Findings (P3)
+
+**3. Robustness: Hardcoded CSS paths**
+*   **File:** `internal/bundle/build.go`
+*   **Issue:** The builder explicitly reads `styles/tokens.css` and `styles/default.css`. If a user configures a different file structure (allowed by `website.yaml` spec potentially), this will fail or produce an incomplete bundle.
+*   **Recommendation:** Use the `defaultStyleBundle` definition from the loaded site configuration to determine which style files to include, rather than hardcoding paths.
+
+**4. Robustness: Brittle script counting logic**
+*   **File:** `internal/server/resources.go`
+*   **Issue:** `handleStatus` distinguishes scripts from assets by checking `strings.HasPrefix(a.Filename, "scripts/")`. This relies on file naming conventions rather than resource types.
+*   **Recommendation:** If the database schema supports it, filter by a `kind` column or a dedicated `scripts` table.
+
+**5. Consistency: Site Name Mismatch**
+*   **File:** `internal/bundle/build.go`
+*   **Issue:** `BuildTarFromDir` takes a `website` string (from CLI context) but also loads `website.yaml`. It does not verify that the name in `website.yaml` matches the context. This allows applying a site configured as "site-A" to "site-B", which might be unintended.
+*   **Recommendation:** Add a validation check: if `website.yaml` defines a name, ensure it matches the target website argument.
+
+### Verification Status
+*   **Automated Tests:** Comprehensive coverage for CLI, Client, and Server logic.
+*   **Manual Verification:** ACs appear met based on code analysis.
+
+**Verdict:** **APPROVE with P2 fixes recommended.** The scalability issues (P2) should be addressed to ensure the tool handles real-world production sites reliably.

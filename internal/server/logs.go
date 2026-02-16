@@ -105,14 +105,8 @@ func parseLogsPath(pathValue string) (website string, env string, envScoped bool
 		if parts[0] != "api" || parts[1] != "v1" || parts[2] != "websites" || parts[4] != "environments" || parts[6] != "logs" {
 			return "", "", false, false
 		}
-		website, err := url.PathUnescape(parts[3])
-		if err != nil {
-			return "", "", false, false
-		}
-		env, err = url.PathUnescape(parts[5])
-		if err != nil {
-			return "", "", false, false
-		}
+		website = strings.TrimSpace(parts[3])
+		env = strings.TrimSpace(parts[5])
 		if strings.TrimSpace(website) == "" || strings.TrimSpace(env) == "" {
 			return "", "", false, false
 		}
@@ -122,10 +116,7 @@ func parseLogsPath(pathValue string) (website string, env string, envScoped bool
 		if parts[0] != "api" || parts[1] != "v1" || parts[2] != "websites" || parts[4] != "logs" {
 			return "", "", false, false
 		}
-		website, err := url.PathUnescape(parts[3])
-		if err != nil {
-			return "", "", false, false
-		}
+		website = strings.TrimSpace(parts[3])
 		if strings.TrimSpace(website) == "" {
 			return "", "", false, false
 		}

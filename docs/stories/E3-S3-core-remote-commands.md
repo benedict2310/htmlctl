@@ -1,7 +1,7 @@
 # E3-S3 - Core Remote Commands
 
 **Epic:** Epic 3 — Remote transport + kubectl UX
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1 (Critical Path)
 **Estimated Effort:** 4 days
 **Dependencies:** E3-S1 (context config), E3-S2 (SSH tunnel transport), E2-S3 (server apply API), E2-S5 (server audit log API)
@@ -90,29 +90,29 @@ As an operator or AI agent, I want to run `htmlctl get`, `status`, `apply`, and 
 
 ## 6. Acceptance Criteria
 
-- [ ] AC-1: `htmlctl get websites --context <ctx>` lists all websites on the server in a formatted table
-- [ ] AC-2: `htmlctl get environments --context <ctx>` lists all environments with their active release IDs
-- [ ] AC-3: `htmlctl status website/<name> --context <ctx>` displays environment name, active release ID, release timestamp, and resource counts (pages, components, styles)
-- [ ] AC-4: `htmlctl apply -f ./site --context <ctx>` bundles the local site directory, uploads it to the server, and reports the new release ID upon success
-- [ ] AC-5: `apply` displays progress feedback: "Bundling... Uploading... Validating... Rendering... Activating... Done. Release <id> active."
-- [ ] AC-6: `apply` with an invalid site directory (missing `website.yaml`) fails with a clear local validation error before uploading
-- [ ] AC-7: `htmlctl logs website/<name> --context <ctx>` displays audit log entries with timestamp, action, actor, environment, and release ID
-- [ ] AC-8: All commands accept `--output json` to produce machine-parseable JSON output
-- [ ] AC-9: All commands accept `--output yaml` to produce YAML output
-- [ ] AC-10: All commands use the SSH tunnel transport — no direct network connections to the server
-- [ ] AC-11: Server-side errors (4xx, 5xx) are translated to user-friendly CLI error messages with actionable suggestions
-- [ ] AC-12: When the `--context` flag is omitted, commands use `current-context` from config; when provided, it overrides
-- [ ] AC-13: Bundle manifest includes SHA256 hashes for all files; server can verify integrity
+- [x] AC-1: `htmlctl get websites --context <ctx>` lists all websites on the server in a formatted table
+- [x] AC-2: `htmlctl get environments --context <ctx>` lists all environments with their active release IDs
+- [x] AC-3: `htmlctl status website/<name> --context <ctx>` displays environment name, active release ID, release timestamp, and resource counts (pages, components, styles)
+- [x] AC-4: `htmlctl apply -f ./site --context <ctx>` bundles the local site directory, uploads it to the server, and reports the new release ID upon success
+- [x] AC-5: `apply` displays progress feedback: "Bundling... Uploading... Validating... Rendering... Activating... Done. Release <id> active."
+- [x] AC-6: `apply` with an invalid site directory (missing `website.yaml`) fails with a clear local validation error before uploading
+- [x] AC-7: `htmlctl logs website/<name> --context <ctx>` displays audit log entries with timestamp, action, actor, environment, and release ID
+- [x] AC-8: All commands accept `--output json` to produce machine-parseable JSON output
+- [x] AC-9: All commands accept `--output yaml` to produce YAML output
+- [x] AC-10: All commands use the SSH tunnel transport — no direct network connections to the server
+- [x] AC-11: Server-side errors (4xx, 5xx) are translated to user-friendly CLI error messages with actionable suggestions
+- [x] AC-12: When the `--context` flag is omitted, commands use `current-context` from config; when provided, it overrides
+- [x] AC-13: Bundle manifest includes SHA256 hashes for all files; server can verify integrity
 
 ## 7. Verification Plan
 
 ### Automated Tests
 
-- [ ] Unit tests for bundle creation (correct tar structure, manifest hashes match file content)
-- [ ] Unit tests for API client methods with mock transport (correct HTTP requests constructed, responses parsed)
-- [ ] Unit tests for output formatters (table alignment, JSON validity, YAML validity)
-- [ ] Integration tests for each command using a mock HTTP server behind the transport interface
-- [ ] Test error paths: server returns 404, 409, 500; verify CLI error messages
+- [x] Unit tests for bundle creation (correct tar structure, manifest hashes match file content)
+- [x] Unit tests for API client methods with mock transport (correct HTTP requests constructed, responses parsed)
+- [x] Unit tests for output formatters (table alignment, JSON validity, YAML validity)
+- [x] Integration tests for each command using a mock HTTP server behind the transport interface
+- [x] Test error paths: server returns 404, 409, 500; verify CLI error messages
 
 ### Manual Tests
 
@@ -139,21 +139,51 @@ As an operator or AI agent, I want to run `htmlctl get`, `status`, `apply`, and 
 
 ## 10. Open Questions
 
-- What are the exact server API endpoint paths? **Tentative answer:** Follow REST conventions: `GET /api/v1/websites`, `GET /api/v1/websites/{name}/status`, `POST /api/v1/websites/{name}/environments/{env}/apply`, `GET /api/v1/websites/{name}/logs`. Finalize with E2 stories.
-- Should `htmlctl get` support a `releases` resource type? **Tentative answer:** Yes, `htmlctl get releases --context <ctx>` lists releases for the website/environment in the context.
-- Should `apply` support `--wait` to block until the release is fully active? **Tentative answer:** Apply is synchronous in v1 (server processes inline); no need for async wait.
-- Should logs support `--since` or `--limit` filtering? **Tentative answer:** Add `--limit N` (default 50) in v1; `--since` can be added later.
+- What are the exact server API endpoint paths? **Implemented answer:** `GET /api/v1/websites`, `GET /api/v1/websites/{website}/environments`, `GET /api/v1/websites/{website}/environments/{env}/status`, `POST /api/v1/websites/{website}/environments/{env}/apply`, `POST|GET /api/v1/websites/{website}/environments/{env}/releases`, `GET /api/v1/websites/{website}/environments/{env}/logs`.
+- Should `htmlctl get` support a `releases` resource type? **Implemented answer:** Yes, `htmlctl get releases` lists releases for the context website/environment.
+- Should `apply` support `--wait` to block until the release is fully active? **Implemented answer:** Apply remains synchronous in v1 (upload + release build in-sequence).
+- Should logs support `--since` or `--limit` filtering? **Implemented answer:** `--limit` is implemented (default 50); `--since` remains out of scope.
 
 ---
 
 ## Implementation Summary
 
-(TBD after implementation.)
+Implemented core remote command stack and supporting APIs:
+- Added `internal/client` typed API client (`ListWebsites`, `ListEnvironments`, `ListReleases`, `GetStatus`, `ApplyBundle`, `CreateRelease`, `GetLogs`) with SSH/transport error mapping and user-friendly HTTP error handling.
+- Added `internal/bundle.BuildTarFromDir` to validate a site directory, generate a full manifest with SHA256 hashes, and build a deterministic tar archive for apply uploads.
+  - Added a 100MB bundle-size guardrail and context/`website.yaml` name consistency validation.
+- Added `internal/output` formatting package for table/json/yaml output modes.
+- Added CLI commands in `internal/cli`: `get`, `status`, `apply`, `logs`, including:
+  - `--output table|json|yaml` support on all commands
+  - `--limit` for logs
+  - apply progress messages in table mode
+  - local validation before upload (`website.yaml` missing fails fast)
+- Extended server APIs in `internal/server`:
+  - `GET /api/v1/websites`
+  - `GET /api/v1/websites/{website}/environments`
+  - `GET /api/v1/websites/{website}/environments/{env}/status`
+  - `GET /api/v1/websites/{website}/environments/{env}/releases`
+  - Optimized status counts to use `COUNT(*)` queries rather than full-row scans.
+- Registered remote commands in CLI root and kept lifecycle on SSH transport via existing runtime annotations.
+- Added comprehensive tests:
+  - bundle generation/validation tests
+  - client request/response + error-path tests
+  - formatter tests
+  - CLI command tests using mocked transport
+  - server endpoint tests for website/environment/status/release listing
+- Verification evidence:
+  - `go test ./...`
 
 ## Code Review Findings
 
-(TBD by review agent.)
+`pi` review iterations:
+- `docs/review-logs/E3-S3-review-pi-2026-02-16-114102.log`
+  - Initial pass: no P0/P1, recommended scalability improvements.
+- `docs/review-logs/E3-S3-review-pi-2026-02-16-114423.log`
+  - Follow-up pass: identified P2 robustness gaps (script counting + MIME fallback).
+- `docs/review-logs/E3-S3-review-pi-2026-02-16-114704.log`
+  - Final status: **CLEAN** (no critical findings).
 
 ## Completion Status
 
-(TBD after merge.)
+Implemented, tested, and review-clean. Ready for merge.

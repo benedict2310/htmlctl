@@ -2,14 +2,15 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
 	"github.com/benedict2310/htmlctl/internal/audit"
+	dbpkg "github.com/benedict2310/htmlctl/internal/db"
 	"github.com/benedict2310/htmlctl/internal/release"
 )
 
@@ -21,14 +22,32 @@ type releaseResponse struct {
 	Status            string  `json:"status"`
 }
 
+type releasesResponse struct {
+	Website         string            `json:"website"`
+	Environment     string            `json:"environment"`
+	ActiveReleaseID *string           `json:"activeReleaseId,omitempty"`
+	Releases        []releaseListItem `json:"releases"`
+}
+
+type releaseListItem struct {
+	ReleaseID string `json:"releaseId"`
+	Status    string `json:"status"`
+	CreatedAt string `json:"createdAt"`
+	Active    bool   `json:"active"`
+}
+
 func (s *Server) handleRelease(w http.ResponseWriter, r *http.Request) {
 	website, env, ok := parseReleasePath(r.URL.Path)
 	if !ok {
 		http.NotFound(w, r)
 		return
 	}
+	if r.Method == http.MethodGet {
+		s.handleListReleases(w, r, website, env)
+		return
+	}
 	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", http.MethodPost)
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
 		writeAPIError(w, http.StatusMethodNotAllowed, "method not allowed", nil)
 		return
 	}
@@ -104,6 +123,53 @@ func (s *Server) handleRelease(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleListReleases(w http.ResponseWriter, r *http.Request, website, env string) {
+	if s.db == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "server is not ready", nil)
+		return
+	}
+	q := dbpkg.NewQueries(s.db)
+	websiteRow, err := q.GetWebsiteByName(r.Context(), website)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeAPIError(w, http.StatusNotFound, fmt.Sprintf("website %q not found", website), nil)
+			return
+		}
+		writeAPIError(w, http.StatusInternalServerError, "lookup website failed", []string{err.Error()})
+		return
+	}
+	envRow, err := q.GetEnvironmentByName(r.Context(), websiteRow.ID, env)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeAPIError(w, http.StatusNotFound, fmt.Sprintf("environment %q not found", env), nil)
+			return
+		}
+		writeAPIError(w, http.StatusInternalServerError, "lookup environment failed", []string{err.Error()})
+		return
+	}
+	releases, err := q.ListReleasesByEnvironment(r.Context(), envRow.ID)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "list releases failed", []string{err.Error()})
+		return
+	}
+	items := make([]releaseListItem, 0, len(releases))
+	for _, rel := range releases {
+		active := envRow.ActiveReleaseID != nil && *envRow.ActiveReleaseID == rel.ID
+		items = append(items, releaseListItem{
+			ReleaseID: rel.ID,
+			Status:    rel.Status,
+			CreatedAt: rel.CreatedAt,
+			Active:    active,
+		})
+	}
+	writeJSON(w, http.StatusOK, releasesResponse{
+		Website:         websiteRow.Name,
+		Environment:     envRow.Name,
+		ActiveReleaseID: envRow.ActiveReleaseID,
+		Releases:        items,
+	})
+}
+
 func parseReleasePath(pathValue string) (website, env string, ok bool) {
 	parts := strings.Split(strings.Trim(pathValue, "/"), "/")
 	if len(parts) != 7 {
@@ -112,14 +178,8 @@ func parseReleasePath(pathValue string) (website, env string, ok bool) {
 	if parts[0] != "api" || parts[1] != "v1" || parts[2] != "websites" || parts[4] != "environments" || parts[6] != "releases" {
 		return "", "", false
 	}
-	website, err := url.PathUnescape(parts[3])
-	if err != nil {
-		return "", "", false
-	}
-	env, err = url.PathUnescape(parts[5])
-	if err != nil {
-		return "", "", false
-	}
+	website = strings.TrimSpace(parts[3])
+	env = strings.TrimSpace(parts[5])
 	if strings.TrimSpace(website) == "" || strings.TrimSpace(env) == "" {
 		return "", "", false
 	}

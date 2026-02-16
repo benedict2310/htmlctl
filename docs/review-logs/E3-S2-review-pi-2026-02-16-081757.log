@@ -1,0 +1,53 @@
+==========================================
+Code Review Log
+==========================================
+Story:     docs/stories/E3-S2-ssh-tunnel-transport.md
+Agent:     pi
+Branch:    main
+Commit:    07ee38a
+Timestamp: Mon Feb 16 08:17:57 CET 2026
+==========================================
+
+This is a strict code review for the E3-S2 implementation patch.
+
+**Status:** **CLEAN** (No P0/P1 issues found)
+
+The implementation is high-quality, secure, and fully covers the acceptance criteria. The integration tests are particularly robust, verifying the full SSH tunnel loop with a real in-process SSH server.
+
+### 1. Acceptance Criteria Verification
+
+| AC | Description | Status | Evidence |
+| :--- | :--- | :--- | :--- |
+| **AC-1** | Parse `ssh://user@host` | **PASS** | `ssh_test.go` verifies default port 22 parsing. |
+| **AC-2** | Parse `ssh://...:2222` | **PASS** | `ssh_test.go` verifies custom port parsing. |
+| **AC-3** | SSH Agent Auth | **PASS** | `ssh_agent.go` implements socket dialing; `ssh.go` falls back to it. |
+| **AC-4** | Local port forward | **PASS** | `forwardConn` implements strict bi-directional copy via `direct-tcpip`. |
+| **AC-5** | HTTP over tunnel | **PASS** | `integration_test.go` verifies HTTP 200 via tunnel. |
+| **AC-6** | Per-command lifecycle | **PASS** | `root.go` `PersistentPreRunE`/`PostRunE` handles setup/teardown. |
+| **AC-7** | Known hosts check | **PASS** | `known_hosts.go` enforces check; `integration_test.go` verifies rejection. |
+| **AC-8** | SSH Agent missing error | **PASS** | `ssh_agent_test.go` verifies explicit error on missing `SSH_AUTH_SOCK`. |
+| **AC-9** | Timeout handling | **PASS** | `NewSSHTransport` respects context deadline; tests verify `ErrSSHUnreachable`. |
+| **AC-10**| Auth failure error | **PASS** | `classifySSHConnectError` correctly maps errors; verified in integration test. |
+| **AC-11**| Mockable Transport | **PASS** | `Transport` interface defined and mocked in `transport_test.go`. |
+
+### 2. Residual Risks & Observations (P2/P3)
+
+These findings do not block the story but should be noted for future maintenance:
+
+1.  **P2: Cleanup on Command Failure**
+    *   **Context:** `cobra` does not execute `PersistentPostRunE` if the command's `RunE` returns an error.
+    *   **Risk:** If `htmlctl` is used as a library or in a long-running process (not CLI), a failed command could leak the SSH connection and listener until the process exits.
+    *   **Mitigation:** For the CLI use case (`User Story`), the OS cleans up resources on process exit, so this is acceptable for v1.
+
+2.  **P3: Default Port Discrepancy**
+    *   **Context:** The AC example mentions `127.0.0.1:8420`, but the code defaults to `127.0.0.1:9400` (`DefaultRemoteAddr`).
+    *   **Analysis:** Code comments explicitly link this to `internal/server.DefaultPort`, suggesting `9400` is the correct technical value and the AC example was illustrative.
+
+3.  **P3: Tunnel Tear-down Dependency**
+    *   **Context:** `forwardConn` waits for both sides of the TCP connection to close (`wg.Wait()`) before returning.
+    *   **Risk:** If the remote server does not close the connection (ignores `Connection: close`), the tunnel goroutines might hang until the parent `SSHTransport.Close()` forcibly kills the SSH client.
+    *   **Mitigation:** `PersistentPostRunE` explicitly calls `Close()`, ensuring no hang on CLI exit.
+
+### 3. Recommendation
+
+**Approve.** The patch meets all requirements with strict security defaults (mandatory known_hosts, clear error classification) and comprehensive testing.

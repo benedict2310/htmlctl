@@ -1,0 +1,30 @@
+The code review for story E3-S3 is complete. The implementation of the client, CLI commands (`get`, `status`, `logs`, `apply`), and corresponding server endpoints is solid and test-covered. However, there are a few correctness and robustness findings regarding resource counting logic and MIME type detection that should be addressed.
+
+### Findings
+
+**P2 - Logic Flaw in Script Counting (Status API)**
+`internal/server/resources.go:290`
+The `countAssetsByPattern` function assumes scripts always reside in a `scripts/` directory by using `LIKE 'scripts/%'`. However, `BuildTarFromDir` uses `site.ScriptPath` from `website.yaml`, which allows the script to be located anywhere (e.g., `app.js` in the root).
+*   **Impact:** If a user configures a script path outside `scripts/`, `htmlctl status` will report 0 scripts and miscount it as a generic asset.
+*   **Recommendation:** If the `assets` table schema allows, count by a `kind` column (e.g. `kind = 'Script'`). Otherwise, align the SQL query with the actual logic used to store resources, or fallback to checking the file extension (`.js`, `.mjs`) instead of the directory prefix.
+
+**P2 - Robustness in MIME Type Detection**
+`internal/bundle/build.go:261`
+`contentTypeForPath` relies solely on `mime.TypeByExtension`, which depends on the host OS's MIME database (e.g., `/etc/mime.types`).
+*   **Impact:** In minimal container environments (Alpine, Distroless) often used in CI/CD, this database may be missing. Critical files like `.css` and `.js` would default to `application/octet-stream`, potentially breaking the site when served.
+*   **Recommendation:** Add a hardcoded fallback map for common web extensions (`.html`, `.css`, `.js`, `.json`, `.svg`, `.png`, `.jpg`) before defaulting to `application/octet-stream`.
+
+**P3 - Inconsistent Database Access**
+`internal/server/resources.go:70`
+`handleWebsites` uses raw `s.db.QueryContext` and manual row scanning, whereas other handlers (`handleEnvironments`, `handleStatus`, `handleListReleases`) use the generated `dbpkg` / `sqlc` interface.
+*   **Recommendation:** Refactor `handleWebsites` to use `dbpkg.NewQueries(s.db).ListWebsites(...)` for consistency and maintainability.
+
+**P3 - Race Condition in Bundle Creation**
+`internal/bundle/build.go`
+`BuildTarFromDir` accesses files twice: once to hash them (`hashFile`) and later to write them to the tarball (`writeTarFileFromDisk`).
+*   **Impact:** If a file is modified between these two operations, the manifest hash will not match the actual content in the tarball, causing server-side validation failure.
+*   **Recommendation:** While likely acceptable for a CLI tool, this can be mitigated by reading small files into memory once, or accepting the risk as low-probability for this iteration.
+
+### Summary
+State: **CHANGES REQUESTED** (due to P2 findings).
+Please address the script counting logic and MIME type fallback to ensure correctness across all configurations and environments. The rest of the implementation is CLEAN.

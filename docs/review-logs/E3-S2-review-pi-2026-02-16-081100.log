@@ -1,0 +1,58 @@
+==========================================
+Code Review Log
+==========================================
+Story:     docs/stories/E3-S2-ssh-tunnel-transport.md
+Agent:     pi
+Branch:    main
+Commit:    07ee38a
+Timestamp: Mon Feb 16 08:11:00 CET 2026
+==========================================
+
+The code review for the `E3-S2` patch follows.
+
+### Summary
+The `internal/transport` package implementation is solid and meets most acceptance criteria (URL parsing, SSH agent auth, forwarding, known_hosts). However, the **CLI integration is missing**, preventing verification of the "per-command lifecycle" (AC-6), and there is a **default port mismatch** with the story spec.
+
+### Findings
+
+#### P0: Missing CLI Integration
+**File:** `cmd/htmlctl/root.go` (Missing from patch)
+- **Issue:** The story scope includes "Files to Modify: cmd/htmlctl/root.go" and AC-6 requires "The tunnel is opened at command start and closed after the command completes". This wiring is absent, leaving the transport unused.
+- **Fix:** Update `cmd/htmlctl/root.go` to:
+  1. Initialize `transport.NewSSHTransportFromContext` in `PersistentPreRunE`.
+  2. Inject the transport into the command context or a global registry.
+  3. Ensure `transport.Close()` is called in `PersistentPostRunE`.
+
+#### P1: Remote Port Mismatch & Configuration
+**File:** `internal/transport/ssh.go` (Line 22)
+- **Issue:** `DefaultRemoteAddr` is set to `127.0.0.1:9400`, but Story Section 10 and 5.3 specify `8420`.
+- **Fix:** Change default to `8420` to match the specification.
+```go
+const DefaultRemoteAddr = "127.0.0.1:8420"
+```
+
+**File:** `internal/transport/context.go`
+- **Issue:** The story's "Open Questions" section tentatively decided to "allow override via `port` field in context config". The current `NewSSHTransportFromContext` implementation ignores any port configuration and hardcodes `DefaultRemoteAddr`, making it impossible to change the remote `htmlservd` port without code changes.
+- **Fix:**
+  1. Add `RemotePort string` (or `int`) to `SSHConfig` struct.
+  2. Update `NewSSHTransport` to use it if provided.
+  3. (Requires `internal/config` update): Map `info.RemotePort` (if added) to `cfg.RemotePort` in `NewSSHTransportFromContext`.
+
+#### P2: Missing Remote Address Validation
+**File:** `internal/transport/ssh.go`
+- **Issue:** `cfg.RemoteAddr` is used directly in `sshClient.Dial`. While `NewSSHTransport` validates the *SSH Server URL*, it does not validate the *Remote Forward Target* (htmlservd address). If `RemoteAddr` is malformed (e.g. missing port), `Dial` will fail at runtime.
+- **Fix:** Add basic validation or `net.SplitHostPort` check for `cfg.RemoteAddr` in `NewSSHTransport` before attempting connection.
+
+#### P2: Known Hosts File Handling
+**File:** `internal/transport/known_hosts.go`
+- **Issue:** `knownhosts.New` fails if the file does not exist. For a new user who hasn't SSH'd to the server yet, `htmlctl` will crash with a "no such file" error rather than a helpful message suggesting `ssh-keyscan` or manual connection (as per Story "Risk & Mitigations").
+- **Fix:** Wrap the `ErrSSHHostKey` with a hint if `os.IsNotExist(err)` is true.
+```go
+if os.IsNotExist(err) {
+    return nil, fmt.Errorf("%w: known_hosts file not found at %s. Run 'ssh %s' to populate it", ErrSSHHostKey, khPath, ...)
+}
+```
+
+### Residual Risks & Testing Gaps
+- **Lifecycle Verification:** Without `cmd/htmlctl/root.go`, we cannot verify if the tunnel correctly closes on command interrupt (Ctrl+C) or panic.
+- **Integration Test:** The `internal/transport/integration_test.go` uses an in-process mock SSH server. A manual verification against a real OpenSSH server (as per "Manual Tests") is still required to confirm compatibility with real-world agent/key behaviors.

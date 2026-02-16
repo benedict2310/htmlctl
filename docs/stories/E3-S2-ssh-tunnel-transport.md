@@ -1,7 +1,7 @@
 # E3-S2 - SSH Tunnel Transport
 
 **Epic:** Epic 3 — Remote transport + kubectl UX
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1 (Critical Path)
 **Estimated Effort:** 3 days
 **Dependencies:** E3-S1 (context config provides server URL)
@@ -28,7 +28,7 @@ As an operator or AI agent, I want htmlctl to automatically establish an SSH tun
 - Multiplex per command: open tunnel, make HTTP request(s) to local forwarded port, close tunnel
 - SSH key-based authentication via system SSH agent (`SSH_AUTH_SOCK`)
 - Support custom SSH port in server URL (e.g., `ssh://root@server:2222`)
-- Default remote target port for htmlservd (e.g., `127.0.0.1:8420` on the server)
+- Default remote target port for htmlservd (current server default `127.0.0.1:9400`, with per-context override)
 - Expose a `Transport` interface that command layer uses to make HTTP requests to the server
 - Connection timeout and error handling (unreachable host, auth failure, tunnel failure)
 - Known hosts verification using `~/.ssh/known_hosts`
@@ -64,7 +64,8 @@ As an operator or AI agent, I want htmlctl to automatically establish an SSH tun
 ### 5.2 Files to Modify
 
 - `go.mod` — Add `golang.org/x/crypto` dependency
-- `cmd/htmlctl/root.go` — Wire transport creation into command execution flow (create transport from resolved context, pass to command handlers)
+- `internal/cli/root.go` — Wire transport creation into command execution flow (create transport from resolved context, pass to command handlers)
+- `internal/config/types.go` / `internal/config/resolve.go` — Add optional context `port` override and propagate into resolved context
 
 ### 5.3 Tests to Add
 
@@ -81,26 +82,26 @@ As an operator or AI agent, I want htmlctl to automatically establish an SSH tun
 
 ## 6. Acceptance Criteria
 
-- [ ] AC-1: `ssh://user@host` URLs from context config are correctly parsed into user, host, and default port (22)
-- [ ] AC-2: `ssh://user@host:2222` URLs correctly parse custom port
-- [ ] AC-3: SSH connection is established using keys from the system SSH agent (`SSH_AUTH_SOCK`)
-- [ ] AC-4: A local port forward is opened to `127.0.0.1:<htmlservd_port>` on the remote server
-- [ ] AC-5: HTTP requests made through the transport reach htmlservd on the remote server's localhost
-- [ ] AC-6: The tunnel is opened at command start and closed after the command completes (per-command lifecycle)
-- [ ] AC-7: Known hosts verification is performed using `~/.ssh/known_hosts`; unknown hosts produce a clear error
-- [ ] AC-8: When SSH agent is not available (`SSH_AUTH_SOCK` unset), a clear error message is returned
-- [ ] AC-9: When the remote host is unreachable, a timeout error is returned within 10 seconds
-- [ ] AC-10: When SSH authentication fails, a clear error distinguishes auth failure from connectivity failure
-- [ ] AC-11: The `Transport` interface is generic enough that a mock/local implementation can be used for testing commands without SSH
+- [x] AC-1: `ssh://user@host` URLs from context config are correctly parsed into user, host, and default port (22)
+- [x] AC-2: `ssh://user@host:2222` URLs correctly parse custom port
+- [x] AC-3: SSH connection is established using keys from the system SSH agent (`SSH_AUTH_SOCK`)
+- [x] AC-4: A local port forward is opened to `127.0.0.1:<htmlservd_port>` on the remote server
+- [x] AC-5: HTTP requests made through the transport reach htmlservd on the remote server's localhost
+- [x] AC-6: The tunnel is opened at command start and closed after the command completes (per-command lifecycle)
+- [x] AC-7: Known hosts verification is performed using `~/.ssh/known_hosts`; unknown hosts produce a clear error
+- [x] AC-8: When SSH agent is not available (`SSH_AUTH_SOCK` unset), a clear error message is returned
+- [x] AC-9: When the remote host is unreachable, a timeout error is returned within 10 seconds
+- [x] AC-10: When SSH authentication fails, a clear error distinguishes auth failure from connectivity failure
+- [x] AC-11: The `Transport` interface is generic enough that a mock/local implementation can be used for testing commands without SSH
 
 ## 7. Verification Plan
 
 ### Automated Tests
 
-- [ ] Unit tests for SSH URL parsing (valid URLs, missing port, invalid scheme, missing user)
-- [ ] Unit tests for error type classification (auth failure, tunnel failure, host key mismatch)
-- [ ] Integration test with in-process SSH server: connect, open tunnel, forward HTTP request, verify response
-- [ ] Test Transport interface with mock implementation to verify command layer integration
+- [x] Unit tests for SSH URL parsing (valid URLs, missing port, invalid scheme, missing user)
+- [x] Unit tests for error type classification (auth failure, tunnel failure, host key mismatch)
+- [x] Integration test with in-process SSH server: connect, open tunnel, forward HTTP request, verify response
+- [x] Test Transport interface with mock implementation to verify command layer integration
 
 ### Manual Tests
 
@@ -127,7 +128,7 @@ As an operator or AI agent, I want htmlctl to automatically establish an SSH tun
 
 ## 10. Open Questions
 
-- Should the remote htmlservd port be configurable per context, or always use a fixed default (e.g., 8420)? **Tentative answer:** Default to 8420, allow override via `port` field in context config.
+- Should the remote htmlservd port be configurable per context, or always use a fixed default (e.g., 8420)? **Implemented answer:** Default to `9400` (matching `htmlservd` current default) and allow override via `port` in context config.
 - Should we support `~/.ssh/config` parsing for host aliases and proxy jumps in v1? **Tentative answer:** No, keep it simple. Users can use the full hostname in the ssh:// URL.
 - Should we implement a `--insecure-skip-host-key` flag for convenience? **Tentative answer:** Yes, with a visible warning, to ease initial setup and testing.
 
@@ -135,12 +136,36 @@ As an operator or AI agent, I want htmlctl to automatically establish an SSH tun
 
 ## Implementation Summary
 
-(TBD after implementation.)
+Implemented transport and runtime wiring:
+- Added `internal/transport` package with:
+  - `Transport` interface (`Do`, `Close`)
+  - `SSHTransport` implementation with `ssh://` URL parsing, SSH-agent auth, known-hosts verification, dynamic local forward listener, HTTP forwarding, typed error classification, and close lifecycle
+  - Helpers for SSH agent and known-hosts loading
+  - `NewSSHTransportFromContext` context bridge
+- Updated CLI runtime (`internal/cli/root.go`) with command annotations and lifecycle hooks:
+  - `PersistentPreRunE` creates transport for commands marked `requires-transport`
+  - `PersistentPostRunE` closes transport after command execution
+- Extended context config model to support optional remote port override (`port`) and propagate it into resolved context
+- Added comprehensive tests:
+  - Unit: URL parsing, classification, invalid remote addresses, SSH-agent missing socket, known-hosts errors, mock transport contract
+  - Integration: in-process SSH server + forwarded HTTP request path + host-key rejection + auth failure
+  - CLI runtime lifecycle test ensuring annotated commands get transport and transport is closed post-run
+- Verification evidence:
+  - `go test -count=1 ./internal/transport -run 'TestSSHTransportForwardsHTTPAndCloses|TestSSHTransportRejectsUnknownHostKey|TestSSHTransportAuthFailureClassification'`
+  - `go test -count=1 ./internal/cli -run 'TestConfigCurrentContextCommandRespectsContextOverrideFlag|TestRootPersistentTransportLifecycleForAnnotatedCommand'`
+  - `go test -count=1 ./internal/config -run 'TestLoadUsesHTMLCTLConfigEnvVar|TestResolveContextWithExplicitOverride'`
+  - `go test -count=1 ./...`
 
 ## Code Review Findings
 
-(TBD by review agent.)
+`pi` review iterations:
+- `docs/review-logs/E3-S2-review-pi-2026-02-16-081100.log`
+  - Initial review identified missing CLI lifecycle integration and hardening gaps.
+- `docs/review-logs/E3-S2-review-pi-2026-02-16-081425.log`
+  - Follow-up review reported no P0/P1; only minor/non-blocking notes.
+- `docs/review-logs/E3-S2-review-pi-2026-02-16-081757.log`
+  - Final strict review status: **CLEAN** (no P0/P1).
 
 ## Completion Status
 
-(TBD after merge.)
+Implemented, tested, and review-clean. Ready for merge.

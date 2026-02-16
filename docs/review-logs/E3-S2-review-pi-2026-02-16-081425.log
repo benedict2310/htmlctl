@@ -1,0 +1,36 @@
+==========================================
+Code Review Log
+==========================================
+Story:     docs/stories/E3-S2-ssh-tunnel-transport.md
+Agent:     pi
+Branch:    main
+Commit:    07ee38a
+Timestamp: Mon Feb 16 08:14:25 CET 2026
+==========================================
+
+This is a strict code review for the E3-S2 implementation patch.
+
+**Status:** CLEAN
+The implementation strictly adheres to the Acceptance Criteria, correctly handles security requirements (localhost binding, host key verification), and includes comprehensive tests. No P0 (Critical) or P1 (Major) issues found.
+
+### Residual Risks & P2 Findings
+
+1.  **Windows SSH Agent Support (P2)**
+    - **File:** `internal/transport/ssh_agent.go:20`
+    - **Issue:** `net.Dial("unix", sockPath)` assumes a Unix domain socket. On Windows, the OpenSSH agent typically uses a named pipe (`\\.\pipe\openssh-ssh-agent`). This implementation may fail on native Windows (non-WSL) environments.
+    - **Mitigation:** Document that v1 requires a Unix-like environment or WSL, or switch to a platform-aware dialer (e.g., using `winio` for Windows pipes) in a future update.
+
+2.  **Missing Remote Port Override (AC Risk)**
+    - **File:** `internal/transport/context.go:10` / `internal/config/types.go`
+    - **Issue:** The story mentions allowing "overriding the remote port in context config" (Risk Mitigation), but `ContextInfo` lacks a `RemotePort` field, and `NewSSHTransportFromContext` has no logic to populate `SSHConfig.RemoteAddr` from configuration.
+    - **Impact:** `htmlctl` is hardcoded to connect to `127.0.0.1:9400` on the remote server. If `htmlservd` runs on a non-standard port, the transport will fail.
+    - **Fix (Future):** Add `RemotePort` to `ContextInfo` in `internal/config` and pass it to `SSHConfig.RemoteAddr`.
+
+3.  **Hardcoded Default Port Sync (Maintenance)**
+    - **File:** `internal/transport/ssh.go:23`
+    - **Issue:** `DefaultRemoteAddr` ("127.0.0.1:9400") must be manually kept in sync with `internal/server.DefaultPort`. The user story example mentioned port 8420, but the code correctly matches the actual `htmlservd` default (9400).
+    - **Mitigation:** Rely on the existing comment warning developers to keep them in sync.
+
+4.  **SSH Agent Connection Lifecycle**
+    - **File:** `internal/transport/ssh.go:143`
+    - **Note:** The agent connection is correctly added to `closers` and cleaned up on `Transport.Close()`. This is verified correct but requires careful maintenance to ensure no leaks if the transport logic changes.

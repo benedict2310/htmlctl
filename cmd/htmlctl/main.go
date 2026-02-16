@@ -10,7 +10,7 @@ var version = "dev"
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
-		os.Exit(1)
+		os.Exit(cli.ExitCode(err))
 	}
 }
 

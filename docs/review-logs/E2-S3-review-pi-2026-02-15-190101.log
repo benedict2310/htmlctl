@@ -1,0 +1,37 @@
+1. **High Severity: Race condition in concurrent applies due to incorrect lock scope.**
+   - **Location:** `internal/server/apply.go`, line 150 (`applyLock` function).
+   - **Issue:** The locking key is `website + "/" + env`. However, the `Apply` logic in `internal/state/merge.go` modifies `pages`, `components`, and `assets` tables, which are scoped to `website_id` (shared across environments).
+   - **Impact:** If two applies run concurrently for the same website but different environments (e.g., `staging` and `prod`), they run in parallel. If one is a `full` apply, its "Delete Stale" step (`DeleteComponentsNotIn`) can delete resources just inserted by the concurrent apply, leading to data loss / race conditions.
+   - **Fix:** Change the locking key to just `website`. Serialize all applies for a given website.
+
+2. **High Severity: Missing built-in MIME type fallback breaks CSS/JS in minimal containers.**
+   - **Location:** `internal/state/merge.go`, line 263.
+   - **Issue:** `mime.TypeByExtension` relies on the OS's `/etc/mime.types`. In minimal Docker images (like `distroless` or `alpine`), this file may be missing or incomplete. The fallback is `application/octet-stream`.
+   - **Impact:** CSS and JS files served as `application/octet-stream` are blocked by browsers (due to `X-Content-Type-Options: nosniff`), breaking the site.
+   - **Fix:** Add a hardcoded fallback map for common types (`.css` -> `text/css`, `.js` -> `application/javascript`, `.html` -> `text/html`, `.svg` -> `image/svg+xml`, `.json` -> `application/json`) before defaulting to octet-stream.
+
+3. **Medium Severity: Manifest validation is too loose for single-file resources.**
+   - **Location:** `internal/bundle/manifest.go`, line 130 (`validate`).
+   - **Issue:** The validation enforces single-file for `asset` and `script`, but not for `component` or `page`. However, `internal/state/merge.go` (lines 178, 198) only uses `entries[0]` for Components and Pages.
+   - **Impact:** A user providing multiple files for a Component (e.g., HTML + sidecar) will have the sidecars silently ignored/dropped by the logic, which might be confusing.
+   - **Fix:** Update `manifest.go` to enforce exactly one file for `component` and `page` kinds as well.
+
+4. **Medium Severity: Ambiguity on "Apply" vs "Deploy" (No Release creation).**
+   - **Location:** `internal/state/merge.go`.
+   - **Issue:** The `Apply` logic upserts resources (updating the "HEAD" state of the website) but does not create a row in the `releases` table or update `environments.active_release_id`.
+   - **Impact:** If `htmlctl apply` is expected to make changes live immediately in a safe manner, this implementation only updates the shared pool of resources. If the serving path reads directly from `components` table, the update is immediate (and affects all environments sharing the website if they just look up by name). If the serving path requires a Release ID, this `Apply` does not make the changes visible.
+   - **Fix:** Clarify if `E2-S3` is strictly "Ingest" (Upload) or "Ingest + Deploy". If the latter, a Release creation step is missing.
+
+5. **Low Severity: Race condition in large-set deletion fallback.**
+   - **Location:** `internal/db/queries.go`, line 299 (`deleteByWebsiteSetDifference`).
+   - **Issue:** The fallback logic (Select keys -> Loop Delete) is not atomic. A resource inserted by a concurrent transaction between the Select and Delete loop might be missed (leaked) by the deletion logic.
+   - **Fix:** While the "Website" lock (Finding #1) prevents this at the application level, relying on `REPEATABLE READ` or `SERIALIZABLE` isolation would be safer at the DB level. Given Finding #1, this is low risk.
+
+## Open questions / assumptions
+
+1.  **Schema Constraints:** I am assuming the database schema (from E2-S2) has `UNIQUE` constraints on `(website_id, name)` for `pages`, `components`, `style_bundles` and `(website_id, filename)` for `assets`. The `ON CONFLICT` clauses in `queries.go` rely on this.
+2.  **Resource Sharing:** I assume resources are intentionally shared across environments for a website. If environments are supposed to be isolated, the schema and logic are fundamentally mismatched.
+
+## Quick risk summary
+
+The code is generally clean and well-tested, but the **locking scope issue** is a critical correctness bug for concurrent usage. The **MIME type reliance** is a "works on my machine" operational risk that will likely break in production/CI environments. Addressing these two will make the implementation robust.

@@ -1,0 +1,9 @@
+Story: docs/stories/E5-S2-caddy-config-generation.md
+Timestamp: 2026-02-15T16:50:07Z
+---
+Ready
+
+1. **P2 - ACME Email Configuration:** The story leaves ACME email as an open question. For production TLS, Caddy requires an email (or strictly optional with warnings). **Fix:** Add optional `CaddyEmail` field to `internal/config` and update the template to render a global options block `email <value>` if provided.
+2. **P2 - Storage Path Dependency:** The `GenerateConfig` function requires the base storage path to construct absolute `root` paths (e.g., `/var/lib/...`), but the plan only mentions reading from `DomainBindingStore`. **Fix:** Ensure `GenerateConfig` (or the struct constructor) accepts the configured `StoragePath`.
+
+No missing tests or acceptance criteria found.

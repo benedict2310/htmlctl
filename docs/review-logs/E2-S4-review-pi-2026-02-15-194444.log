@@ -1,0 +1,40 @@
+You asked for a strict code review of the Release Builder (Story E2-S4) implementation.
+
+### 🔴 Critical Findings (Blocking)
+
+1.  **Missing `applyLock` Implementation**
+    *   **File:** `internal/server/server.go` (implied missing), `internal/server/release.go` (usage)
+    *   **Issue:** The `Server` struct adds `applyLockStripes`, and `handleRelease` calls `s.applyLock(website)`, but the implementation of `applyLock` is not included in the diff. The code will not compile.
+    *   **Remediation:** Add the `applyLock(website string) *sync.Mutex` method to `Server`.
+
+2.  **Missing Route Handlers**
+    *   **File:** `internal/server/routes.go`
+    *   **Issue:** `handleWebsiteAPI` references `s.handleApply` and `s.handleLogs`. These methods are not in the provided diff. If `routes.go` is a new file replacing inline mux definitions, these methods must exist on `Server`. If they are not part of this story, the router should likely not reference them yet, or stub them out.
+
+### 🟡 Medium Severity (Stability & Performance)
+
+3.  **OOM Risk in Hash Computation**
+    *   **File:** `internal/release/builder.go`, `computeOutputHashes`
+    *   **Issue:** `os.ReadFile` loads the entire file content into memory to compute the SHA256 sum. For large assets (e.g., videos, large PDFs), this could cause an Out Of Memory (OOM) crash.
+    *   **Remediation:** Use `io.Copy` with `sha256.New()` and `os.Open()` to stream the file content.
+
+4.  **Redundant I/O Operations**
+    *   **File:** `internal/release/builder.go`
+    *   **Issue:** `materializeSource` reads assets from the Blob Store and writes them to `sourceDir`. Later, `copyOriginalAssets` reads the *same* assets from the Blob Store again to write them to `releaseDir`.
+    *   **Remediation:** `copyOriginalAssets` should copy files directly from `sourceDir` to `releaseDir` to avoid re-reading from the blob store (and potential network/disk overhead).
+
+### 🔵 Low Severity (Maintainability)
+
+5.  **Hardcoded Style Filenames**
+    *   **File:** `internal/release/builder.go`, `copyOriginalStyles`
+    *   **Issue:** The filenames `tokens.css` and `default.css` are hardcoded. While `resolveDefaultStyleRefs` enforces these names, future changes to the style system will require modifying multiple locations in the builder.
+
+### ⚠️ Risk Summary
+
+*   **Atomic Activation:** The implementation correctly uses atomic symlink swapping (`os.Symlink` + `os.Rename`) and attempts to rollback the filesystem if the subsequent database transaction fails.
+*   **Concurrency:** The intended `applyLock` strategy (per-website locking) is sound for preventing race conditions between builds, assuming it covers the `apply` endpoint as well.
+*   **Data Integrity:** The use of a read-only transaction for snapshotting ensures the release manifest is consistent.
+
+### Open Questions
+
+1.  Does `handleApply` (referenced in `routes.go`) also acquire the same `applyLock`? If not, a concurrent `apply` (updating DB) could conflict with a running `release` build (reading DB), leading to a release that doesn't match the "latest" applied state, or the `active_release_id` being overwritten unexpectedly.

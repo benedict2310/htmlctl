@@ -1,0 +1,12 @@
+Story: docs/stories/E5-S4-domain-cli-commands.md
+Timestamp: 2026-02-15T16:50:34Z
+---
+1. Needs Work
+
+2. Findings:
+   - **Severity: P2**: Contradiction in DNS verification scope. Section 3 "In Scope" states "check that DNS resolves to the expected server IP", while Section 10 "Open Questions" explicitly selects Option (c) "verify just reports what DNS resolves to" for v1.
+     - **Fix**: Update Section 3 to match the decision in Section 10 (replace "check that... resolves to the expected server IP" with "report DNS resolution status and resolved IPs").
+   - **Severity: P2**: Testability of network calls in `domain verify`. `net.LookupHost` and `tls.Dial` are hard dependencies that make unit testing difficult/flaky.
+     - **Fix**: Update Section 5.1 and 5.3 to include a `NetworkProber` interface (or similar abstraction) in `cmd/htmlctl` that wraps `LookupHost` and `tls.Dial`, allowing `cmd/htmlctl/domain_verify_test.go` to use mocks.
+
+3. Missing tests/acceptance criteria: None.

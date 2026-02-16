@@ -1,0 +1,13 @@
+Story: docs/stories/E5-S1-domain-binding-resource.md
+Timestamp: 2026-02-15T16:50:07Z
+---
+Needs Work
+
+**Findings:**
+1.  **Severity P2:** Missing dependency on E2-S5 (Audit Logging). AC-8 requires audit logging, but E2-S5 is not listed in the `Dependencies` section. If the audit logging infrastructure (E2-S5) is not implemented, AC-8 cannot be fulfilled.
+    *   *Fix:* Add E2-S5 to the dependencies list or note that audit logging should be stubbed if E2-S5 is incomplete.
+2.  **Severity P2:** Ambiguous Foreign Key Deletion Behavior. The `Risks` section suggests `ON DELETE CASCADE` as a mitigation for orphaned bindings, but this behavior is not explicitly mandated in the `Implementation Plan` or `Scope`.
+    *   *Fix:* Explicitly specify `ON DELETE CASCADE` (or `RESTRICT`) for `website_id` and `environment_id` foreign keys in Section 5.1 or Section 6.
+
+**Missing Tests/Acceptance Criteria:**
+1.  **AC/Test:** Verify that deleting a Website or Environment automatically deletes associated DomainBindings (if CASCADE is adopted) or is blocked (if RESTRICT is adopted).

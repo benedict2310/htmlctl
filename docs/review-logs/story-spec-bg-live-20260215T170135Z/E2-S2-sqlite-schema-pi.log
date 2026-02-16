@@ -1,0 +1,20 @@
+Story: docs/stories/E2-S2-sqlite-schema.md
+Timestamp: 2026-02-15T17:05:13Z
+---
+Status: Needs Work
+
+1.  **Contradictory Release Immutability vs Status Updates (P1)**
+    The `releases` table schema defines a `status` column with default `'building'`, but AC-8 states "rows are never updated after insertion". This creates a logical deadlock: a release inserted as `'building'` can never transition to `'active'` or `'failed'` if the row is immutable.
+    *Fix*: Either add an `UpdateReleaseStatus` method in `/Users/bene/Dev-Source-NoBackup/htmlctl/internal/db/queries.go` (making releases mutable) or remove the `'building'` default/concept from the DB and require inserting only final states (`'succeeded'`, `'failed'`) upon build completion.
+
+2.  **Implicit Multi-Statement Migration Execution (P2)**
+    `/Users/bene/Dev-Source-NoBackup/htmlctl/internal/db/migrate.go` passes the entire schema DDL (containing multiple `;` separated statements) to `tx.ExecContext` in a single call. This relies on `modernc.org/sqlite` implicitly handling multi-statement strings, which is not guaranteed across all driver versions or configurations and may lead to partial schema application if behavior changes.
+    *Fix*: Split `m.UpSQL` by `";"` and execute each statement sequentially within the transaction loop in `RunMigrations`.
+
+3.  **Potential DSN Path Issue on Windows (P2)**
+    In `/Users/bene/Dev-Source-NoBackup/htmlctl/internal/db/db.go`, using `url.URL` with `Scheme: "file"` to construct the DSN may produce `file:///C:/path` on Windows, which can be misinterpreted by some SQLite drivers/VFS implementations.
+    *Fix*: Construct the DSN string manually using `fmt.Sprintf("file:%s?%s", ...)` or verify `modernc.org/sqlite` explicitly supports the `file:///` format with drive letters.
+
+4.  **Loose Reference for Default Style Bundle (P2)**
+    The `websites` table in `/Users/bene/Dev-Source-NoBackup/htmlctl/internal/db/migrations/001_initial_schema.go` has a `default_style_bundle` text column without a foreign key constraint to `style_bundles`, allowing references to non-existent bundles.
+    *Fix*: Add a check constraint or application-level validation in `InsertWebsite` to ensure the referenced bundle exists or is the reserved literal `'default'`.

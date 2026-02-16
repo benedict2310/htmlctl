@@ -1,0 +1,20 @@
+Story: docs/stories/E1-S2-deterministic-renderer.md
+Timestamp: 2026-02-15T16:45:35Z
+---
+**Needs Work**
+
+**Findings:**
+
+1. **P1 - Ambiguous Asset Output Strategy**: The Scope mentions copying assets "preserving relative paths", while AC-12 specifies "content-addressed filenames". The "Risks" section and "Implementation Summary" suggest *both* are needed to support hardcoded HTML links, but the ACs do not explicitly require the original paths to be preserved alongside hashed ones.
+   * **Fix**: Update Scope and add an AC (e.g., AC-15) to explicitly require assets to be written to *both* their original relative paths (for HTML compatibility) and hashed paths.
+
+2. **P2 - Conflicting Document State**: The header lists `Status: Not Started`, yet the file ends with an "Implementation Summary" and "Completion Status" claiming the work is done and validated.
+   * **Fix**: If this is a fresh implementation, remove the trailing summary sections. If reviewing a completed story, update the header status to `Done`.
+
+3. **P2 - Unspecified Script Tag Source**: AC-8 requires injecting `scripts/site.js`, but does not specify if the `src` attribute should target the original filename or the hashed filename (implied by AC-12's intent).
+   * **Fix**: Modify AC-8 to explicitly state that the injected `<script>` tag must reference the *hashed/content-addressed* filename.
+
+**Missing Tests / Acceptance Criteria:**
+
+* **AC-15**: Assets are present in the output directory at their original relative paths (e.g., `output/assets/image.png`).
+* **Test**: Integration test verifying that a component referencing `<img src="/assets/logo.svg">` works because `output/assets/logo.svg` exists.

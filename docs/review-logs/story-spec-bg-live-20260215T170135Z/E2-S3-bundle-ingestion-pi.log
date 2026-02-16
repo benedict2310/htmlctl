@@ -1,0 +1,19 @@
+Story: docs/stories/E2-S3-bundle-ingestion.md
+Timestamp: 2026-02-15T17:05:13Z
+---
+Status: Needs Work
+
+1. **Missing Website Resource Support (P2)**: The story references `website.yaml` in the Tech Spec and `E2-S2` schema (`defaultStyleBundle`, `baseTemplate`), but the bundle format and `apply` logic (AC-2, AC-6) do not include `Website` as a supported resource kind. This prevents users from updating website configuration via `htmlctl apply`.
+   *Fix:* Add `Website` to the supported resource kinds in the manifest and bundle parser. Update AC-6 to include upserting website metadata if a `Website` resource is present.
+
+2. **Race Condition on Website Auto-Creation (P2)**: AC-7 specifies auto-creation of websites if they don't exist. Concurrent `apply` requests to *different* environments (e.g., `staging` vs `prod`) of the same new website will race to create the website record, potentially failing with a unique constraint violation on the `websites.name` column.
+   *Fix:* Use a global or named mutex for website creation, or implement an "insert-or-get" logic with retry on constraint violation to handle this race safely.
+
+3. **Implicit Parsing & Syntax Validation (P2)**: The story implies populating DB tables (like `pages` with `route` and `layout`) from the bundle, but the manifest only provides file paths/hashes. The implementation plan fails to mention that the server must *parse* these resource files (using `E1-S1` parsers) to extract DB metadata. Syntax errors in these files must reject the apply.
+   *Fix:* Explicitly add "Resource Parsing" to the Implementation Plan (using `E1-S1`) and add an AC: "Resource files are parsed to extract metadata; syntax errors result in a 400 Bad Request."
+
+4. **Ambiguous Dry-Run Contract (P2)**: AC-8 states `?dry_run=true` returns "what would change" but does not define the response structure (e.g., list of operations, diffs). This ambiguous contract will make implementing the CLI (Epic 3) difficult.
+   *Fix:* Define the dry-run response schema (e.g., JSON list of `{ resource, action: create/update/delete/unchanged, diff: ... }`) in the Scope or ACs.
+
+5. **Missing Dependency on E1-S1 (P2)**: The story depends on `E1-S1` for resource schemas and parsers (required to read blobs and populate the `E2-S2` database), but `E1-S1` is not listed in the **Dependencies** section.
+   *Fix:* Add `E1-S1 (resource schemas & parsers)` to the Dependencies list to ensure parsers are available for the ingestion logic.

@@ -1,0 +1,14 @@
+Story: docs/stories/E1-S4-local-cli-commands.md
+Timestamp: 2026-02-15T16:46:02Z
+---
+Ready
+
+**Findings:**
+
+1.  **Severity P2:** The "Open Questions" section recommends defaulting `-o` to `./dist`, but this isn't explicitly captured in Scope or Acceptance Criteria. AC-1 uses explicit flags.
+    *   **Fix:** Update Section 3 (Scope) and add an AC to explicitly state: "If `-o` is omitted, output defaults to `./dist`."
+2.  **Severity P2:** AC-5 requires the `-f` flag. Typical CLIs default to the current directory if the source is omitted.
+    *   **Fix:** Consider changing AC-5 to allow omitting `-f` (defaulting to `.`) or explicitly note in Section 3 that explicit source paths are required for safety/clarity.
+
+**Missing Tests/Acceptance Criteria:**
+*   None.

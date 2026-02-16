@@ -1,0 +1,31 @@
+Story: docs/stories/E1-S3-component-validation.md
+Timestamp: 2026-02-15T17:06:09Z
+---
+Status: Approved with comments
+
+I have reviewed the story and compared it with the Technical Spec and E1-S1. The plan is solid, but there are a few overlooked edge cases and clarifications needed to ensure production safety and consistent behavior.
+
+1.  **Ambiguity on `<style>` tags (Severity Levels)**
+    *   **Severity:** Low (Clarification)
+    *   **Finding:** The "Open Questions" section recommends allowing `<style>` tags but warning about them. However, the Scope mentions "diagnostic messages with severity (error/warning)" while the Acceptance Criteria only define Error cases. There is no AC defining what happens when a `<style>` tag is encountered.
+    *   **Fix:** Add an AC: "AC-13: Components containing `<style>` tags trigger a validation warning (not error), or explicitly state in AC that they are allowed silently."
+
+2.  **Safety Gap: Inline Event Handlers**
+    *   **Severity:** Medium (Security)
+    *   **Finding:** The "Script disallow rule" (AC-5) bans `<script>` tags but does not explicitly ban inline event handlers (e.g., `<div onclick="alert(1)">`). While full sanitization is out of scope, allowing `on*` attributes bypasses the intent of the "no script" rule.
+    *   **Fix:** Add an AC or clarification to AC-5 to also reject elements with attributes starting with `on` (case-insensitive), or explicitly document that inline handlers are allowed in v1.
+
+3.  **Risk of Duplicate IDs in Page Layouts**
+    *   **Severity:** Medium (HTML Validity)
+    *   **Finding:** The requirement for anchor-navigable components to have a hardcoded `id="<componentName>"` (AC-7) means that if a component is included multiple times in a single page layout (e.g., two spacers or dividers), the rendered page will have duplicate IDs, which is invalid HTML. The story excludes Page Validation, but this is a direct consequence of the component validation rules.
+    *   **Fix:** Consider adding a check in `ValidateAllComponents` (or flag for E1-S1/E1-S4) to warn or error if a navigable component (which forces an ID) is included more than once in the same page.
+
+4.  **Clarification of "Action at a Distance" UX**
+    *   **Severity:** Low (UX)
+    *   **Finding:** AC-12 implies that a valid component (without an ID) becomes invalid the moment it is referenced in a page layout. This "action at a distance" might be confusing for users editing `page.yaml` who then see errors in `component.html`.
+    *   **Fix:** No code change needed, but ensure the error message in AC-6 clearly explains *why* the ID is required now (e.g., "Component 'header' is used in page 'index' and must have an ID").
+
+5.  **Test Data Alignment**
+    *   **Severity:** Low (Housekeeping)
+    *   **Finding:** The tests section defines new `testdata/components/` files. Ensure these do not conflict with or confuse the `testdata/valid-site/` structure established in E1-S1. Using a dedicated `testdata/validator/` directory might be cleaner.
+    *   **Fix:** Suggest moving validator-specific test fragments to `pkg/validator/testdata/` or `testdata/validator/` to avoid polluting the main site fixtures.

@@ -1,0 +1,26 @@
+Story: docs/stories/E2-S1-server-bootstrap-config.md
+Timestamp: 2026-02-15T17:03:57Z
+---
+Status: Needs Work
+
+Findings:
+
+1. **Contradictory Status & Content (P2)**
+   The story status is `Not Started`, yet the footer sections ("Implementation Summary", "Code Review Findings", "Completion Status") describe the work as already completed. This makes the actual state of the story ambiguous.
+   **Fix:** Remove the "Implementation Summary", "Code Review Findings", and "Completion Status" sections until the work is actually performed.
+
+2. **Missing Acceptance Criteria for Scope Item (P2)**
+   Section 3 (Scope) explicitly includes "Create or open `db.sqlite` (placeholder)", but AC-4 only covers directory creation. The placeholder file is critical for verifying write permissions in the data root before the database logic (E2-S2) is implemented.
+   **Fix:** Add `AC-11`: "On startup, a `db.sqlite` placeholder file is created/opened in the data directory root to verify write permissions."
+
+3. **Unspecified Versioning Mechanism (P2)**
+   AC-6 requires a `/version` endpoint, but Section 5 (Implementation Plan) does not specify how build information is injected (e.g., via `ldflags`). Without this, the endpoint implementation is undefined.
+   **Fix:** Add `internal/version/version.go` to "Files to Create" and update "Files to Modify" to include `Makefile` (adding `-ldflags` to the build command).
+
+4. **Missing Build Configuration in Plan (P2)**
+   The story introduces a new binary `cmd/htmlservd/main.go`, but Section 5.2 (Files to Modify) fails to list `Makefile` (or build scripts) which must be updated to compile this new entry point.
+   **Fix:** Add `Makefile` to Section 5.2 with the note: "Add `bin/htmlservd` target with version injection."
+
+5. **Ambiguous Bind Logic in AC-10 (P2)**
+   AC-10 states the server "refuses to bind to 0.0.0.0 unless explicitly configured". This phrasing is confusing (configuration *is* permission). It implies active blocking logic that might not be intended.
+   **Fix:** Rewrite AC-10: "If configured to bind to a non-loopback address (e.g., 0.0.0.0), the server logs a warning (security risk) but proceeds with startup."

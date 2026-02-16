@@ -1,0 +1,24 @@
+Story: docs/stories/E1-S1-resource-schemas-parser.md
+Timestamp: 2026-02-15T17:01:35Z
+---
+Status: Needs Work
+
+1. **Severity: P2**
+   **Issue:** Ambiguous YAML structure for `spec.layout`. The Technical Spec (Section 2.3) defines `layout` as a list of objects (`- include: header`), but the Story description ("ordered list of include references") could be misinterpreted by a developer as a simple list of strings (`- header`).
+   **Fix:** Explicitly state in AC-2 that `spec.layout` must be parsed as a list of objects/structs matching the YAML `[{ "include": "string" }]` pattern, not a string slice.
+
+2. **Severity: P2**
+   **Issue:** Component `scope` field source is undefined. The Story requires a `Component` struct with a `scope` field, but Components are defined as raw `.html` files (Tech Spec 2.4) with no metadata/frontmatter support in v1. There is no source to parse `scope` from.
+   **Fix:** Clarify in the Scope/AC that the `scope` field should be hardcoded to "global" during parsing for all components in the `components/` directory, as no per-component configuration exists in v1.
+
+3. **Severity: P2**
+   **Issue:** Missing Acceptance Criterion for mandatory page validation. The Scope section mentions "Validation that ... at least one page file ... exist", but there is no corresponding check in the Acceptance Criteria.
+   **Fix:** Add an AC (e.g., AC-11): "`LoadSite()` returns an error if the `pages/` directory is empty or contains no valid `*.page.yaml` files."
+
+4. **Severity: P2**
+   **Issue:** Ambiguous file location for Pages in AC. AC-2 mentions parsing `*.page.yaml` files but does not restrict this to the `pages/` directory, whereas Tech Spec Section 1 mandates the `pages/` directory. This could lead to a parser that scans the entire tree.
+   **Fix:** Modify AC-2 to explicitly state "from the `pages/` directory" to prevent scanning root or other folders.
+
+5. **Severity: P2**
+   **Issue:** Missing Acceptance Criterion for route normalization. The Scope mentions "route normalization" in `pkg/loader/validate.go`, and Tech Spec 6.2 requires "routes normalized", but no AC verifies this behavior (e.g., adding leading slash, removing trailing slash).
+   **Fix:** Add an AC: "`LoadSite()` normalizes page routes (e.g., ensures leading `/`, removes trailing `/` unless root) so that route matching is deterministic."

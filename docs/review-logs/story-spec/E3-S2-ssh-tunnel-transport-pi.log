@@ -1,0 +1,20 @@
+Story: docs/stories/E3-S2-ssh-tunnel-transport.md
+Timestamp: 2026-02-15T16:48:30Z
+---
+Ready (Conditional)
+
+**Findings:**
+
+1.  **P2 - Architecture/Performance:** The "In Scope" section specifies "Set up a local port forward". It is cleaner and more robust to implement a custom `http.Transport.DialContext` that uses `sshClient.Dial("tcp", "127.0.0.1:port")` directly. This avoids binding a local ephemeral TCP port, reduces OS resource usage, and eliminates potential local firewall prompts or port conflicts.
+    *   *Fix:* Update Scope and Implementation Plan to use `DialContext` over SSH instead of a physical local port forward.
+
+2.  **P2 - Specification Gap:** The "Open Questions" section tentatively defaults the remote `htmlservd` port to `8420`. This should be formalized in the "Scope" or "Implementation Plan".
+    *   *Fix:* Move the default port decision (8420) into the "Scope" or a "Constants" section to resolve the open question.
+
+3.  **P2 - Interface Convention:** The proposed `Transport` interface defines `Do` (like `http.Client`) and `Close`. This naming conflicts with Go's standard `http.Transport` (which implements `RoundTripper`).
+    *   *Fix:* Rename the interface to `RemoteSession` or `ClientTransport` to avoid confusion, or implement `http.RoundTripper` and handle lifecycle via a separate `Close()` method on the concrete struct.
+
+**Missing Tests/AC:**
+
+*   **AC:** Verify behavior when `~/.ssh/known_hosts` does not exist (should not panic, likely treat as empty/unknown).
+*   **Test:** Unit test for the `DialContext` (or port forward) logic to ensure it targets the correct remote loopback address.

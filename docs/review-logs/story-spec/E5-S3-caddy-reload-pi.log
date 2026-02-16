@@ -1,0 +1,11 @@
+Story: docs/stories/E5-S3-caddy-reload.md
+Timestamp: 2026-02-15T16:50:34Z
+---
+Ready
+
+**Findings:**
+1. **P2 - Clarify Restore Behavior:** AC-3 states that if `caddy reload` fails, the backup is restored. It should explicitly clarify that a second `caddy reload` is *not* triggered after restoration, as the running Caddy process is presumed to still be holding the previous valid configuration in memory.
+2. **P2 - Synchronous vs Asynchronous API:** AC-7 and AC-2 imply a synchronous operation where the HTTP API client waits for the reload. Ensure `caddy reload` timeouts are handled in the `Reloader` to prevent the HTTP request from hanging indefinitely if Caddy becomes unresponsive.
+
+**Missing Tests/Acceptance Criteria:**
+- No critical tests missing. The verification plan covers mock runner, failure modes, and concurrency.

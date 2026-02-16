@@ -1,0 +1,51 @@
+You are doing a strict code review for the current uncommitted E2-S3 implementation in htmlctl.
+
+Review goals:
+- Find correctness bugs, regressions, race conditions, API contract issues, and missing tests.
+- Prioritize real issues over style.
+- Be concrete: include file path, approximate line, severity, and fix recommendation.
+- If no issues, say "No findings".
+
+Output format:
+1. Findings (ordered by severity)
+2. Open questions / assumptions
+3. Quick risk summary
+
+1. Findings
+
+**1. Race condition in website creation (`internal/state/merge.go`)**
+- **Severity**: High (Operational reliability)
+- **Location**: `internal/state/merge.go` around line 397 (`ensureWebsite`)
+- **Issue**: The `applyLock` in `internal/server/apply.go` is scoped to `website + "/" + env`. If two requests arrive simultaneously for the *same* new website but *different* environments (e.g., `dev` and `prod`), they will hold different locks. Both will call `ensureWebsite`, find the website missing, and attempt `InsertWebsite`. Due to likely DB uniqueness constraints on website name, one will fail with a 500 error.
+- **Fix**: Update `ensureWebsite` to handle the uniqueness constraint violation (e.g., `INSERT OR IGNORE` or retry `GetWebsiteByName` on insert failure).
+
+**2. Missing `updated_at` handling for Assets (`internal/db/queries.go`)**
+- **Severity**: Medium (Data consistency)
+- **Location**: `internal/db/queries.go`: `UpsertAsset` (line 226) and `ListAssetsByWebsite` (line 242).
+- **Issue**: unlike `Page`, `Component`, and `StyleBundle`, the `UpsertAsset` query does not update the `updated_at` column on conflict. Similarly, `ListAssetsByWebsite` does not `SELECT` or scan the `updated_at` column, leading to inconsistent data models compared to other resources.
+- **Fix**: Add `updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')` to the `ON CONFLICT` clause in `UpsertAsset` and add the column to `ListAssetsByWebsite`.
+
+**3. SQLite variable limit in Full Mode deletions (`internal/db/queries.go`)**
+- **Severity**: Medium (Scalability)
+- **Location**: `internal/db/queries.go` around line 289 (`deleteByWebsiteNotIn`).
+- **Issue**: The query uses `NOT IN (?, ?, ...)` with a placeholder for every preserved resource. SQLite has a default limit on host variables (typically 999 or 32766 depending on compile options). If a site has thousands of assets or pages, `Apply` in `full` mode will crash.
+- **Fix**: Batch the deletion logic in chunks or use a temporary table/subquery strategy to filter items.
+
+**4. Manifest validation allows duplicate resources (`internal/bundle/manifest.go`)**
+- **Severity**: Low (Ambiguity)
+- **Location**: `internal/bundle/manifest.go` `Validate` method.
+- **Issue**: The validation checks individual resources but does not enforce uniqueness of the `(kind, name)` tuple. If a manifest contains two definitions for the same resource, `Apply` will upsert both sequentially (last one wins), which is likely unintended and confusing.
+- **Fix**: Add a pass in `Validate` to ensure resource uniqueness.
+
+**5. Full mode cannot delete all resources (`internal/bundle/manifest.go`)**
+- **Severity**: Low (API Contract)
+- **Location**: `internal/bundle/manifest.go` line 62.
+- **Issue**: `if len(m.Resources) == 0 { return error }`. This prevents a user from "unpublishing" an entire site by sending an empty resource list in `full` mode.
+- **Fix**: Consider removing this check or documenting that at least one resource is required (or users must use `delete` in partial mode repeatedly, which defeats the purpose of `full` sync).
+
+2. Open questions / assumptions
+- **Assumption**: `AssetRow` struct (not visible in diff) actually has an `UpdatedAt` field. If not, the database schema is inconsistent with other tables.
+- **Assumption**: The `blobs` directory is on a filesystem that supports atomic renames (POSIX) or the `Store.Put` logic for Windows (rename fail -> check exist) is sufficient. The current implementation handles the Windows case correctly, assuming `os.Stat` is reliable.
+
+3. Quick risk summary
+The implementation is solid for happy paths but has a few concurrency and scalability edge cases. The race condition on website creation is the most likely operational headache during initial onboarding of new sites. The SQLite variable limit will become a hard blocker for large sites unless addressed. Data integrity is generally well-handled via transactions.

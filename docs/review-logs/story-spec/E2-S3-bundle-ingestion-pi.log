@@ -1,0 +1,23 @@
+Story: docs/stories/E2-S3-bundle-ingestion.md
+Timestamp: 2026-02-15T16:47:25Z
+---
+READY
+
+**Findings:**
+
+1.  **Severity: P2 (Implementation Complexity)**
+    The proposed manifest JSON structure is polymorphic (`Component` uses a single `file` field, while `StyleBundle` uses a `files` array). This complicates Go JSON unmarshalling.
+    *Fix Suggestion:* Standardize the resource definition to always use a `files` array (even for single-file resources), or define a strict `Resource` struct with optional fields and validation logic to ensure mutual exclusivity where appropriate.
+
+2.  **Severity: P2 (Data Integrity)**
+    The story specifies "Write to a temp file in the same directory... then `os.Rename`". While valid for atomicity, leaving `.tmp` files in the content-addressed store (`blobs/sha256/`) on failure can clutter the storage.
+    *Fix Suggestion:* Use a dedicated staging directory on the same filesystem (e.g., `<data-dir>/blobs/incoming/`) for temp files to ensure `os.Rename` works while keeping the canonical store clean, or add a server startup task to clean `.tmp` files.
+
+3.  **Severity: P2 (Ambiguity)**
+    The endpoint URL contains `{website}` and `{env}`, and the manifest also contains a `website` field. The behavior on mismatch is undefined.
+    *Fix Suggestion:* Add a validation step: The `website` in the manifest must match the URL path parameter, or the API should return HTTP 400.
+
+**Missing Tests/Acceptance Criteria:**
+
+*   **AC-13:** Validate that the `website` declared in the manifest matches the `{website}` path parameter in the URL.
+*   **Test:** Integration test sending a bundle with a manifest `website` field differing from the URL path (should fail).

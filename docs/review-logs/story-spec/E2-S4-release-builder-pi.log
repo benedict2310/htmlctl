@@ -1,0 +1,18 @@
+Story: docs/stories/E2-S4-release-builder.md
+Timestamp: 2026-02-15T16:47:25Z
+---
+1. **Ready**
+
+2. **Findings:**
+
+*   **Severity: P2** - **Undefined Renderer Interface Location:** The story notes the risk of E1-S2 not being ready and suggests defining an interface, but the "Implementation Plan" does not list where this interface should reside (e.g., a shared `internal/renderer` package) to ensure the builder can be implemented and tested independently.
+    *   *Fix:* Add a shared definition file (e.g., `internal/renderer/interface.go`) to "Files to Create" or "Files to Modify" that defines the `Renderer` interface (rendering state to an output `fs` or directory).
+*   **Severity: P2** - **Unspecified API Response Schema:** AC-1 states the endpoint returns the release ID with HTTP 201 but does not define the JSON structure, which is necessary for clients.
+    *   *Fix:* Update AC-1 to specify the response body, e.g., `{"id": "01ARZ...", "status": "building", "created_at": "..."}`.
+*   **Severity: P2** - **Missing File Permissions Specification:** The release builder creates static files intended for web serving, but the story does not specify the file mode/permissions (e.g., `0644` for files, `0755` for directories), which is critical for the web server daemon to read them.
+    *   *Fix:* Add an Acceptance Criterion requiring specific POSIX permissions for the generated directories and files.
+
+3. **Missing Tests/Acceptance Criteria:**
+
+*   **AC:** Verify that created directories and files have correct read permissions for the server process (e.g., `0755`/`0644`).
+*   **AC:** Verify that the "current" symlink is created as a **relative** symlink (as mentioned in Risks) to ensure the data directory remains portable if moved.

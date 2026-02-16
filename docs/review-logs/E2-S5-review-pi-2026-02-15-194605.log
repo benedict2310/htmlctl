@@ -1,0 +1,22 @@
+The code review for story E2-S5 (Audit Log) is below.
+
+**Findings**
+
+*   **Severity: High**
+    *   **Panic on Concurrent Shutdown**: `AsyncLogger.Log` sends to `l.queue` without a lock, while `AsyncLogger.Close` closes that channel. If a log entry is being written (e.g., from a background job or finishing request) exactly when `Close` is called, the application will panic (`send on closed channel`).
+        *   *Recommendation*: Guard the channel send in `Log` and the close in `Close` with a `sync.RWMutex`, or use a recovery mechanism in `Log`.
+
+*   **Severity: Medium**
+    *   **Incorrect Timestamp Sorting**: The implementation uses `time.RFC3339Nano` for the SQLite `timestamp` column. This format produces variable-length strings (trimming trailing zeros). Because `Z` (ASCII 90) > `.` (ASCII 46), a timestamp like `...:00Z` will sort lexicographically *after* `...:00.123Z`, breaking the `ORDER BY timestamp DESC` logic (older events may appear before newer ones).
+        *   *Recommendation*: Use a fixed-width string format (e.g., `2006-01-02T15:04:05.000000000Z`) or Unix timestamps (integers) to ensure lexicographical sorting matches chronological order.
+
+*   **Severity: Low**
+    *   **Trace Context Loss**: `AsyncLogger` creates a new `context.Background()` for DB inserts, causing the loss of any tracing IDs or cancellation signals present in the request context.
+    *   **Scope Restriction**: `SQLiteLogger.Log` returns an error if `EnvironmentID` is nil. This prevents logging website-level administrative actions (non-environment scoped) if such features are added in the future.
+    *   **JSON Number Precision**: The `Metadata` field (map[string]any) is JSON-marshaled and unmarshaled. Numeric integers in the metadata will round-trip as `float64` in the query response.
+
+**Open Questions**
+*   **Failed Operations**: The system logs operations like `apply` or `release.build`. Does the system intend to log failed attempts? The `Entry` struct lacks a `Status` (Success/Failure) or `Error` field, making it difficult to distinguish a successful deployment from a failed one in the logs.
+
+**Risk Summary**
+The implementation meets the core functional requirements for buffering and querying logs. However, the **High** severity concurrency defect poses a stability risk during server shutdown/redeploys, and the **Medium** severity timestamp issue guarantees incorrect log ordering for events occurring within the same second. These should be addressed before merging.

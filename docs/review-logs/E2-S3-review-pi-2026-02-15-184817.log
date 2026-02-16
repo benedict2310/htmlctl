@@ -1,0 +1,45 @@
+You asked for a strict code review of the `E2-S3` implementation.
+
+### 1. Findings
+
+**Severity: Critical (Correctness)**
+*   **Inconsistent Identity for Assets/Scripts (Partial Deletion Bug)**:
+    *   **Location**: `internal/state/merge.go:359` (Upsert) vs `internal/state/merge.go:382` (Delete)
+    *   **Issue**: When upserting an `Asset` or `Script`, the code uses the file path (`ref.File`) as the DB key (`Filename`). However, when processing a `deleted: true` resource in partial mode, it uses the resource name (`res.Name`) to call `DeleteAssetByFilename`.
+    *   **Impact**: If a manifest defines `{"kind": "Asset", "name": "logo", "file": "assets/logo.svg"}`, it is stored as `assets/logo.svg`. A subsequent partial delete with `{"kind": "Asset", "name": "logo", "deleted": true}` attempts to delete `logo` and fails silently (0 rows affected), leaving the orphan asset.
+    *   **Fix**: In `internal/bundle/manifest.go`, enforce that `Name` must equal `File` for `Asset` and `Script` kinds during validation. Alternatively, the Applier must treat `Name` as the canonical identifier, but the DB schema currently uses `filename`.
+
+**Severity: Major (DoS / Memory Leak)**
+*   **Unbounded Map Growth in Server Locks**:
+    *   **Location**: `internal/server/server.go:153` (`applyLock`)
+    *   **Issue**: The `applyLocks` map creates a new Mutex for every unique `website/env` pair requested. These entries are never deleted.
+    *   **Impact**: A client can exhaust server memory over time by sending requests with random website/environment strings (path parsing happens before validation).
+    *   **Fix**: Use a fixed-size sharded lock map (e.g., array of 256 Mutexes hashed by key) or a `sync.Map` with proper cleanup logic.
+
+**Severity: Major (Data Integrity)**
+*   **Silent Data Loss for Multi-File Assets**:
+    *   **Location**: `internal/state/merge.go:271`
+    *   **Issue**: For `Asset` and `Script` resources, the code arbitrarily selects `entries[0]` and ignores subsequent files in the resource `Files` list, though they are uploaded to the blob store.
+    *   **Impact**: If a user defines an asset with multiple files (which valid `manifest` schema allows via `files: []`), only the first one is linked in the DB.
+    *   **Fix**: Update `manifest.go` validation to ensure `Asset`/`Script` resources contain exactly one file entry.
+
+**Severity: Medium (Testing)**
+*   **Missing Partial Deletion Test**:
+    *   **Location**: `internal/server/apply_test.go`
+    *   **Issue**: Tests cover success, dry-run, hash mismatch, and *full mode* deletion, but there is no test for *partial mode* explicit deletion (`deleted: true`).
+    *   **Fix**: Add a test case that creates a resource, then sends a partial update with `deleted: true` to verify it is removed. This would have caught the Asset identity bug.
+
+**Severity: Minor (Performance)**
+*   **Flat Blob Directory**:
+    *   **Location**: `internal/blob/store.go`
+    *   **Issue**: `blobs/sha256/<hash>` stores all blobs in a single directory.
+    *   **Impact**: Filesystem performance degradation with millions of files.
+    *   **Fix**: Consider sharding (e.g., `blobs/sha256/ab/cd/...`).
+
+### 2. Open Questions / Assumptions
+*   **Component Scope**: `UpsertComponent` hardcodes `Scope: "global"`. The manifest does not expose `scope`. Is it intended that all bundled components are global?
+*   **Blob Race Condition**: `blob.Store.Put` relies on `os.Rename` behavior. If two concurrent requests upload the same blob, one overwrites the other. Since it's content-addressed (CAS), this is benign, but `Put` returns `true` (created) for both, which is technically inaccurate for the second winner.
+
+### 3. Quick Risk Summary
+*   **Risk Level**: **High** (due to Critical correctness bug in deletions).
+*   **Deployment**: The memory leak and lack of streaming (50MB buffered in RAM) limit this implementation to small/medium scale. It is not production-ready for high-traffic or large-site scenarios without addressing the locking and memory buffering.

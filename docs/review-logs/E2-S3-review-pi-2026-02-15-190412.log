@@ -1,0 +1,34 @@
+Reviewing the uncommitted implementation of E2-S3.
+
+### 1. Findings
+
+**Severity: Medium (Reliability)**
+- **File**: `internal/server/server.go`
+- **Line**: ~40
+- **Issue**: `ReadTimeout: 5 * time.Second` is too aggressive for the allowed 50MB request body size. While the endpoint is localhost-only, system load or I/O contention could easily cause a 50MB transfer to exceed 5 seconds, causing flaky failures.
+- **Fix**: Increase `ReadTimeout` to 60 seconds. `http.MaxBytesReader` already protects against unbounded payloads; the timeout should strictly protect against stalled connections.
+
+**Severity: Low (Performance/Scalability)**
+- **File**: `internal/state/merge.go`
+- **Line**: ~98
+- **Issue**: `Apply` loads all resource metadata for the website (Pages, Components, Assets) into memory map at the start of the transaction. For a site with thousands of assets (e.g., generated images), this adds significant overhead to every `apply` operation, even small partial ones.
+- **Fix**: Acceptable for v1 given the 50MB bundle limit. For future scaling, query only the resources referenced in the bundle (for Partial mode) or use batched iteration.
+
+**Severity: Low (Edge Case)**
+- **File**: `internal/blob/store.go`
+- **Line**: ~68
+- **Issue**: `Store.Put` uses `os.Rename` to finalize blobs. If two concurrent requests try to write the same blob (same hash), both will perform the write and rename. While safe (content is identical), the return value `bool` (created) will be `true` for both, which is technically inaccurate for the second winner.
+- **Fix**: Acceptable for v1. The impact is negligible (redundant I/O for identical content) and data integrity is preserved.
+
+### 2. Open Questions / Assumptions
+- **Assumption**: The `style_bundles` table schema is assumed to store `files_json` but not a `content_hash` column, based on `internal/db/queries.go`. The `AcceptedResource` response generates a synthetic hash for style bundles, which is inconsistent with other resources (where hash comes from DB), but valid given the schema constraints.
+- **Assumption**: The schema unique constraints (`ON CONFLICT`) assumed in `Upsert*` queries must exist in the database schema (managed by E2-S2) for these queries to work correctly.
+
+### 3. Quick Risk Summary
+- **Risk**: Low.
+- The implementation is robust, utilizing database transactions and file-system atomicity correctly.
+- Concurrency is strictly controlled via striped mutexes on the Website ID.
+- Test coverage is high, including edge cases like hash mismatches, dry runs, and large deletion sets.
+- The only real operational risk is the tight 5s timeout.
+
+No critical correctness bugs found.

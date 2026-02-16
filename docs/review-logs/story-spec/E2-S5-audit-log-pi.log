@@ -1,0 +1,20 @@
+Story: docs/stories/E2-S5-audit-log.md
+Timestamp: 2026-02-15T16:47:54Z
+---
+1. Ready
+
+2. Findings:
+
+*   **Severity P2: Schema Scope Mismatch for Release Builds.** The story includes `release.build` as an audit event (AC-2) and a website-level logs endpoint (AC-6). However, releases are typically website-scoped, not environment-scoped. If the `audit_log` table (from E2-S2) strictly requires a non-null `environment_id`, logging release builds will be problematic.
+    *   **Fix:** Ensure the implementation uses a `website_id` column in `audit_log` and allows `environment_id` to be nullable. Update the Implementation Plan to reflect handling of website-scoped events.
+
+*   **Severity P2: Audit Integrity vs. Availability (AC-12).** AC-12 states "If audit logging fails... primary operation still succeeds." For an audit system, this allows actions to occur without record, compromising non-repudiation. Since the audit log is in the same SQLite DB as the state, writes should generally be transactional.
+    *   **Fix:** Modify AC-12 to require that audit writes be performed in the same transaction as the state change where possible (e.g., `apply`, `release.activate`), causing the operation to fail if the log cannot be written.
+
+*   **Severity P2: Stable Pagination Ordering.** AC-5 specifies ordering by timestamp. High-frequency automated operations might occur in the same millisecond, leading to unstable pagination.
+    *   **Fix:** Update AC-5 and the query implementation plan to order by `timestamp DESC, id DESC` (or `rowid`) to guarantee stable sort order.
+
+3. Missing Tests / Acceptance Criteria:
+
+*   **Test:** Integration test specifically for `GET /api/v1/websites/{website}/logs` to verify it correctly aggregates logs across multiple environments and includes website-scoped events (like `release.build`).
+*   **Test:** Unit test for logging a `release.build` event to verify correct handling of the `environment_id` field (e.g., null or distinct value).

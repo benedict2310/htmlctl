@@ -1,0 +1,13 @@
+Story: docs/stories/E1-S3-component-validation.md
+Timestamp: 2026-02-15T16:45:55Z
+---
+READY
+
+**Findings:**
+
+1.  **Severity: P2** - **Ambiguity in Anchor ID Rule Scope**: The requirement states that the Anchor ID rule applies "if a component is used in a page layout". However, the `ValidateComponent(component *model.Component)` function signature implies stateless, isolated validation without access to the site-wide layout usage map.
+    *   **Fix Suggestion**: Update the rule to be universal: "All components must have a root `id` attribute matching the component name." This simplifies validation, ensures all components are "layout-ready" by default, and allows `ValidateComponent` to function correctly in isolation.
+
+**Missing Tests / Acceptance Criteria:**
+
+*   No missing tests or ACs found. The verification plan is comprehensive.

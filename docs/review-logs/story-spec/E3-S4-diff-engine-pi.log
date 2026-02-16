@@ -1,0 +1,19 @@
+Story: docs/stories/E3-S4-diff-engine.md
+Timestamp: 2026-02-15T16:48:57Z
+---
+**1. Status:** Ready
+
+**2. Findings:**
+
+*   **Severity: P2**
+    *   **Description:** The spec does not explicitly mention ignoring files (e.g., via `.htmlctlignore`). If the `apply` command filters out files (like `.git`, `node_modules`), the `diff` command must use the exact same filter to avoid falsely reporting them as "Added".
+    *   **Fix Suggestion:** Explicitly state in Section 3 (Scope) or 6 (AC) that local directory traversal must respect the same ignore logic as the bundle builder.
+
+*   **Severity: P2**
+    *   **Description:** The API contract for `GetDesiredStateManifest` is not strictly defined, relying on a tentative assumption in "Risks". This creates a coupling risk with the E2-S3 server implementation.
+    *   **Fix Suggestion:** Add a specific struct definition for the expected API response in Section 5.2 (e.g., `type RemoteManifest struct { Files map[string]string }`) to serve as the integration contract.
+
+**3. Missing Tests / Acceptance Criteria:**
+
+*   **AC-15:** `htmlctl diff` respects `.htmlctlignore` and default ignore patterns (files ignored by `apply` are not listed in `diff`).
+*   **AC-16:** When `apply --dry-run` is used, the exit code should always be 0 (success) unless an error occurs, distinguishing it from `diff` which returns 1 if changes exist. (The spec mentions `apply --dry-run` shows diff, but usually `apply` implies "try to apply", and if dry-run succeeds, it exits 0, whereas `diff` is a query that exits 1 on changes. Clarify if `apply --dry-run` propagates the `diff` exit code or consumes it).

@@ -1,0 +1,13 @@
+Story: docs/stories/E1-S3-component-validation.md
+Timestamp: 2026-02-15T17:02:29Z
+---
+Status: Needs Work
+
+1. **P1 - API Signature Mismatch for Contextual Validation:** The proposed signature `ValidateComponent(component *model.Component) []ValidationError` (Section 3 & 5.1) is insufficient to implement AC-6 and AC-7. These acceptance criteria require checking if a component is "anchor-navigable" (used in a Page layout), but the `Component` model (from E1-S1) contains only `name`, `scope`, and `html`, with no usage context.
+    *   **Fix:** Change the function signature to `ValidateComponent(component *model.Component, isNavigable bool) []ValidationError` or similar, allowing the caller to inject the usage context derived from the Site model.
+
+2. **P2 - Contradictory Test Plan Cases:** The test plan (Section 5.3) lists `testdata/components/valid-div.html` (no ID) as valid and `testdata/components/missing-id.html` (no ID) as invalid. Structurally these files are identical regarding the missing ID. The test plan does not specify that the validator must be invoked with different context flags (`isNavigable=false` vs `true`) to produce these different results.
+    *   **Fix:** Update Section 5.3 and 7 to explicitly state that `valid-div.html` will be tested with `isNavigable=false` and `missing-id.html` with `isNavigable=true`.
+
+3. **P2 - Missing Logic for Usage Resolution:** AC-8 requires `ValidateAllComponents` to report errors including the anchor-ID checks (AC-6/7). However, Section 5 (Implementation Plan) does not describe the necessary step of building a "usage index" (iterating all `site.Pages` to find which components are referenced) before validating the components. Without this, `ValidateAllComponents` cannot determine which components are anchor-navigable.
+    *   **Fix:** Add a step to `ValidateAllComponents` logic in Section 5.1/5.4 to "Pre-calculate component usage by iterating all Page layouts to identify navigable components" before invoking validation on each component.

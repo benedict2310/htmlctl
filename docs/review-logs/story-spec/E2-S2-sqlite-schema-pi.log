@@ -1,0 +1,22 @@
+Story: docs/stories/E2-S2-sqlite-schema.md
+Timestamp: 2026-02-15T16:46:34Z
+---
+Ready
+
+**Findings:**
+
+1. **P2 - Missing Indexes in DDL:** The Proposed DDL section lacks explicit `CREATE INDEX` statements for foreign key columns (e.g., `website_id` in `pages`, `environment_id` in `releases`). SQLite does not automatically index foreign keys, which is necessary to satisfy **AC-12** ("appropriate indexes for query patterns").
+   *   *Fix Suggestion:* Add `CREATE INDEX` statements for all foreign key columns and common query fields (e.g., `audit_log.timestamp`) in `internal/db/migrations/001_initial_schema.go`.
+
+2. **P2 - Migration Execution Risk:** The plan to use a single DDL string for migrations may fail if the `database/sql` driver does not support executing multiple semicolon-separated statements in a single `Exec()` call.
+   *   *Fix Suggestion:* Implement `internal/db/migrate.go` to support migrations returning a slice of strings (`[]string`) or strictly split the SQL string by semicolon before execution.
+
+3. **P2 - Environment Name Constraint:** The `environments` table DDL defines `name` as `TEXT NOT NULL` but comments imply it must be 'staging' or 'prod'.
+   *   *Fix Suggestion:* Add a `CHECK (name IN ('staging', 'prod'))` constraint to the DDL or ensure the Go model enforces this validation strictly.
+
+4. **P2 - Audit Log Foreign Key:** The `audit_log` DDL defines `release_id` as `TEXT` without a foreign key constraint, whereas **AC-9** refers to it as a "release ID reference".
+   *   *Fix Suggestion:* Add `REFERENCES releases(id)` to `audit_log.release_id` if strict referential integrity is desired, or document that it is a loose reference.
+
+**Missing Tests/Acceptance Criteria:**
+
+*   None.

@@ -1,0 +1,17 @@
+Story: docs/stories/E3-S3-core-remote-commands.md
+Timestamp: 2026-02-15T16:48:30Z
+---
+Ready
+
+1. **Ambiguous API Paths** (P2): The "Open Questions" section lists tentative API paths. Implementation requires concrete paths or a strict interface.
+   *Fix*: Replace tentative paths with specific references to E2-S3/E2-S5 specs, or explicitly define the `APIClient` interface in `internal/client` to decouple logic from URL paths until the server contract is frozen.
+
+2. **Streaming vs In-Memory Bundling** (P2): Section 8 suggests streaming uploads, but Section 5.1 implies creating a tar.gz archive, potentially in-memory.
+   *Fix*: Clarify in Section 5.1 that the bundle package should return an `io.Reader` (using `io.Pipe` or a temporary file) rather than a byte slice, ensuring the CLI doesn't buffer 100MB+ in memory before sending.
+
+3. **Command Aliases & Resource Normalization** (P2): `get` commands (AC-1, AC-2) often support aliases (e.g., `ws` for `websites`) and singular/plural forms.
+   *Fix*: Add a constraint or AC specifying whether aliases/short-names are supported in v1 or if strict full-noun matching is required.
+
+**Missing Tests/Acceptance Criteria:**
+- [ ] AC: `htmlctl get` handles empty states gracefully (e.g., "No websites found" vs empty table).
+- [ ] AC: `htmlctl apply` enforces a client-side timeout for uploads to prevent hanging on poor connections (default e.g., 30s or 1m).

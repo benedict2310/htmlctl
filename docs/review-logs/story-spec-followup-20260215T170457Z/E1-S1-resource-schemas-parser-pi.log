@@ -1,0 +1,33 @@
+Story: docs/stories/E1-S1-resource-schemas-parser.md
+Timestamp: 2026-02-15T17:04:57Z
+---
+Status: **NEEDS REVISION**
+
+The story is well-aligned with the technical specification and covers the core requirements for the resource parser. However, there are a few missing acceptance criteria regarding validation logic that are critical for downstream deterministic rendering and routing.
+
+### Findings
+
+1.  **Missing AC for Duplicate Route Detection**
+    *   **Severity:** High
+    *   **Issue:** While test coverage for "duplicate routes" is mentioned in Section 5.3, there is no corresponding Acceptance Criterion requiring `LoadSite()` to fail when multiple pages resolve to the same normalized route (e.g., `/about` and `about/`).
+    *   **Fix:** Add an AC: `LoadSite()` returns an error if multiple pages claim the same normalized route.
+
+2.  **Missing AC for Line Ending Normalization**
+    *   **Severity:** High
+    *   **Issue:** Section 9 mentions normalizing line endings to LF as a mitigation for deterministic rendering, but this is not captured in the Acceptance Criteria. Without this, cross-platform builds (Linux vs Windows) will produce different hashes.
+    *   **Fix:** Add an AC: Component HTML content is normalized to LF line endings regardless of the source file format.
+
+3.  **Asset Discovery Includes Hidden Files**
+    *   **Severity:** Medium
+    *   **Issue:** AC-10 ("recursively list files") implies all files in `assets/` are included. This would include system files like `.DS_Store` or `.gitkeep`, polluting the release artifact.
+    *   **Fix:** Update AC-10 to explicitly exclude dotfiles and hidden files from asset discovery.
+
+4.  **Ambiguity on Missing Style Files**
+    *   **Severity:** Medium
+    *   **Issue:** AC-4 states `StyleBundle` is populated from specific files (`styles/tokens.css`, `styles/default.css`), but doesn't specify behavior if they are missing. Spec 2.5 implies these are standard/mandatory in v1.
+    *   **Fix:** Add an AC specifying that `LoadSite()` returns an error if the files required by `spec.defaultStyleBundle` are missing.
+
+5.  **Missing Validation for `kind`**
+    *   **Severity:** Low
+    *   **Issue:** The story mentions parsing `kind`, but lacks an AC ensuring the parser validates that the `kind` field matches the expected resource type (e.g., a file in `pages/` must be `kind: Page`, not `kind: Website`).
+    *   **Fix:** Add an AC: `LoadSite()` validates that `kind` matches the source directory context.

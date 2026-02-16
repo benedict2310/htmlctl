@@ -1,0 +1,21 @@
+Story: docs/stories/E4-S3-promote.md
+Timestamp: 2026-02-15T16:49:28Z
+---
+READY
+
+**Findings:**
+
+1.  **P1 - Metadata Isolation with Hard Links**: The strategy to "hard-link ... release artifact directory" puts environment-specific metadata at risk. If the release directory contains a metadata file (e.g., `release.json` with ID/Env fields), hard-linking it will cause the Staging and Prod releases to share the exact same physical file. Updating the metadata for Prod will incorrectly update it for Staging.
+    *   *Fix*: Explicitly state that content files (static assets) are hard-linked, but metadata files must be *regenerated* or *copied-and-modified* (not linked) to reflect the new target environment and Release ID.
+
+2.  **P2 - Source Lineage Traceability**: The "Open Questions" section suggests storing the source release ID, but this is not captured in the Architecture or Acceptance Criteria. Without this, the link between the Staging artifact and the Prod artifact is lost in the permanent record.
+    *   *Fix*: Add an Acceptance Criterion requiring the promoted release's metadata to include `source_release_id` and `source_env`.
+
+3.  **P2 - Hash Manifest Dependency**: The scope assumes a hash manifest is "stored during E2-S4 release build". If the E2-S4 implementation did not persist a manifest file, the promotion logic will fail to find it.
+    *   *Fix*: Modify the logic to "Load source manifest if available; otherwise compute it from the source directory on-the-fly before promotion."
+
+**Missing Tests / Acceptance Criteria:**
+
+*   **AC-12**: The release metadata file (e.g., `meta.json`) in the target environment must contain the new target Release ID and Environment, and must **not** be a hard link to the source metadata file.
+*   **Test**: Verify that the `source_release_id` field is correctly populated in the target release metadata.
+*   **Test**: Verify that modifying the metadata file in the target environment does *not* affect the source environment (ensures no hard link on metadata).

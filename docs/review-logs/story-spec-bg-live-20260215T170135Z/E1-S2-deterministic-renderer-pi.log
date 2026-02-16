@@ -1,0 +1,26 @@
+Story: docs/stories/E1-S2-deterministic-renderer.md
+Timestamp: 2026-02-15T17:01:35Z
+---
+Status: Needs Work
+
+The implementation story is mostly complete, but contains critical specification bugs and dependency gaps that contradict the implemented code or risk regression if re-implemented based on this text.
+
+1.  **(P1) Dependency Mismatch: Missing `RootDir` in Site Model.**
+    The `Render` function (and `renderStatics` internally) requires access to the source directory to read and hash binary assets. However, the `Render` signature (`site *model.Site, outputDir string`) implies all data is in `site`, yet the E1-S1 `Site` struct specification does not include a `RootDir` or `SourcePath` field. The implementation (visible in `pkg/model/types.go`) *has* added `RootDir`, but the E1-S1 specification does not reflect this contract, creating a documentation gap.
+    *Fix:* Update E1-S1 story to explicitly include `RootDir` in the `Site` struct "In Scope", or update E1-S2 "Files to Modify" to acknowledge this extension to the model.
+
+2.  **(P1) Specification Bug: AC-11 Corrupts Binary Assets.**
+    AC-11 states: "All output files use LF line endings (no CRLF)". This blanket requirement applies to images and other binary assets in the output directory, which would be corrupted by text normalization. The code correctly handles this by only normalizing text files, but the Acceptance Criterion is dangerously incorrect.
+    *Fix:* Amend AC-11 to: "All **text-based** output files (HTML, CSS, JS) use LF line endings. Binary assets are copied verbatim."
+
+3.  **(P2) Design Omission: Discarded Hash Metadata.**
+    The renderer calculates SHA-256 hashes for all assets, styles, and scripts to generate filenames, but discards this information (the `AssetMap` in `assets.go` is unused). The Technical Spec (Section 2.7) requires Releases to contain "hashes of outputs". By not returning this metadata from `Render()`, the system forces the future Release Builder (E2-S4) to inefficiently re-read and re-hash all files.
+    *Fix:* Update the `Render` return signature to return a `RenderManifest` (path -> hash map) and add an AC to verify this metadata is returned.
+
+4.  **(P2) Ambiguous Output Structure.**
+    AC-12 states asset files are copied "to the output directory", while AC-15 implies they exist at "original `assets/...` paths". It is unclear if the content-addressed versions should reside at the root or inside `assets/`. The implementation places them in `assets/`, which is cleaner.
+    *Fix:* Clarify AC-12 to explicitly state: "Asset files are copied to the `assets/` subdirectory within the output directory with content-addressed filenames."
+
+5.  **(P2) Missing Verification for Stale File Cleanup.**
+    AC-14 requires the output directory to be cleaned. While the implementation (and `renderer_test.go`) covers this, the "Verification Plan" in the story misses this critical test case (verifying that a pre-existing file is removed).
+    *Fix:* Add an integration test case to the Verification Plan: "Verify that pre-existing files in the output directory (stale artifacts) are removed during render."

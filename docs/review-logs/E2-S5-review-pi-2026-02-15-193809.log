@@ -1,0 +1,24 @@
+1. Findings (ordered by severity)
+
+*   **Blocking Audit Logging (Severity: High)**
+    *   **File:** `internal/audit/logger.go` (Method `Log`)
+    *   **Issue:** The `Log` method performs a synchronous SQL `INSERT`. This blocks the caller (API request) until the database write completes. This contradicts the review goal of "non-blocking behavior". If the database is slow or locked, user-facing operations will stall.
+    *   **Fix:** Implement an asynchronous logger using a buffered channel and a background worker goroutine. The `Log` method should enqueue the entry and return immediately. Ensure the worker is started in `New` and flushed/stopped in a `Close` method (which `Server.Shutdown` should call).
+
+*   **Invisible Audit Entries (Severity: High)**
+    *   **File:** `internal/audit/logger.go` (Method `Query`)
+    *   **Issue:** The query uses `INNER JOIN environments e ON e.id = a.environment_id`. However, `Entry.EnvironmentID` is a pointer (nullable) and `Log` allows it to be nil. If an entry is inserted with `EnvironmentID: nil` (e.g., a website-level setting change), it will be persisted but completely invisible to `Query` because the inner join fails to match.
+    *   **Fix:** If environment-less logs are supported: use `LEFT JOIN` for environments and ensure `audit_log` has a direct `website_id` column to filter by website. If not supported: enforce `entry.EnvironmentID != nil` in `Log`.
+
+*   **Manual Path Parsing Fragility (Severity: Low)**
+    *   **File:** `internal/server/logs.go` (Function `parseLogsPath`)
+    *   **Issue:** Manual `strings.Split` and index-based validation is brittle and error-prone compared to modern routing (e.g., Go 1.22 `ServeMux` path values).
+    *   **Fix:** Use `r.PathValue("website")` if on Go 1.22+, or ensure the router passes these vars to context. If manual parsing is retained, ensure strict validation of segment count prevents panic or aliasing.
+
+2. Open questions / assumptions
+*   **Assumption:** The `audit_log` table schema is not visible but presumably supports nullable `environment_id` based on the Go struct.
+*   **Question:** Is `EnvironmentID` strictly required? If yes, `Log` should return an error when it is missing. If no (website-global events), the DB schema and Query need adjustment (add `website_id` to `audit_log` to allow efficient filtering without joining `environments`).
+*   **Question:** How are audit write failures handled? Currently `Log` returns an error, but the "non-blocking" goal implies failures might need to be ignored or logged to a fallback (stderr), rather than returned to the API caller.
+
+3. Quick risk summary
+The current implementation risks **API latency spikes** due to synchronous logging and **data visibility bugs** where valid logs cannot be retrieved. The SQL correctness regarding the optional `EnvironmentID` is the most critical functional defect.

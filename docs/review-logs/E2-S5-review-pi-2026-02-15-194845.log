@@ -1,0 +1,22 @@
+Findings:
+
+**Severity: High**
+*   **Audit Data Accessibility / Lifecycle**: The audit query relies on an `INNER JOIN` with `environments` and `websites` (`FROM audit_log a JOIN environments e ...`). If an Environment is hard-deleted from the database, all associated audit logs become inaccessible via the API (and potentially deleted if FK cascades exist). Audit trails should typically survive the deletion of the resource they describe.
+*   **Scope Restriction**: The `Log` method mandates `EnvironmentID` (`if entry.EnvironmentID == nil { return error }`). This prevents auditing website-level operations (like "Create Environment" or "Update Website Settings") that are not specific to an existing environment, unless they are artificially attached to one.
+
+**Severity: Medium**
+*   **Data Integrity (Async Drop)**: The `AsyncLogger` is configured to drop log entries if the internal queue (512 slots) is full or if the database write times out (250ms). While this satisfies the "non-blocking" requirement, it means high load or database latency will cause silent gaps in the audit trail. API clients receive a `200 OK` despite the data loss.
+*   **Error Observability**: The `onError` callback in `AsyncLogger` receives only the `error` object, not the `Entry` that failed. This makes it impossible to identify which specific operation or actor failed to be logged when "asynchronous audit write failed" errors occur.
+
+**Severity: Low**
+*   **Pagination Performance**: The implementation uses `OFFSET` for pagination. As the `audit_log` table grows, queries for older pages will degrade linearly in performance.
+*   **Hardcoded Timeout**: The `250ms` write timeout in `AsyncLogger` is hardcoded. This may be too aggressive for cloud-based SQLite storage or during backup windows, leading to unnecessary data loss.
+
+**Open Questions**
+1.  **Schema Constraints**: Are there Foreign Keys on `audit_log.environment_id`? If `ON DELETE CASCADE` is set, deleting an environment permanently erases its history.
+2.  **Soft Deletion**: Does the system use soft-deletes for Environments? If not, the `INNER JOIN` logic is a critical flaw.
+3.  **Missing Integration**: The diff provides the logging engine and read API, but does not show the integration (calls to `Log`) in the `Apply` or `Release` handlers. Are these implemented?
+4.  **Indexing**: Are columns `audit_log(environment_id, timestamp)` and `audit_log(operation)` indexed? Without them, filtering and sorting will be slow.
+
+**Risk Summary**
+The implementation is concurrency-safe and non-blocking, but strictly prioritizes system availability over audit reliability. The critical risks are **data loss during high load** (due to the bounded queue/timeout) and **loss of historical data** (due to the tight coupling with Environment existence). Correctness is compromised by the inability to query logs for deleted environments.

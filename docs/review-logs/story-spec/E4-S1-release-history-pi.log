@@ -1,0 +1,13 @@
+Story: docs/stories/E4-S1-release-history.md
+Timestamp: 2026-02-15T16:48:57Z
+---
+Ready
+
+1. **P2 - Store/Logic Separation:** The plan implies `store.ListReleases` will inspect the `current` symlink to determine active status (Section 4 & 5.3). This mixes database access with filesystem operations.
+   *Fix:* Keep `store.ListReleases` pure (SQLite only). Perform the symlink check in the HTTP handler (`handler_releases.go`) or a service layer to combine the DB list with the active status flag.
+
+2. **P2 - API Response Structure:** AC-5 specifies returning a simple "JSON array". This prevents sending pagination metadata (e.g., total count, has_more) in the body.
+   *Fix:* Update AC-5 to return an envelope structure, for example: `{"items": [Release...], "meta": {"count": 20, "offset": 0}}`.
+
+3. **P2 - Missing Dependency:** The "Actor" field relies on E2-S5 (Audit Log) or a join, but E2-S5 is not listed in the "Dependencies" section, creating a risk of missing data.
+   *Fix:* Add E2-S5 to Dependencies, or explicitly scope the "Actor" field to read from a column in the `releases` table if it exists.

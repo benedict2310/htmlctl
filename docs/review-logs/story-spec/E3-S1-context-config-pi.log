@@ -1,0 +1,12 @@
+Story: docs/stories/E3-S1-context-config.md
+Timestamp: 2026-02-15T16:48:02Z
+---
+Ready
+
+1. **Severity P2**: The `apiVersion` field discussed in "Open Questions" is tentatively approved but missing from the `Config` struct definition and Acceptance Criteria. **Fix**: Add `apiVersion` string field to `internal/config/types.go` and update AC-2 to check for its presence (or at least valid parsing).
+2. **Severity P2**: The `use-context` command modifies the config file but the plan doesn't specify atomic writing (write-temp-and-rename), which risks file corruption on crash. **Fix**: Explicitly require atomic write semantics (write to temporary file, `fsync`, then `os.Rename`) in the `internal/config` saver logic.
+3. **Severity P2**: The lifecycle for resolving the context and making it available to subcommands is slightly vague ("usable by transport"). **Fix**: Clarify that `root.go`'s `PersistentPreRun` should handle loading and inject the resolved `ContextInfo` into the command's `context.Context` (or a CLI state struct) so subcommands can access it type-safely.
+
+**Missing Tests/Acceptance Criteria:**
+- **AC-12**: Config file write operations (via `use-context`) utilize atomic filesystem operations to prevent corruption.
+- **Test**: Verify `apiVersion` is preserved during read/write cycles.

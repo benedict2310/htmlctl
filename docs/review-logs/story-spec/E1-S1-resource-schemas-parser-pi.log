@@ -1,0 +1,16 @@
+Story: docs/stories/E1-S1-resource-schemas-parser.md
+Timestamp: 2026-02-15T16:45:35Z
+---
+**Ready**
+
+**Findings:**
+1. **Severity: P2** - Component directory scanning depth is ambiguous in AC-3 ("read all .html files"). Risk section mentions "flat components/ only", but code should explicitly handle this (e.g., ignore subdirectories or error).
+   * *Fix:* Update AC-3 to specify "read .html files from the root of `components/` directory only (non-recursive)".
+2. **Severity: P2** - `StyleBundle` struct definition in Scope is vague ("representing styles/tokens.css...").
+   * *Fix:* Explicitly define fields in Scope, e.g., `Tokens string` (content of tokens.css) and `Default string` (content of default.css).
+3. **Severity: P2** - `spec.baseTemplate` in Website struct lacks semantic definition (is it a path? inline HTML?).
+   * *Fix:* Clarify in Scope that this field holds the *filename* (e.g., "layout.html") found in the site root, or verify if the loader should validate this file's existence (similar to components).
+
+**Missing Tests / Acceptance Criteria:**
+- [ ] AC-11: Component loader ignores subdirectories in `components/` (verifies the flat structure constraint).
+- [ ] Test case: `LoadSite` verifies that the file referenced by `website.spec.baseTemplate` exists (if it's a file path).

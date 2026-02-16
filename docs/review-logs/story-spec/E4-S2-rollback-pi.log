@@ -1,0 +1,20 @@
+Story: docs/stories/E4-S2-rollback.md
+Timestamp: 2026-02-15T16:49:25Z
+---
+Review of `docs/stories/E4-S2-rollback.md`:
+
+**Status:** Needs Work
+
+**Findings:**
+
+1.  **State Persistence (P1):** The Scope and Implementation Plan describe switching the `current` symlink but fail to explicitly state that the environment's `active_release_id` in the database must be updated. This is critical because AC-3 (`rollout history` shows change) relies on the database state, and E2-S4 established that the DB tracks the active release.
+    *   **Fix:** Add "Update environment's `active_release_id` in database" to Scope and Implementation Plan (Server Logic).
+2.  **Repeated Rollback Logic (P2):** The `GetPreviousRelease` method in 5.2 must be defined to look up the release immediately preceding the *currently active* release (not just the latest created one). Without updating `active_release_id` (Finding 1) and using it as the reference point, repeated rollbacks (V3 -> V2 -> V1) would fail or flap.
+    *   **Fix:** Clarify in 5.2 that `GetPreviousRelease` resolves the predecessor of the currently active release.
+3.  **File Ownership (P2):** Section 5.1 lists `internal/release/symlink.go` as a "File to Create". However, E2-S4 (Release Builder), which is a dependency, already creates this file for its own atomic activation logic.
+    *   **Fix:** Move `internal/release/symlink.go` to "Files to Modify" (if changes are needed) or simply rely on it as a dependency, noting that E2-S4 provides the atomic switch helper.
+
+**Missing Tests / Acceptance Criteria:**
+
+*   **AC:** Verify that `active_release_id` in the `environments` table matches the release target of the `current` symlink after a rollback.
+*   **Test:** Integration test confirming that performing a rollback twice sequentially correctly moves from V3 -> V2 -> V1.

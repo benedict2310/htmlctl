@@ -1,0 +1,16 @@
+Story: docs/stories/E1-S4-local-cli-commands.md
+Timestamp: 2026-02-15T17:03:57Z
+---
+Status: Needs Work
+
+1.  **Risk: Catastrophic Data Loss (P1)**
+    *   **Issue:** The `renderer.Render` function (E1-S2) cleans/recreates the output directory. There is no safeguard in E1-S4 to prevent a user from accidentally running `htmlctl render -f ./site -o ./site`, which would wipe the source directory before rendering.
+    *   **Fix:** Add acceptance criteria: "AC-15: `htmlctl render` exits with error if the resolved output directory path matches the resolved source directory path."
+
+2.  **Ambiguity: Default Output Directory (P2)**
+    *   **Issue:** The "Open Questions" section recommends defaulting `-o` to `./dist`, but the Acceptance Criteria do not specify this behavior. AC-5 enforces `-f` but is silent on `-o`.
+    *   **Fix:** Add acceptance criteria: "AC-16: If `-o` flag is omitted, the output directory defaults to `./dist`."
+
+3.  **Security: Default Bind Address (P2)**
+    *   **Issue:** `htmlctl serve` ACs (AC-6, AC-11) do not specify the bind interface. Section 9 states "should bind to 127.0.0.1 by default" for security, but Go's `http.ListenAndServe` defaults to all interfaces (`0.0.0.0`) if not specified.
+    *   **Fix:** Modify AC-6 to read: "...starts an HTTP server serving static files from `./dist` on 127.0.0.1:8080 (localhost only)."

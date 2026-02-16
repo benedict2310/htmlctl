@@ -1,0 +1,34 @@
+No major findings. Code quality is high, but there are concurrency and atomicity risks typical of distributed/hybrid (FS + DB) state management.
+
+### 1. Findings
+
+**Severity: High (Data Consistency)**
+- **Inconsistent Snapshot Risk**: `loadDesiredState` executes multiple separate SELECT queries (`ListPages`, `ListComponents`, etc.) against `b.db` directly. In SQLite (especially if WAL mode is used or if isolation levels aren't strict), a concurrent `Apply` operation could modify the database between these reads.
+    - *Consequence*: A release might contain a Page referencing a Component that doesn't exist in the same snapshot, causing render failures or broken links.
+    - *Fix*: Wrap the read operations in `loadDesiredState` within a single read-only transaction (`b.db.BeginTx` with `sql.TxOptions{ReadOnly: true}`) and pass the transaction's `Tx` to `NewQueries`.
+
+**Severity: Medium (Concurrency Control)**
+- **Split Locking Strategy**: The server defines separate `applyLockStripes` and `releaseLockStripes`.
+    - *Consequence*: If `Apply` and `Release` use different locks for the same environment, they can run concurrently. Since `Release` reads what `Apply` writes, this exacerbates the snapshot consistency issue above.
+    - *Fix*: Use a single lock map (e.g., `environmentLocks`) for both operations to ensure `Apply` and `Release` are mutually exclusive for a given environment.
+
+**Severity: Medium (Atomicity)**
+- **Symlink/DB Desynchronization**: `SwitchCurrentSymlink` (FS change) occurs before the database transaction (Release Insert + Environment Update) is committed.
+    - *Consequence*: If the DB transaction fails (e.g., constraint violation or context cancel), the file system will point to the new release (`current -> releases/X`), but the database will verify it as "failed" (via `recordFailedAndReturn`) or not record it as active. The system enters a split-brain state where the live site differs from the control plane's view.
+    - *Fix*:
+        1.  Move `SwitchCurrentSymlink` *after* the DB transaction commits (preferred, but requires a way to rollback DB if FS fails, or accept that FS failure means "DB says active, but site is old").
+        2.  **Or** (Easier): Capture the previous symlink target before switching. In the `defer` or error handling block, if the DB commit fails, revert the symlink to the previous target.
+
+**Severity: Low (Maintenance)**
+- **Hardcoded Style Dependencies**: `copyOriginalStyles` and `resolveDefaultStyleRefs` hardcode filenames `tokens.css` and `default.css`.
+    - *Fix*: While this might be the enforced structure, defining these as constants (e.g., `const TokenStyleFile = "tokens.css"`) would improve maintainability if the contract changes.
+
+### 2. Open Questions / Assumptions
+- **Assumption**: `Apply` implementation (not in diff) uses `applyLockStripes`. If it doesn't use any locking, the concurrency risk is Critical.
+- **Assumption**: `renderer.Render` is deterministic and thread-safe (or at least process-isolated enough).
+- **Question**: Is `blobStore` safe for concurrent reads? (Usually yes for file systems, just verifying).
+
+### 3. Quick Risk Summary
+The release builder logic is sound, but the coordination between FS and DB needs tightening. The primary risk is a race condition between `Apply` modifying the site definition and `Release` reading it, leading to broken builds. The secondary risk is the "FS active / DB failed" split state on commit errors.
+
+**Recommendation**: Add the transaction wrapper in `loadDesiredState` and unify the locking mechanism before merging.

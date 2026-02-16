@@ -1,0 +1,25 @@
++ set -uo pipefail
++ ROOT=/Users/bene/Dev-Source-NoBackup/htmlctl
++ RUN_DIR=docs/review-logs/story-spec-bg-debug-165750
++ cd /Users/bene/Dev-Source-NoBackup/htmlctl
++ PROMPT='Review this implementation story for overlooked issues. Do not edit files. Focus on: (1) cross-story dependency mismatches, (2) contradictory scope/AC/test plan statements, (3) missing acceptance criteria for critical behavior, (4) ambiguous API/CLI contracts likely to cause implementation bugs. Output: status (Ready/Needs Work) + up to 5 concrete findings with severity P1/P2 and exact fix suggestions.'
+++ date -u +%Y-%m-%dT%H:%M:%SZ
++ echo 'start 2026-02-15T16:57:50Z'
++ :
++ find docs/stories -maxdepth 1 -name '*.md' -print0
++ xargs -0 -n1 -P2 '-I{}' bash -lc '
+      story="$1"
+      run_dir="$2"
+      prompt="$3"
+      base=$(basename "$story" .md)
+      log="$run_dir/${base}-pi.log"
+      {
+        echo "Story: $story"
+        echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo "---"
+        perl -e "alarm shift; exec @ARGV" 300 pi --model gemini-3-pro-high --thinking low --print --no-session "@$story" "$prompt"
+      } > "$log" 2>&1
+      code=$?
+      printf "%s\t%s\n" "$base" "$code" >> "$run_dir/status.log"
+      exit 0
+    ' _ '{}' docs/review-logs/story-spec-bg-debug-165750 'Review this implementation story for overlooked issues. Do not edit files. Focus on: (1) cross-story dependency mismatches, (2) contradictory scope/AC/test plan statements, (3) missing acceptance criteria for critical behavior, (4) ambiguous API/CLI contracts likely to cause implementation bugs. Output: status (Ready/Needs Work) + up to 5 concrete findings with severity P1/P2 and exact fix suggestions.'

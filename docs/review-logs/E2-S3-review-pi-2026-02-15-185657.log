@@ -1,0 +1,26 @@
+1. Findings
+- **High**: Transaction leak in `internal/state/merge.go` on error paths.
+    - The `rolledBack` variable logic is flawed. When an error occurs, `rolledBack` is set to `true`, causing the `defer` block to skip `tx.Rollback()`. This leaves the transaction open, potentially exhausting the connection pool.
+    - **Fix**: Remove `rolledBack` variable. Use `defer tx.Rollback()` unconditionally (ignoring `sql.ErrTxDone`).
+- **Medium**: `pkg/model/types.go` structs lack `json` tags, causing `LayoutJSON` to violate API conventions.
+    - `model.PageLayoutItem` has `yaml:"include"` but no JSON tag. `json.Marshal` will produce `{"Include": "..."}` (capitalized).
+    - If consumers (frontend or other services) expect standard lowercase JSON (e.g., `{"include": "..."}`), this will break.
+    - **Fix**: Add `json:"include"` tags to `pkg/model` structs.
+- **Low**: Inconsistent hash format stored in DB.
+    - `internal/state/merge.go` inserts `ref.Hash` directly from the manifest into the DB (`ContentHash` column).
+    - If the user provides a raw hex hash (allowed by `bundle.ReadTar` validation), it is stored as raw hex. If they provide `sha256:...`, it is stored with the prefix.
+    - **Fix**: Normalize to `sha256:` prefix using `bundle.CanonicalHash` before upserting to DB.
+- **Low**: `internal/blob/store.go` creates files with `0600` permissions (default for `os.CreateTemp`).
+    - If these blobs are intended to be served directly by a web server process (e.g., Nginx or a non-root daemon) in the future, they may be unreadable.
+    - **Fix**: Explicitly `chmod` to `0644` or use `0644` if the deployment model requires it.
+- **Low**: Double rollback in `dry_run` success path in `internal/state/merge.go`.
+    - The code manually calls `tx.Rollback()`, then sets `rolledBack = false`, causing the `defer` to call `tx.Rollback()` again. While `sql` package handles this safely, it's sloppy.
+    - **Fix**: Just `return out, nil` in the `dryRun` block and let the `defer` handle the rollback.
+
+2. Open questions / assumptions
+- **Blob GC**: There is no logic to clean up blobs that are no longer referenced by any resource. Is there a planned garbage collection story?
+- **Blob Permissions**: Is the default `0600` permission intentional for security, or should it be `0644` for serving?
+
+3. Quick risk summary
+- **High Risk**: The transaction leak is a stability killer. Must be fixed before merge.
+- **Medium Risk**: The JSON casing issue might break frontend integration if not addressed.

@@ -1,0 +1,24 @@
+==========================================
+E5 Hardening PI Review Log
+==========================================
+Agent: pi
+Timestamp: Tue Feb 17 19:18:19 CET 2026
+==========================================
+
+Verdict: **APPROVED**
+
+The patch successfully addresses the hardening requirements for Caddy reloads, database error handling, and transaction atomicity (via manual rollback).
+
+### Findings
+
+*   **P0 (Critical):** None.
+*   **P1 (High):** None.
+*   **P2 (Medium/Low):**
+    *   **ID Instability on Rollback:** In `handleDeleteDomain`, rolling back a failed deletion involves inserting a *new* row. This generates a new `ID` and resets `CreatedAt`. Since the API uses the domain name as the primary identifier, this is functionally correct, but any system relying on persistent numeric IDs (e.g., client-side caching or internal foreign keys not shown here) would observe a change.
+    *   **Audit Consistency:** Moving `logDomainAudit` to after the Caddy reload is correct (it prevents logging operations that were rolled back). However, in the rare case where `DeleteDomainBindingByDomain` (the rollback) fails, the system is left with a domain in the DB but no corresponding "Add" audit log (though it logs a severe error). This is an acceptable trade-off to avoid false positive audit entries.
+
+### Review Summary
+1.  **Domain Rollback:** Correctly implemented. `handleCreateDomain` deletes the domain if reload fails; `handleDeleteDomain` re-inserts it. Tests `TestDomainsReloadFailureReturnsError` and `TestDomainsGetDeleteValidationAndReloadFailureBranch` verify this "all-or-nothing" behavior.
+2.  **Typed SQLite Errors:** Correctly implements `modernc.org/sqlite` error type assertion and checks extended codes `2067` (UNIQUE) and `1555` (PRIMARYKEY), falling back to string matching for safety.
+3.  **Caddy Adapter:** Explicit `--adapter caddyfile` added to both `validate` and `reload` commands, preventing potential ambiguity if the default changes or if a different config format is auto-detected.
+4.  **Tests:** The test suite is adequately updated. It covers the new rollback logic (asserting state restoration) and validates the specific unique constraint logic.

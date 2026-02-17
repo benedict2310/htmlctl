@@ -1,0 +1,40 @@
+==========================================
+E5-S1 PI Review Log
+==========================================
+Story: docs/stories/E5-S1-domain-binding-resource.md
+Agent: pi
+Timestamp: Tue Feb 17 18:18:02 CET 2026
+==========================================
+
+You are performing a code review for story E5-S1 (DomainBinding Resource).
+
+### 1) Verdict
+**Ready**
+
+### 2) Findings
+| Severity | Finding | Description |
+| :--- | :--- | :--- |
+| **P2** | Scope Mismatch (Update) | The Scope section lists "Update (re-bind domain to different environment)" as in-scope, but no API endpoint (PUT/PATCH) was implemented. Currently, users must Delete and Re-create to change environments. Since the Acceptance Criteria do not explicitly require an Update endpoint, this is acceptable for v1. |
+| **P2** | Partial Failure State | The implementation proactively includes Caddy reload logic (technically out-of-scope). If `s.caddyReloader.Reload` fails, the handler returns 500, but the database insertion is already committed. This results in a "zombie" binding (persisted but not active) and causes subsequent retries to fail with 409 Conflict. |
+
+### 3) AC Coverage Table
+| ID | Status | Evidence |
+| :--- | :--- | :--- |
+| **AC-1** | **PASS** | `handleCreateDomain` in `internal/server/domains.go` handles POST, parses JSON, and calls `InsertDomainBinding`. |
+| **AC-2** | **PASS** | `internal/domain/binding.go` validates against RFC 1123 rules (regex, length, trailing dot, IP check). |
+| **AC-3** | **PASS** | SQLite `UNIQUE` constraint on `domain` column. Handler catches error and returns 409 Conflict. |
+| **AC-4** | **PASS** | `handleListDomains` supports `website` and `environment` query params; `ListDomainBindings` query implements filtering. |
+| **AC-5** | **PASS** | `handleGetDomain` implemented; returns 200 with JSON or 404 if not found. |
+| **AC-6** | **PASS** | `handleDeleteDomain` implemented; returns 204 on success, 404 if not found. |
+| **AC-7** | **PASS** | `domain.Normalize` function lowercases domains; called in all handlers. |
+| **AC-8** | **PASS** | `logDomainAudit` called in Create and Delete handlers with `domain.add`/`domain.remove` operations. |
+| **AC-9** | **PASS** | Extensive tests added in `internal/domain/binding_test.go`, `internal/server/domains_test.go`, etc. |
+
+### 4) Test/Coverage Assessment
+- **Unit Tests**: `internal/domain/binding_test.go` covers normalization, valid/invalid formats, and edge cases.
+- **Integration Tests**: `internal/server/domains_test.go` and `queries_test.go` cover the full CRUD lifecycle, filtering, and database constraints.
+- **Epic Coverage**: The comprehensive test suite appears to satisfy the >85% coverage target for this story.
+
+### 5) Minimal Fix List
+- None required for merge.
+- *(Optional)* In E5-S3 (Caddy Reload), consider handling reload failures more gracefully (e.g., rolling back the DB transaction or returning 201 with a warning) to avoid the partial failure state.

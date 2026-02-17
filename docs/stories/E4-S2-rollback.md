@@ -1,7 +1,7 @@
 # E4-S2 - Rollback
 
 **Epic:** Epic 4 — Promotion and rollback
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1 (Critical Path)
 **Estimated Effort:** 2 days
 **Dependencies:** E4-S1 (release history), E2-S4 (release/symlink management), E2-S5 (audit log)
@@ -23,7 +23,7 @@ As an operator or AI agent, I want to instantly roll back an environment to its 
 ### In Scope
 
 - CLI command: `htmlctl rollout undo website/<name> --context <ctx>`
-- Server API endpoint: `POST /api/v1/websites/{name}/envs/{env}/rollback`
+- Server API endpoint: `POST /api/v1/websites/{name}/environments/{env}/rollback`
 - Server logic: resolve the previous release from history, atomically switch the `current` symlink to point to it, and persist the new active release in `environments.active_release_id`
 - Safety checks before rollback:
   - Verify a previous release exists (at least 2 releases in history)
@@ -156,12 +156,37 @@ As an operator or AI agent, I want to instantly roll back an environment to its 
 
 ## Implementation Summary
 
-(TBD after implementation.)
+Implemented rollback end-to-end with atomic switch safety and audit logging:
+- Added `htmlctl rollout undo website/<name>` in `internal/cli/rollout_cmd.go` with table/json/yaml output.
+- Added rollback API in `internal/server/rollback.go`:
+  - `POST /api/v1/websites/{name}/environments/{env}/rollback`
+  - clear conflict errors for no previous release / missing rollback target directory
+  - rollback audit entry emission.
+- Added rollback core logic in `internal/release/rollback.go`:
+  - resolves previous release from the current active pointer
+  - skips failed releases in history
+  - validates target release directory exists
+  - atomically switches `current` symlink
+  - updates `environments.active_release_id`
+  - restores previous symlink target if DB update fails.
+- Added rollback audit operation constant in `internal/audit/entry.go`.
+- Updated server locking to per-environment locks in `internal/server/apply.go` and reuse for rollback serialization.
+- Added/updated tests:
+  - `internal/release/rollback_test.go`
+  - `internal/server/rollback_test.go`
+  - `internal/server/rollback_branch_test.go`
+  - `internal/cli/rollout_cmd_test.go`.
 
 ## Code Review Findings
 
-(TBD by review agent.)
+`pi` review logs:
+- `docs/review-logs/E4-S2-review-pi-2026-02-16-214406.log`
+- `docs/review-logs/E4-S2-review-pi-2026-02-16-214506.log`
+- `docs/review-logs/E4-S2-review-pi-2026-02-16-214618.log`
+- `docs/review-logs/E4-S2-review-pi-2026-02-16-214819.log` (final)
+
+Final review reported no P0/P1 issues. Remaining notes were non-blocking future optimizations (targeted SQL predecessor query and route-dispatch hardening).
 
 ## Completion Status
 
-(TBD after merge.)
+Implemented, tested, and reviewed. Rollback behavior is covered for success, no-previous-release, missing-target-directory, and repeated rollback transitions.

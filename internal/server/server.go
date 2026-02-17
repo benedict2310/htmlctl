@@ -8,11 +8,13 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/benedict2310/htmlctl/internal/audit"
 	"github.com/benedict2310/htmlctl/internal/blob"
+	"github.com/benedict2310/htmlctl/internal/caddy"
 	dbpkg "github.com/benedict2310/htmlctl/internal/db"
 )
 
@@ -29,8 +31,10 @@ type Server struct {
 	httpServer *http.Server
 	errCh      chan error
 
-	auditLogger      audit.Logger
-	applyLockStripes [256]sync.Mutex
+	auditLogger       audit.Logger
+	applyLockStripes  [256]sync.Mutex
+	domainLockStripes [256]sync.Mutex
+	caddyReloader     caddyReloader
 }
 
 func New(cfg Config, logger *slog.Logger, version string) (*Server, error) {
@@ -100,6 +104,22 @@ func (s *Server) Start() error {
 	s.auditLogger = audit.NewAsyncLogger(baseAuditLogger, 512, func(err error) {
 		s.logger.Error("asynchronous audit write failed", "error", err)
 	})
+
+	caddyBinaryPath := strings.TrimSpace(s.cfg.CaddyBinaryPath)
+	if caddyBinaryPath == "" {
+		caddyBinaryPath = DefaultCaddyBinary
+	}
+	caddyfilePath := strings.TrimSpace(s.cfg.CaddyfilePath)
+	if caddyfilePath == "" {
+		caddyfilePath = DefaultCaddyfilePath
+	}
+	reloader, err := caddy.NewReloader(caddyBinaryPath, caddyfilePath, strings.TrimSpace(s.cfg.CaddyConfigBackupPath), s.generateCaddyConfig, nil)
+	if err != nil {
+		_ = s.db.Close()
+		s.db = nil
+		return fmt.Errorf("initialize caddy reloader: %w", err)
+	}
+	s.caddyReloader = reloader
 
 	ln, err := net.Listen("tcp", s.cfg.ListenAddr())
 	if err != nil {
@@ -178,6 +198,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 	s.blobStore = nil
 	s.auditLogger = nil
+	s.caddyReloader = nil
 	return nil
 }
 

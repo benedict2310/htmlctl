@@ -1,0 +1,47 @@
+==========================================
+E5-S3 PI Review Log
+==========================================
+Story: docs/stories/E5-S3-caddy-reload.md
+Agent: pi
+Timestamp: Tue Feb 17 18:31:00 CET 2026
+==========================================
+
+Implementation matches the design and handles safety mechanisms (atomic swap, validation, rollback) correctly. The primary gap is observability (logging of successful reloads), which is explicitly required by AC-8.
+
+### Findings
+
+**P2 - Missing Success Logs (AC-8)**
+The `Reload` method accepts a `reason` argument but ignores it. Successful reloads are not logged in `reloader.go` or the calling API handlers.
+- **Evidence:** `internal/caddy/reloader.go:53` takes `reason string` but does not use it. API handlers in `domains.go` only log errors.
+- **Requirement:** "Reload success and failure events are logged with structured context (trigger reason, error details)."
+
+**P2 - Reload Failure Response (API Design)**
+When a domain is created/deleted but reload fails, the API returns 500. The DB operation (create/delete) persists, leading to a state mismatch (DB has domain, Caddy does not).
+- **Evidence:** `internal/server/domains.go:175` returns `http.StatusInternalServerError` after successful DB insert if reload fails.
+- **Impact:** Client sees failure but domain exists.
+- **Recommendation:** Acceptable for v1 (safe failure), but worth noting that the client should likely retry or the system needs a reconciler later.
+
+**P3 - Missing `generateCaddyConfig` in Diff**
+The diff relies on `s.generateCaddyConfig` in `internal/server/server.go`, which relies on `E5-S2`. Verified via file lookup that `internal/server/caddy.go` exists and contains the implementation, so this is valid, but strictly speaking outside the provided diff context.
+
+### AC Coverage
+
+| ID | Status | Notes |
+|----|--------|-------|
+| AC-1 | **PASS** | `Reload` implements full validate-backup-replace-reload sequence. |
+| AC-2 | **PASS** | Validation failure prevents config overwrite; error returned. |
+| AC-3 | **PASS** | Reload failure triggers `restoreBackup`; error returned. |
+| AC-4 | **PASS** | `copyFile` creates backup before rename. |
+| AC-5 | **PASS** | `sync.Mutex` serializes concurrent reload requests. |
+| AC-6 | **PASS** | Binary path configurable; missing binary handled via error return. |
+| AC-7 | **PASS** | API handlers trigger reload after DB success. |
+| AC-8 | **FAIL** | Failure is logged by caller, but **Success** is not logged, and `reason` is ignored. |
+| AC-9 | **PASS** | Comprehensive unit tests with `fakeRunner` covering all paths. |
+
+### Merge Verdict
+
+**CHANGES REQUESTED**
+
+The core logic is solid and safe, but **AC-8 must be addressed** before merge.
+1.  Add a `Logger` (e.g., `*slog.Logger`) to `caddy.Reloader`.
+2.  Log "Caddy reload started" and "Caddy reload succeeded" with the provided `reason` in `Reload()`.

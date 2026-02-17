@@ -8,14 +8,20 @@ import (
 func registerAPIRoutes(mux *http.ServeMux, srv *Server) {
 	mux.HandleFunc("/api/v1/websites", srv.handleWebsites)
 	mux.HandleFunc("/api/v1/websites/", srv.handleWebsiteAPI)
+	mux.HandleFunc("/api/v1/domains", srv.handleDomains)
+	mux.HandleFunc("/api/v1/domains/", srv.handleDomains)
 }
 
 func (s *Server) handleWebsiteAPI(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case strings.HasSuffix(r.URL.Path, "/apply"):
 		s.handleApply(w, r)
+	case strings.HasSuffix(r.URL.Path, "/promote"):
+		s.handlePromote(w, r)
 	case strings.HasSuffix(r.URL.Path, "/releases"):
 		s.handleRelease(w, r)
+	case strings.HasSuffix(r.URL.Path, "/rollback"):
+		s.handleRollback(w, r)
 	case strings.HasSuffix(r.URL.Path, "/manifest"):
 		s.handleManifest(w, r)
 	case strings.HasSuffix(r.URL.Path, "/logs"):

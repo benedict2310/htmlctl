@@ -80,3 +80,21 @@ type AuditLogRow struct {
 	ReleaseID       *string
 	MetadataJSON    string
 }
+
+type DomainBindingRow struct {
+	ID            int64
+	Domain        string
+	EnvironmentID int64
+	CreatedAt     string
+	UpdatedAt     string
+}
+
+type DomainBindingResolvedRow struct {
+	ID              int64
+	Domain          string
+	EnvironmentID   int64
+	WebsiteName     string
+	EnvironmentName string
+	CreatedAt       string
+	UpdatedAt       string
+}

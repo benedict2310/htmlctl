@@ -48,6 +48,14 @@ func TestApplyCommandProgressAndRelease(t *testing.T) {
 			t.Fatalf("expected %q in output, got: %s", marker, out)
 		}
 	}
+	for _, marker := range []string{
+		"First deploy for futurelab/staging complete.",
+		"Next: run 'htmlctl domain add <domain> --context staging' to publish it.",
+	} {
+		if !strings.Contains(out, marker) {
+			t.Fatalf("expected first-deploy hint %q in output, got: %s", marker, out)
+		}
+	}
 	if len(tr.requests) != 2 {
 		t.Fatalf("expected 2 requests, got %d", len(tr.requests))
 	}
@@ -126,5 +134,85 @@ func TestApplyCommandDryRunUsesDiffWithoutUpload(t *testing.T) {
 	}
 	if strings.Contains(out, "Uploading...") || strings.Contains(out, "Rendering...") {
 		t.Fatalf("expected no upload/release progress in dry-run output, got: %s", out)
+	}
+}
+
+func TestApplyCommandRequiresFromFlag(t *testing.T) {
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			t.Fatalf("unexpected transport call %#v", req)
+			return nil, nil
+		},
+	}
+
+	_, _, err := runCommandWithTransport(t, []string{"apply"}, tr)
+	if err == nil {
+		t.Fatalf("expected missing --from error")
+	}
+	if !strings.Contains(err.Error(), "required flag(s) \"from\" not set") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tr.requests) != 0 {
+		t.Fatalf("expected no API requests, got %d", len(tr.requests))
+	}
+}
+
+func TestApplyCommandInvalidOutputFormat(t *testing.T) {
+	siteDir := writeApplySiteFixture(t)
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			t.Fatalf("unexpected transport call %#v", req)
+			return nil, nil
+		},
+	}
+
+	_, _, err := runCommandWithTransport(t, []string{"apply", "-f", siteDir, "--output", "bogus"}, tr)
+	if err == nil {
+		t.Fatalf("expected invalid output format error")
+	}
+	if !strings.Contains(err.Error(), "invalid output format") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestApplyCommandDoesNotPrintFirstDeployHintWhenPreviousReleaseExists(t *testing.T) {
+	siteDir := writeApplySiteFixture(t)
+
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			if call == 0 {
+				return jsonHTTPResponse(200, `{"website":"futurelab","environment":"staging","mode":"full","dryRun":false,"acceptedResources":[{"kind":"Component","name":"header"}],"changes":{"created":1,"updated":0,"deleted":0}}`), nil
+			}
+			return jsonHTTPResponse(201, `{"website":"futurelab","environment":"staging","releaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAV","previousReleaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAA","status":"active"}`), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"apply", "-f", siteDir}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if strings.Contains(out, "First deploy for") {
+		t.Fatalf("did not expect first-deploy hint when previous release exists, got: %s", out)
+	}
+}
+
+func TestApplyCommandDryRunJSONOutput(t *testing.T) {
+	siteDir := writeApplySiteFixture(t)
+
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			if call != 0 {
+				t.Fatalf("unexpected transport call %d: %#v", call, req)
+			}
+			return jsonHTTPResponse(200, `{"website":"futurelab","environment":"staging","files":[]}`), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"apply", "-f", siteDir, "--dry-run", "--output", "json"}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(out, `"dryRun": true`) || !strings.Contains(out, `"message": "Dry run: no changes applied"`) {
+		t.Fatalf("unexpected dry-run json output: %s", out)
 	}
 }

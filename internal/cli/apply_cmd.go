@@ -111,6 +111,10 @@ func newApplyCmd() *cobra.Command {
 			}
 
 			fmt.Fprintf(cmd.OutOrStdout(), "Done. Release %s active.\n", releaseResp.ReleaseID)
+			if releaseResp.PreviousReleaseID == nil {
+				fmt.Fprintf(cmd.OutOrStdout(), "First deploy for %s/%s complete.\n", rt.ResolvedContext.Website, rt.ResolvedContext.Environment)
+				fmt.Fprintf(cmd.OutOrStdout(), "Next: run 'htmlctl domain add <domain> --context %s' to publish it.\n", rt.ResolvedContext.Name)
+			}
 			return nil
 		},
 	}

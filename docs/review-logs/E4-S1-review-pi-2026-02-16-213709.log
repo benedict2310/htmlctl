@@ -1,0 +1,26 @@
+==========================================
+E4-S1 PI Review Log (Iteration 3)
+==========================================
+Timestamp: 2026-02-16T21:37:09Z
+
+The provided diff was reviewed.
+
+**Status:** **P0 Issues Found**
+
+### P0: Missing Implementation File
+- **File:** `internal/cli/rollout_cmd.go` (missing from diff)
+- **Issue:** `internal/cli/root.go` adds `newRolloutCmd()`, but the definition of this function is not included in the diff.
+- **Impact:** Compilation failure.
+- **Note:** I verified `internal/cli/rollout_cmd.go` exists on disk and implements `rollout history` using the new `ListReleasesPage`. It must be included in the patch/commit to be valid.
+
+### P3: Unused Code (Cleanup)
+- **File:** `internal/db/queries.go`
+- **Issue:** `GetLatestReleaseActor` is added but appears unused (only the batch version `ListLatestReleaseActors` is used by the server).
+- **Recommendation:** Remove if not intended for future use.
+
+### Verification
+- **Pagination Logic:** The client-side loop in `ListReleases` correctly handles the 200-item page limit from the server.
+- **Status Logic:** The server correctly derives "previous" status for non-active releases that claim to be "active" in the DB.
+- **Actor Lookup:** The batch actor lookup correctly handles the correlated subquery for latest audit logs.
+
+**Action Required:** Include `internal/cli/rollout_cmd.go` in the diff/commit.

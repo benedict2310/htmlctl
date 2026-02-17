@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -61,11 +62,47 @@ func (c *APIClient) ListEnvironments(ctx context.Context, website string) (Envir
 }
 
 func (c *APIClient) ListReleases(ctx context.Context, website, environment string) (ReleasesResponse, error) {
+	const pageSize = 200
+
+	var out ReleasesResponse
+	offset := 0
+	for {
+		page, err := c.ListReleasesPage(ctx, website, environment, pageSize, offset)
+		if err != nil {
+			return ReleasesResponse{}, err
+		}
+		if offset == 0 {
+			out.Website = page.Website
+			out.Environment = page.Environment
+			out.ActiveReleaseID = page.ActiveReleaseID
+		}
+		out.Releases = append(out.Releases, page.Releases...)
+		if len(page.Releases) < pageSize {
+			break
+		}
+		offset += len(page.Releases)
+	}
+	out.Offset = 0
+	out.Limit = len(out.Releases)
+	return out, nil
+}
+
+func (c *APIClient) ListReleasesPage(ctx context.Context, website, environment string, limit, offset int) (ReleasesResponse, error) {
 	path := fmt.Sprintf(
 		"/api/v1/websites/%s/environments/%s/releases",
 		url.PathEscape(strings.TrimSpace(website)),
 		url.PathEscape(strings.TrimSpace(environment)),
 	)
+	query := url.Values{}
+	if limit > 0 {
+		query.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		query.Set("offset", strconv.Itoa(offset))
+	}
+	if encoded := query.Encode(); encoded != "" {
+		path = path + "?" + encoded
+	}
 	req, err := c.newRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return ReleasesResponse{}, err
@@ -148,6 +185,116 @@ func (c *APIClient) CreateRelease(ctx context.Context, website, environment stri
 		return ReleaseCreateResponse{}, err
 	}
 	return out, nil
+}
+
+func (c *APIClient) Rollback(ctx context.Context, website, environment string) (RollbackResponse, error) {
+	path := fmt.Sprintf(
+		"/api/v1/websites/%s/environments/%s/rollback",
+		url.PathEscape(strings.TrimSpace(website)),
+		url.PathEscape(strings.TrimSpace(environment)),
+	)
+	req, err := c.newRequest(ctx, http.MethodPost, path, nil)
+	if err != nil {
+		return RollbackResponse{}, err
+	}
+	var out RollbackResponse
+	if err := c.do(req, &out); err != nil {
+		return RollbackResponse{}, err
+	}
+	return out, nil
+}
+
+func (c *APIClient) Promote(ctx context.Context, website, fromEnv, toEnv string) (PromoteResponse, error) {
+	path := fmt.Sprintf(
+		"/api/v1/websites/%s/promote",
+		url.PathEscape(strings.TrimSpace(website)),
+	)
+	body, err := json.Marshal(map[string]string{
+		"from": strings.TrimSpace(fromEnv),
+		"to":   strings.TrimSpace(toEnv),
+	})
+	if err != nil {
+		return PromoteResponse{}, fmt.Errorf("marshal promote payload: %w", err)
+	}
+	req, err := c.newRequest(ctx, http.MethodPost, path, bytes.NewReader(body))
+	if err != nil {
+		return PromoteResponse{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	var out PromoteResponse
+	if err := c.do(req, &out); err != nil {
+		return PromoteResponse{}, err
+	}
+	return out, nil
+}
+
+func (c *APIClient) CreateDomainBinding(ctx context.Context, domain, website, environment string) (DomainBinding, error) {
+	payload, err := json.Marshal(map[string]string{
+		"domain":      strings.TrimSpace(domain),
+		"website":     strings.TrimSpace(website),
+		"environment": strings.TrimSpace(environment),
+	})
+	if err != nil {
+		return DomainBinding{}, fmt.Errorf("marshal domain binding payload: %w", err)
+	}
+	req, err := c.newRequest(ctx, http.MethodPost, "/api/v1/domains", bytes.NewReader(payload))
+	if err != nil {
+		return DomainBinding{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	var out DomainBinding
+	if err := c.do(req, &out); err != nil {
+		return DomainBinding{}, err
+	}
+	return out, nil
+}
+
+func (c *APIClient) ListDomainBindings(ctx context.Context, website, environment string) (DomainBindingsResponse, error) {
+	pathValue := "/api/v1/domains"
+	query := url.Values{}
+	if v := strings.TrimSpace(website); v != "" {
+		query.Set("website", v)
+	}
+	if v := strings.TrimSpace(environment); v != "" {
+		query.Set("environment", v)
+	}
+	if encoded := query.Encode(); encoded != "" {
+		pathValue += "?" + encoded
+	}
+	req, err := c.newRequest(ctx, http.MethodGet, pathValue, nil)
+	if err != nil {
+		return DomainBindingsResponse{}, err
+	}
+
+	var out DomainBindingsResponse
+	if err := c.do(req, &out); err != nil {
+		return DomainBindingsResponse{}, err
+	}
+	return out, nil
+}
+
+func (c *APIClient) GetDomainBinding(ctx context.Context, domain string) (DomainBinding, error) {
+	pathValue := "/api/v1/domains/" + url.PathEscape(strings.TrimSpace(domain))
+	req, err := c.newRequest(ctx, http.MethodGet, pathValue, nil)
+	if err != nil {
+		return DomainBinding{}, err
+	}
+	var out DomainBinding
+	if err := c.do(req, &out); err != nil {
+		return DomainBinding{}, err
+	}
+	return out, nil
+}
+
+func (c *APIClient) DeleteDomainBinding(ctx context.Context, domain string) error {
+	pathValue := "/api/v1/domains/" + url.PathEscape(strings.TrimSpace(domain))
+	req, err := c.newRequest(ctx, http.MethodDelete, pathValue, nil)
+	if err != nil {
+		return err
+	}
+	return c.do(req, nil)
 }
 
 func (c *APIClient) GetLogs(ctx context.Context, website, environment string, limit int) (LogsResponse, error) {

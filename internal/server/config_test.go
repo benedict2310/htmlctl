@@ -18,6 +18,9 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if !cfg.DBWAL {
 		t.Fatalf("expected DBWAL default true")
 	}
+	if cfg.CaddyfilePath != DefaultCaddyfilePath || cfg.CaddyBinaryPath != DefaultCaddyBinary {
+		t.Fatalf("unexpected caddy defaults: %#v", cfg)
+	}
 }
 
 func TestLoadConfigFromFile(t *testing.T) {
@@ -49,12 +52,15 @@ func TestLoadConfigEnvOverridesFile(t *testing.T) {
 	t.Setenv("HTMLSERVD_LOG_LEVEL", "warn")
 	t.Setenv("HTMLSERVD_DB_PATH", "/tmp/override/db.sqlite")
 	t.Setenv("HTMLSERVD_DB_WAL", "false")
+	t.Setenv("HTMLSERVD_CADDYFILE_PATH", "/tmp/caddy/Caddyfile")
+	t.Setenv("HTMLSERVD_CADDY_BINARY", "/usr/local/bin/caddy")
+	t.Setenv("HTMLSERVD_CADDY_CONFIG_BACKUP", "/tmp/caddy/Caddyfile.bak")
 
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	if cfg.BindAddr != "127.0.0.3" || cfg.Port != 9700 || cfg.DataDir != "/tmp/override" || cfg.LogLevel != "warn" || cfg.DBPath != "/tmp/override/db.sqlite" || cfg.DBWAL {
+	if cfg.BindAddr != "127.0.0.3" || cfg.Port != 9700 || cfg.DataDir != "/tmp/override" || cfg.LogLevel != "warn" || cfg.DBPath != "/tmp/override/db.sqlite" || cfg.DBWAL || cfg.CaddyfilePath != "/tmp/caddy/Caddyfile" || cfg.CaddyBinaryPath != "/usr/local/bin/caddy" || cfg.CaddyConfigBackupPath != "/tmp/caddy/Caddyfile.bak" {
 		t.Fatalf("unexpected overridden config: %#v", cfg)
 	}
 }

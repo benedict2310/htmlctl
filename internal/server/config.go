@@ -10,29 +10,37 @@ import (
 )
 
 const (
-	DefaultBindAddr = "127.0.0.1"
-	DefaultPort     = 9400
-	DefaultDataDir  = "/var/lib/htmlservd"
-	DefaultLogLevel = "info"
+	DefaultBindAddr      = "127.0.0.1"
+	DefaultPort          = 9400
+	DefaultDataDir       = "/var/lib/htmlservd"
+	DefaultLogLevel      = "info"
+	DefaultCaddyfilePath = "/etc/caddy/Caddyfile"
+	DefaultCaddyBinary   = "caddy"
 )
 
 type Config struct {
-	BindAddr string `yaml:"bind"`
-	Port     int    `yaml:"port"`
-	DataDir  string `yaml:"dataDir"`
-	LogLevel string `yaml:"logLevel"`
-	DBPath   string `yaml:"dbPath"`
-	DBWAL    bool   `yaml:"dbWAL"`
+	BindAddr              string `yaml:"bind"`
+	Port                  int    `yaml:"port"`
+	DataDir               string `yaml:"dataDir"`
+	LogLevel              string `yaml:"logLevel"`
+	DBPath                string `yaml:"dbPath"`
+	DBWAL                 bool   `yaml:"dbWAL"`
+	CaddyfilePath         string `yaml:"caddyfilePath"`
+	CaddyBinaryPath       string `yaml:"caddyBinaryPath"`
+	CaddyConfigBackupPath string `yaml:"caddyConfigBackupPath"`
 }
 
 func DefaultConfig() Config {
 	return Config{
-		BindAddr: DefaultBindAddr,
-		Port:     DefaultPort,
-		DataDir:  DefaultDataDir,
-		LogLevel: DefaultLogLevel,
-		DBPath:   "",
-		DBWAL:    true,
+		BindAddr:              DefaultBindAddr,
+		Port:                  DefaultPort,
+		DataDir:               DefaultDataDir,
+		LogLevel:              DefaultLogLevel,
+		DBPath:                "",
+		DBWAL:                 true,
+		CaddyfilePath:         DefaultCaddyfilePath,
+		CaddyBinaryPath:       DefaultCaddyBinary,
+		CaddyConfigBackupPath: "",
 	}
 }
 
@@ -74,6 +82,15 @@ func LoadConfig(configPath string) (Config, error) {
 			return cfg, fmt.Errorf("parse HTMLSERVD_DB_WAL=%q: %w", v, err)
 		}
 		cfg.DBWAL = parsed
+	}
+	if v := strings.TrimSpace(os.Getenv("HTMLSERVD_CADDYFILE_PATH")); v != "" {
+		cfg.CaddyfilePath = v
+	}
+	if v := strings.TrimSpace(os.Getenv("HTMLSERVD_CADDY_BINARY")); v != "" {
+		cfg.CaddyBinaryPath = v
+	}
+	if v := strings.TrimSpace(os.Getenv("HTMLSERVD_CADDY_CONFIG_BACKUP")); v != "" {
+		cfg.CaddyConfigBackupPath = v
 	}
 
 	if err := cfg.Validate(); err != nil {

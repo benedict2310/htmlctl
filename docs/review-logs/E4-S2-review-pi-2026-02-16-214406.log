@@ -1,0 +1,29 @@
+==========================================
+E4-S2 PI Review Log
+==========================================
+Timestamp: 2026-02-16T21:44:06Z
+Branch: feat/epic4-release-history-rollback-promote
+Story: docs/stories/E4-S2-rollback.md
+==========================================
+
+The provided diff is incomplete and missing the core implementation files required by the story. It appears to contain only the "wiring" and helper updates (DB, Client, Routes) but lacks the actual logic for the rollback handler and CLI command.
+
+### Issues
+
+**P0 - Missing Core Implementation Files (Build Failure)**
+The diff references `s.handleRollback` in `internal/server/routes.go` and `newRolloutCmd` in `internal/cli/root.go`, but the definitions of these methods are missing. The following files specified in the plan are absent from the diff:
+- `internal/server/handler_rollback.go` (Server logic)
+- `internal/cli/cmd/rollout_undo.go` (CLI command)
+- `internal/release/rollback.go` (Core rollback logic)
+**Impact:** The code will not compile due to undefined references.
+
+**P1 - Missing `GetPreviousRelease` DB Method**
+The implementation plan explicitly required adding `GetPreviousRelease` to `internal/store/release_store.go` (or `db/queries.go`) to efficiently resolve the rollback target. This method is missing in the diff.
+**Impact:** The rollback logic (once implemented) presumably has to rely on listing/pagination to find the previous release, which is less efficient and potentially more complex than a dedicated SQL query.
+
+**P2 - Client Pagination Logic Fragility**
+In `internal/client/client.go`, `ListReleases` determines iteration end by checking `if len(page.Releases) < pageSize`.
+- `pageSize` is hardcoded to 200.
+- Server clamps limit to 200 (`maxReleaseHistoryLimit` in `release.go`).
+**Risk:** If the server's max limit is ever reduced below the client's `pageSize` (e.g., to 50), the client will request 200, receive 50 (clamped), see `50 < 200`, and stop fetching prematurely even if more pages exist.
+**Fix:** Client should check `len(page.Releases) < page.Limit` (using the limit returned by server) or simply continue if `len > 0` and `len == page.Limit`.

@@ -1,0 +1,26 @@
+==========================================
+E4-S2 PI Review Log (Focused)
+==========================================
+Timestamp: 2026-02-16T21:45:06Z
+
+Review of E4-S2 Rollback Implementation Diff:
+
+### P0 (Critical) - Missing Implementation
+*   **Undefined Handlers**: The diff registers `s.handleRollback` in `routes.go` and tests `parseRollbackPath` in `path_parse_test.go`, but the actual implementation of these methods (likely in a file like `internal/server/rollback.go`) is **missing from the diff**.
+    *   **Impact**: I cannot review the safety, atomicity, or correctness of the rollback logic itself. As presented, this code would likely fail to compile.
+
+### P1 (High) - API Design
+*   **No Target Release for Rollback**: The `Rollback` method in `internal/client/client.go` accepts no arguments other than website/env.
+    *   **Impact**: This implies a fixed "undo" behavior (presumably to the immediate parent). This is insufficient for incident response where the "previous" release might also be defective, requiring a rollback to a specific older version (Release ID or hash).
+    *   **Recommendation**: Update the Client and API to accept an optional `targetReleaseID`.
+
+### P2 (Medium) - Data & Logic
+*   **Status Override Logic**: In `internal/server/release.go`, the display logic forces a release status to `"previous"` if it claims to be `"active"` but isn't the Environment's current active release.
+    *   **Impact**: While this ensures the UI/CLI shows only one active release, it masks potential data corruption where multiple rows in the database might have `active=true`.
+*   **Lock Granularity (Positive)**: The change from `applyLock(website)` to `environmentLock(website, env)` in `internal/server/apply.go` is a good P2 improvement, correctly reducing contention between environments.
+
+### P3 (Low) - Client Behavior
+*   **Aggressive Pagination**: `ListReleases` in the client loops until all pages are consumed. While safe for CLI usage now, `pageSize=200` with an infinite loop could become slow if history grows large. Consider exposing the iterator or limit to the caller in the future.
+
+---
+**Summary**: This diff appears to be a partial snapshot. The scaffolding (routes, client, types) is present, but the core server-side logic (`handleRollback`) is missing, preventing a complete security/stability review.

@@ -1,0 +1,48 @@
+==========================================
+E4-S3 PI Review Log
+==========================================
+Timestamp: 2026-02-16T21:56:06Z
+
+Review of E4-S3 (Promote) implementation.
+
+**Summary**
+The implementation logic is generally sound regarding the "happy path," verifying artifact parity via hashes, and maintaining metadata lineage. However, a **P1** issue exists in the rollback logic that could cause downtime during a failure scenario.
+
+**Classification of Findings**
+
+**[P1] Unsafe Rollback Order causing potential downtime**
+- **Location**: `internal/release/promote.go` (in `Promote` function's `defer` block).
+- **Issue**: The rollback logic removes the `targetFinalDir` (the promoted release directory) *before* restoring the `current` symlink to the previous release.
+  ```go
+  if finalizedTargetDir {
+      _ = os.RemoveAll(targetFinalDir) // Directory deleted here
+  }
+  if switchedCurrent {
+      // ...
+      _ = SetCurrentSymlinkTarget(targetEnvDir, restoreTarget) // Symlink switched here
+  }
+  ```
+- **Impact**: If an error occurs after the symlink switch (e.g., during the DB transaction), the system enters rollback. It deletes the directory that the live `current` symlink points to, causing 404s/outages until the symlink is restored in the next step. If the symlink restoration fails, the site remains broken.
+- **Recommendation**: Invert the rollback order. Restore the `current` symlink first, *then* remove the failed release directory.
+
+**[P2] Artifact Divergence due to Symlink Strategy Inconsistency**
+- **Location**: `internal/release/promote.go` (`copyReleaseContent` and `copyFile`).
+- **Issue**: The promotion logic attempts to hardlink files (`linkFile`) first. If that fails (e.g., cross-partition promotion), it falls back to copying (`copyFile`).
+  - `linkFile` (using `os.Link`) preserves symlinks (hardlinking the inode) on most Unix systems.
+  - `copyFile` uses `os.Open`, which follows symlinks, converting them into regular files containing the target content.
+- **Impact**: Promoting between environments on the same partition preserves symlinks, while promoting across partitions dereferences them. This violates strict artifact parity (file types differ), even though the content hashes (calculated via `os.ReadFile` which also follows symlinks) will match.
+- **Recommendation**: Ensure `copyFile` uses `os.Lstat` and `os.Readlink`/`os.Symlink` to replicate symlinks exactly, ensuring the artifact structure is identical regardless of the transfer strategy.
+
+**[P2] Crash Consistency Gap (FileSystem vs Database)**
+- **Location**: `internal/release/promote.go`.
+- **Issue**: The `current` symlink is switched to the new release *before* the database transaction commits the new release row.
+- **Impact**: If the process crashes immediately after `SwitchCurrentSymlink` but before `tx.Commit`, the web server will serve the new release (filesystem is updated), but the database will not have a record of this release. The release will effectively be an "orphan."
+- **Recommendation**: This is a typical distributed transaction trade-off. While complex to fix completely without a journal, it should be noted that the system favors "serving new code" over "DB consistency" in a crash. Swapping the order (DB first) would result in "DB has release, FS serves old," which might be safer but leads to state mismatch in the other direction.
+
+**[P3] Resource Leak Risk**
+- **Location**: `internal/release/promote.go` (`copyFile`).
+- **Issue**: `defer out.Close()` ignores the error return.
+- **Impact**: Write errors during the file close/flush operation (e.g., disk full) could be masked.
+- **Recommendation**: Explicitly check the error from `out.Close()`.
+
+**Explicit Statement**: P1 and P2 findings remain. The implementation is not yet ready for production without addressing the rollback order (P1).

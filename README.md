@@ -15,10 +15,8 @@ Implemented scope:
 - Epic 1: Local parser/validation/render/serve
 - Epic 2: Server daemon, desired state storage, apply ingestion, release build/activation, audit logs
 - Epic 3: Context config, SSH transport, remote `get/status/apply/logs/diff`
-
-Not yet implemented:
-- Epic 4: Rollback + promote commands
-- Epic 5: Domain/TLS/Caddy commands
+- Epic 4: Release history, rollback (`rollout undo`), and artifact promotion (`promote`)
+- Epic 5: Domain bindings, Caddy config/reload integration, and `domain` CLI commands
 
 ## Build & Test
 
@@ -32,6 +30,21 @@ or:
 ```bash
 go test ./...
 ```
+
+## Docker
+
+Build packaged images:
+
+```bash
+docker build --target htmlctl -t htmlctl:local .
+docker build --target htmlservd -t htmlservd:local .
+docker build --target htmlservd-ssh -t htmlservd-ssh:local .
+```
+
+See:
+
+- `docs/guides/first-deploy-docker.md` for first deployment walkthrough
+- `docs/reference/docker-images.md` for image/runtime details
 
 ## Quick Start (Local)
 
@@ -73,6 +86,14 @@ htmlctl apply -f ./site --context staging
 htmlctl status website/futurelab --context staging
 htmlctl logs website/futurelab --context staging
 htmlctl get releases --context staging
+htmlctl rollout history website/futurelab --context staging
+htmlctl promote website/futurelab --from staging --to prod --context staging
+htmlctl rollout history website/futurelab --context prod
+htmlctl rollout undo website/futurelab --context prod
+htmlctl domain add futurelab.studio --context prod
+htmlctl domain list --context prod
+htmlctl domain verify futurelab.studio --context prod
+htmlctl domain remove futurelab.studio --context prod
 ```
 
 Dry run (diff-only, no upload/release):
@@ -80,6 +101,8 @@ Dry run (diff-only, no upload/release):
 ```bash
 htmlctl apply -f ./site --context staging --dry-run
 ```
+
+On a first deploy, `htmlctl apply` now prints a follow-up hint to bind a domain.
 
 ## Implemented Commands
 
@@ -91,7 +114,17 @@ htmlctl apply -f ./site --context staging --dry-run
 - `htmlctl logs website/<name>`
 - `htmlctl diff -f <site-dir>`
 - `htmlctl apply -f <site-dir>`
+- `htmlctl rollout history website/<name>`
+- `htmlctl rollout undo website/<name>`
+- `htmlctl promote website/<name> --from <env> --to <env>`
+- `htmlctl domain add|list|remove|verify`
 - `htmlctl version`
+
+## Documentation
+
+- `docs/README.md` documentation index
+- `docs/stories/` story specs and acceptance criteria
+- `docs/review-logs/` PI/code review logs
 
 ## License
 

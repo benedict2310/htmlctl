@@ -1,0 +1,50 @@
+==========================================
+E5 Hardening Follow-up PI Review Log
+==========================================
+Tue Feb 17 20:40:06 CET 2026
+
+Prompt: Review current uncommitted changes for bugs/regressions, concurrency issues, rollback safety, docker/runtime risks, and testing gaps. Provide severity-ranked findings.
+
+Current uncommitted changes review:
+
+### 1. Severity Findings (Docker & Security)
+
+**High Severity**
+*   **Root Execution in Runtime**: The `docker/htmlservd-ssh-entrypoint.sh` script runs the main application as root.
+    *   *Issue*: While the `Dockerfile` creates a `htmlservd` user (uid 10001), the `htmlservd-ssh` stage switches to `USER root` for setup and never switches back. The entrypoint runs `/usr/local/bin/htmlservd &` which inherits root privileges.
+    *   *Fix*: Use `su-exec` or `setpriv` in the entrypoint to drop privileges for the `htmlservd` process, e.g., `su-exec htmlservd:htmlservd /usr/local/bin/htmlservd &`.
+*   **Root SSH Access**: The SSH configuration permits root login.
+    *   *Issue*: `htmlservd-ssh-entrypoint.sh` writes the public key to `/root/.ssh/authorized_keys`, and `sshd` is configured with `PermitRootLogin prohibit-password`. This allows SSH access as root, bypassing the defense-in-depth of the dedicated user.
+    *   *Fix*: Configure SSH for the `htmlservd` user (or a dedicated `deploy` user) and disable root login completely.
+
+**Medium Severity**
+*   **Secrets in Environment**: passing `SSH_PUBLIC_KEY` via environment variable is visible to any process capable of inspecting container environment (e.g., `docker inspect`).
+    *   *Mitigation*: For public keys this is acceptable, but ensure this pattern isn't used for private keys.
+
+### 2. Code Review: Feature Implementation
+
+**Domain Rollback Metadata (Preservation)**
+*   **Status**: **Verified**.
+*   **Implementation**: `RestoreDomainBinding` correctly accepts an explicit `ID`, `CreatedAt`, and `UpdatedAt`.
+*   **Logic**: `handleDeleteDomain` attempts to restore the exact original row if Caddy reload fails, maintaining referential integrity and history.
+*   **Testing**: `TestRestoreDomainBindingPreservesIdentity` covers the critical path.
+
+**Same-Domain Concurrency Locking**
+*   **Status**: **Verified**.
+*   **Implementation**: `domainLockStripes` (256 shards) with FNV hashing correctly shards locks by domain name.
+*   **Safety**: Lock is held during both DB operation and Caddy reload, preventing race conditions between create/delete of the same domain.
+*   **Deadlock Risk**: Low. `domainLock` seems independent of `environmentLock` used in `Apply`.
+*   **Testing**: `TestDomainsSameDomainDeleteCreateSerialized` confirms serialization.
+
+**First-Deploy UX**
+*   **Status**: **Verified**.
+*   **Implementation**: `Apply` command now checks `releaseResp.PreviousReleaseID == nil` to detect first deploy.
+*   **Output**: correctly suggests `htmlctl domain add` with the context name.
+*   **Testing**: Unit tests cover both first-deploy (hint present) and subsequent-deploy (hint absent) scenarios.
+
+### 3. Residual Risks & Testing Gaps
+
+*   **Docker Security Testing**: No automated tests verify that the container processes run as non-root.
+*   **ID Collision (Theoretical)**: If the database sequence for `domain_bindings` advances while a domain is deleted and then restored (very unlikely in this specific rollback window), there is a negligible risk. The current implementation is safe for standard auto-increment behavior.
+
+**Recommendation**: Prioritize fixing the Docker entrypoint to drop privileges before merging. The code changes in Go are solid.

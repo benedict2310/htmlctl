@@ -1,0 +1,41 @@
+==========================================
+E4-S1 PI Review Log (Iteration 2)
+==========================================
+Timestamp: 2026-02-16T21:33:47Z
+Branch: feat/epic4-release-history-rollback-promote
+==========================================
+
+Review of `E4-S1 Release History` diff iteration.
+
+### Findings
+
+#### P0: Release Status Masking
+- **Location:** `internal/server/release.go:186`
+- **Issue:** The logic `status := "previous"` (overridden only if `active`) ignores the actual `rel.Status` from the database.
+- **Impact:** Failed or pending releases will be incorrectly reported as "previous" (implying a valid, inactive state) instead of "failed" or "pending".
+- **Fix:** Preserve `rel.Status` (e.g., "failed") and only override to "previous" if the status was "active" but the release is not currently live.
+
+#### P1: Breaking Change in `ListReleases`
+- **Location:** `internal/client/client.go:64`
+- **Issue:** `ListReleases` now delegates to `ListReleasesPage` with `limit=0`. The server defaults `limit=0` (missing param) to `20`.
+- **Impact:** Existing callers expecting *all* releases will now receive only the most recent 20. This is a behavioral regression for consumers of the Go client or existing CLI commands (e.g., `htmlctl get releases` if it exists).
+- **Fix:** Either explicitly pass a high limit/`-1` for `ListReleases` to preserve behavior, or document the breaking change.
+
+#### P1: Incomplete Diff (Verification Gap)
+- **Location:** `internal/cli/rollout_cmd.go`, `internal/server/release_history_test.go`
+- **Issue:** The diff references `newRolloutCmd` but does not include the implementation of the rollout command or the relevant integration tests (`TestReleaseHistory...`).
+- **Impact:** Cannot verify CLI output formatting (tables, column headers) or integration test correctness from the diff alone. (Note: Files exist on disk, but were excluded from the patch).
+
+#### P2: Actor Attribution Semantics
+- **Location:** `internal/db/queries.go:375` (`ListLatestReleaseActors`)
+- **Issue:** The query selects the actor from the *latest* audit log entry for a release.
+- **Impact:** If a release is created by Alice, then rolled back by Bob, the "Actor" column will show "Bob". This means "Last Modified By" rather than "Created By".
+- **Action:** Confirm if this is the intended design for a history view.
+
+#### P2: Database Performance
+- **Location:** `internal/db/queries.go:359`
+- **Issue:** The correlated subquery in `ListLatestReleaseActors` runs per row in the page.
+- **Action:** Ensure a composite index exists on `audit_log(environment_id, release_id, timestamp)` to prevent full table scans as the audit log grows.
+
+### Summary
+The iteration introduces core pagination and actor lookup logic but contains a critical correctness bug (P0) masking release statuses and a client-side regression (P1). The provided diff is also partial, missing the CLI implementation and tests required for a full sign-off.

@@ -1,0 +1,41 @@
+==========================================
+E5-S3 PI Review Log
+==========================================
+Story: docs/stories/E5-S3-caddy-reload.md
+Agent: pi
+Timestamp: Tue Feb 17 18:36:43 CET 2026
+==========================================
+
+Review findings for E5-S3 implementation:
+
+# Review Findings
+
+## Verdict: MERGE
+
+The implementation is high-quality, fully compliant with the story requirements, and integrates correctly with the existing codebase. The reload logic is robust (atomic write + rollback), and the API integration ensures domain changes are reflected immediately.
+
+## Findings
+
+| Severity | Description | Evidence |
+| :--- | :--- | :--- |
+| **P2** | **DB/Caddy Consistency:** If `Reload` fails (e.g., port conflict), the API returns 500, but the domain binding remains committed in the DB. The domain will be inactive until the next successful reload. This is acceptable for this story (safety first), but future work could implement DB rollback or a "pending" state. | `internal/server/domains.go` executes `InsertDomainBinding` before calling `Reload`. |
+| **P2** | **Caddy Adapter Detection:** `caddy validate --config <file>` relies on Caddy detecting the format. Since the temp file ends in `.tmp`, ensure Caddy defaults to Caddyfile or that the content triggers detection. Usually safe for Caddy v2. | `internal/caddy/reloader.go` uses `tmpPath` without `--adapter`. |
+
+## Acceptance Criteria Coverage
+
+| AC | Status | Evidence |
+| :--- | :--- | :--- |
+| **AC-1** (Generate/Validate/Write/Reload) | **PASS** | `reloader.go:Reload` orchestrates the full sequence. |
+| **AC-2** (Validation Failure) | **PASS** | `reloader.go` checks `validate` exit code before renaming config. |
+| **AC-3** (Reload Failure Rollback) | **PASS** | `reloader.go` calls `restoreBackup` if `reload` command fails. |
+| **AC-4** (Backup Creation) | **PASS** | `reloader.go` copies existing config to `.bak` before overwrite. |
+| **AC-5** (Concurrency) | **PASS** | `reloader.go` uses `sync.Mutex` to serialize `Reload` calls. |
+| **AC-6** (Configurable Binary) | **PASS** | `NewReloader` accepts binary path; `server.go` reads from config/env. |
+| **AC-7** (API Trigger) | **PASS** | `internal/server/domains.go` handlers trigger `Reload` on success. |
+| **AC-8** (Logging) | **PASS** | `domains.go` logs outcomes; `reloader.go` returns stderr in errors. |
+| **AC-9** (Mock Tests) | **PASS** | `reloader_test.go` uses `fakeRunner` to verify logic without Caddy. |
+
+## Code Quality
+- **Modularity:** The `Reloader` is well-isolated in `internal/caddy`, making it easy to test.
+- **Safety:** Extensive use of atomic file operations (`os.Rename`) and cleanup (`defer os.Remove`).
+- **Testing:** Excellent coverage of failure modes (validation fail, reload fail, concurrent access) in `reloader_test.go`.

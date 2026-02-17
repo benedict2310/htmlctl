@@ -1,0 +1,6 @@
+.git
+.tmp
+bin
+coverage*.out
+preview-dist
+docs/review-logs

@@ -288,7 +288,28 @@ func (q *Queries) GetReleaseByID(ctx context.Context, id string) (ReleaseRow, er
 }
 
 func (q *Queries) ListReleasesByEnvironment(ctx context.Context, environmentID int64) ([]ReleaseRow, error) {
-	rows, err := q.db.QueryContext(ctx, `SELECT id, environment_id, manifest_json, output_hashes, build_log, status, created_at FROM releases WHERE environment_id = ? ORDER BY created_at DESC, id DESC`, environmentID)
+	return q.listReleasesByEnvironment(ctx, environmentID, nil, nil)
+}
+
+func (q *Queries) ListReleasesByEnvironmentPage(ctx context.Context, environmentID int64, limit, offset int) ([]ReleaseRow, error) {
+	if limit < 0 {
+		limit = 0
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return q.listReleasesByEnvironment(ctx, environmentID, &limit, &offset)
+}
+
+func (q *Queries) listReleasesByEnvironment(ctx context.Context, environmentID int64, limit, offset *int) ([]ReleaseRow, error) {
+	query := `SELECT id, environment_id, manifest_json, output_hashes, build_log, status, created_at FROM releases WHERE environment_id = ? ORDER BY created_at DESC, id DESC`
+	args := []any{environmentID}
+	if limit != nil && offset != nil {
+		query += " LIMIT ? OFFSET ?"
+		args = append(args, *limit, *offset)
+	}
+
+	rows, err := q.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list releases by environment: %w", err)
 	}
@@ -306,6 +327,52 @@ func (q *Queries) ListReleasesByEnvironment(ctx context.Context, environmentID i
 		return nil, fmt.Errorf("iterate release rows: %w", err)
 	}
 	return out, nil
+}
+
+func (q *Queries) ListLatestReleaseActors(ctx context.Context, environmentID int64, releaseIDs []string) (map[string]string, error) {
+	actors := map[string]string{}
+	if len(releaseIDs) == 0 {
+		return actors, nil
+	}
+
+	args := make([]any, 0, len(releaseIDs)+1)
+	args = append(args, environmentID)
+	for _, id := range releaseIDs {
+		args = append(args, id)
+	}
+
+	query := `
+SELECT a.release_id, a.actor
+FROM audit_log a
+WHERE a.environment_id = ?
+  AND a.release_id IN (` + placeholders(len(releaseIDs)) + `)
+  AND a.id = (
+    SELECT a2.id
+    FROM audit_log a2
+    WHERE a2.environment_id = a.environment_id AND a2.release_id = a.release_id
+    ORDER BY a2.timestamp DESC, a2.id DESC
+    LIMIT 1
+  )`
+
+	rows, err := q.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list latest release actors: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var releaseID string
+		var actor string
+		if err := rows.Scan(&releaseID, &actor); err != nil {
+			return nil, fmt.Errorf("scan latest release actor row: %w", err)
+		}
+		actors[releaseID] = actor
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate latest release actor rows: %w", err)
+	}
+
+	return actors, nil
 }
 
 func (q *Queries) UpdateEnvironmentActiveRelease(ctx context.Context, environmentID int64, releaseID *string) error {
@@ -326,6 +393,134 @@ func (q *Queries) InsertAuditLog(ctx context.Context, in AuditLogRow) (int64, er
 		return 0, fmt.Errorf("insert audit log: %w", err)
 	}
 	return lastInsertID("insert audit log", res)
+}
+
+func (q *Queries) InsertDomainBinding(ctx context.Context, in DomainBindingRow) (int64, error) {
+	res, err := q.db.ExecContext(
+		ctx,
+		`INSERT INTO domain_bindings(domain, environment_id) VALUES(?, ?)`,
+		in.Domain,
+		in.EnvironmentID,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("insert domain binding: %w", err)
+	}
+	return lastInsertID("insert domain binding", res)
+}
+
+func (q *Queries) RestoreDomainBinding(ctx context.Context, in DomainBindingRow) error {
+	_, err := q.db.ExecContext(
+		ctx,
+		`INSERT INTO domain_bindings(id, domain, environment_id, created_at, updated_at) VALUES(?, ?, ?, ?, ?)`,
+		in.ID,
+		in.Domain,
+		in.EnvironmentID,
+		in.CreatedAt,
+		in.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("restore domain binding: %w", err)
+	}
+	return nil
+}
+
+func (q *Queries) GetDomainBindingByDomain(ctx context.Context, domain string) (DomainBindingResolvedRow, error) {
+	var out DomainBindingResolvedRow
+	err := q.db.QueryRowContext(ctx, `
+SELECT
+  d.id,
+  d.domain,
+  d.environment_id,
+  w.name AS website_name,
+  e.name AS environment_name,
+  d.created_at,
+  d.updated_at
+FROM domain_bindings d
+JOIN environments e ON e.id = d.environment_id
+JOIN websites w ON w.id = e.website_id
+WHERE d.domain = ?
+`, domain).Scan(
+		&out.ID,
+		&out.Domain,
+		&out.EnvironmentID,
+		&out.WebsiteName,
+		&out.EnvironmentName,
+		&out.CreatedAt,
+		&out.UpdatedAt,
+	)
+	if err != nil {
+		return out, fmt.Errorf("get domain binding by domain: %w", err)
+	}
+	return out, nil
+}
+
+func (q *Queries) ListDomainBindings(ctx context.Context, websiteName, environmentName string) ([]DomainBindingResolvedRow, error) {
+	query := `
+SELECT
+  d.id,
+  d.domain,
+  d.environment_id,
+  w.name AS website_name,
+  e.name AS environment_name,
+  d.created_at,
+  d.updated_at
+FROM domain_bindings d
+JOIN environments e ON e.id = d.environment_id
+JOIN websites w ON w.id = e.website_id
+`
+	where := []string{}
+	args := []any{}
+	if strings.TrimSpace(websiteName) != "" {
+		where = append(where, "w.name = ?")
+		args = append(args, strings.TrimSpace(websiteName))
+	}
+	if strings.TrimSpace(environmentName) != "" {
+		where = append(where, "e.name = ?")
+		args = append(args, strings.TrimSpace(environmentName))
+	}
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+	query += " ORDER BY d.domain ASC"
+
+	rows, err := q.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list domain bindings: %w", err)
+	}
+	defer rows.Close()
+
+	out := []DomainBindingResolvedRow{}
+	for rows.Next() {
+		var row DomainBindingResolvedRow
+		if err := rows.Scan(
+			&row.ID,
+			&row.Domain,
+			&row.EnvironmentID,
+			&row.WebsiteName,
+			&row.EnvironmentName,
+			&row.CreatedAt,
+			&row.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan domain binding row: %w", err)
+		}
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate domain binding rows: %w", err)
+	}
+	return out, nil
+}
+
+func (q *Queries) DeleteDomainBindingByDomain(ctx context.Context, domain string) (bool, error) {
+	res, err := q.db.ExecContext(ctx, `DELETE FROM domain_bindings WHERE domain = ?`, domain)
+	if err != nil {
+		return false, fmt.Errorf("delete domain binding: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("domain binding rows affected: %w", err)
+	}
+	return affected > 0, nil
 }
 
 func (q *Queries) deleteByWebsiteNotIn(ctx context.Context, table, column string, websiteID int64, values []string) (int64, error) {

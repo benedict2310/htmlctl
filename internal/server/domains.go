@@ -13,6 +13,7 @@ import (
 	"github.com/benedict2310/htmlctl/internal/audit"
 	dbpkg "github.com/benedict2310/htmlctl/internal/db"
 	domainpkg "github.com/benedict2310/htmlctl/internal/domain"
+	sqlite3 "modernc.org/sqlite"
 )
 
 type domainBindingRequest struct {
@@ -167,17 +168,25 @@ func (s *Server) handleCreateDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.logDomainAudit(r.Context(), actorFromRequest(r), audit.OperationDomainAdd, row.EnvironmentID, normalized, row.WebsiteName, row.EnvironmentName)
-
 	if s.caddyReloader != nil {
 		reason := "domain.add " + normalized
 		if err := s.caddyReloader.Reload(r.Context(), reason); err != nil {
 			s.logger.Error("caddy reload failed after domain add", "domain", normalized, "reason", reason, "error", err)
-			writeAPIError(w, http.StatusInternalServerError, "domain binding created but caddy reload failed", []string{err.Error()})
+			rolledBack, rollbackErr := q.DeleteDomainBindingByDomain(r.Context(), normalized)
+			if rollbackErr != nil {
+				writeAPIError(w, http.StatusInternalServerError, "domain binding created but caddy reload failed and rollback failed", []string{err.Error(), rollbackErr.Error()})
+				return
+			}
+			if !rolledBack {
+				writeAPIError(w, http.StatusInternalServerError, "domain binding created but caddy reload failed and rollback was inconclusive", []string{err.Error()})
+				return
+			}
+			writeAPIError(w, http.StatusInternalServerError, "domain binding was rolled back because caddy reload failed", []string{err.Error()})
 			return
 		}
 		s.logger.Info("caddy reload succeeded after domain add", "domain", normalized, "reason", reason)
 	}
+	s.logDomainAudit(r.Context(), actorFromRequest(r), audit.OperationDomainAdd, row.EnvironmentID, normalized, row.WebsiteName, row.EnvironmentName)
 
 	writeJSON(w, http.StatusCreated, mapDomainBindingRow(row))
 }
@@ -210,17 +219,24 @@ func (s *Server) handleDeleteDomain(w http.ResponseWriter, r *http.Request, doma
 		return
 	}
 
-	s.logDomainAudit(r.Context(), actorFromRequest(r), audit.OperationDomainRemove, row.EnvironmentID, normalized, row.WebsiteName, row.EnvironmentName)
-
 	if s.caddyReloader != nil {
 		reason := "domain.remove " + normalized
 		if err := s.caddyReloader.Reload(r.Context(), reason); err != nil {
 			s.logger.Error("caddy reload failed after domain remove", "domain", normalized, "reason", reason, "error", err)
-			writeAPIError(w, http.StatusInternalServerError, "domain binding removed but caddy reload failed", []string{err.Error()})
+			_, rollbackErr := q.InsertDomainBinding(r.Context(), dbpkg.DomainBindingRow{
+				Domain:        normalized,
+				EnvironmentID: row.EnvironmentID,
+			})
+			if rollbackErr != nil {
+				writeAPIError(w, http.StatusInternalServerError, "domain binding removed but caddy reload failed and rollback failed", []string{err.Error(), rollbackErr.Error()})
+				return
+			}
+			writeAPIError(w, http.StatusInternalServerError, "domain binding removal was rolled back because caddy reload failed", []string{err.Error()})
 			return
 		}
 		s.logger.Info("caddy reload succeeded after domain remove", "domain", normalized, "reason", reason)
 	}
+	s.logDomainAudit(r.Context(), actorFromRequest(r), audit.OperationDomainRemove, row.EnvironmentID, normalized, row.WebsiteName, row.EnvironmentName)
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -279,6 +295,13 @@ func parseDomainItemPath(pathValue string) (domain string, ok bool) {
 }
 
 func isDomainUniqueConstraintError(err error) bool {
+	var sqliteErr *sqlite3.Error
+	if errors.As(err, &sqliteErr) {
+		switch sqliteErr.Code() {
+		case 2067, 1555:
+			return true
+		}
+	}
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "unique constraint failed") && strings.Contains(msg, "domain_bindings.domain")
 }

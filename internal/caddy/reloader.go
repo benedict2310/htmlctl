@@ -67,7 +67,7 @@ func (r *Reloader) Reload(ctx context.Context, reason string) error {
 		_ = os.Remove(tmpPath)
 	}()
 
-	if _, stderr, err := r.Runner.Run(ctx, r.BinaryPath, "validate", "--config", tmpPath); err != nil {
+	if _, stderr, err := r.Runner.Run(ctx, r.BinaryPath, "validate", "--config", tmpPath, "--adapter", "caddyfile"); err != nil {
 		return fmt.Errorf("caddy validate failed: %w: %s", err, strings.TrimSpace(stderr))
 	}
 
@@ -85,7 +85,7 @@ func (r *Reloader) Reload(ctx context.Context, reason string) error {
 		return fmt.Errorf("activate new caddy config: %w", err)
 	}
 
-	if _, stderr, err := r.Runner.Run(ctx, r.BinaryPath, "reload", "--config", r.ConfigPath); err != nil {
+	if _, stderr, err := r.Runner.Run(ctx, r.BinaryPath, "reload", "--config", r.ConfigPath, "--adapter", "caddyfile"); err != nil {
 		if restoreErr := r.restoreBackup(hadPreviousConfig); restoreErr != nil {
 			return fmt.Errorf("caddy reload failed: %w: %s (restore failed: %v)", err, strings.TrimSpace(stderr), restoreErr)
 		}

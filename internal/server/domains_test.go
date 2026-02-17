@@ -175,8 +175,8 @@ func TestDomainsReloadFailureReturnsError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListDomainBindings() error = %v", err)
 	}
-	if len(rows) != 1 {
-		t.Fatalf("expected persisted domain binding despite reload failure, got %#v", rows)
+	if len(rows) != 0 {
+		t.Fatalf("expected no persisted domain binding after rollback on reload failure, got %#v", rows)
 	}
 }
 

@@ -61,6 +61,26 @@ func TestReloaderSuccess(t *testing.T) {
 	if string(bak) != "old" {
 		t.Fatalf("unexpected backup content: %q", string(bak))
 	}
+
+	runner.mu.Lock()
+	calls := append([]string(nil), runner.calls...)
+	runner.mu.Unlock()
+	foundValidate := false
+	foundReload := false
+	for _, call := range calls {
+		if strings.Contains(call, "validate") && strings.Contains(call, "--adapter caddyfile") {
+			foundValidate = true
+		}
+		if strings.Contains(call, "reload") && strings.Contains(call, "--adapter caddyfile") {
+			foundReload = true
+		}
+	}
+	if !foundValidate {
+		t.Fatalf("expected validate call with explicit caddyfile adapter, calls=%v", calls)
+	}
+	if !foundReload {
+		t.Fatalf("expected reload call with explicit caddyfile adapter, calls=%v", calls)
+	}
 }
 
 func TestReloaderValidateFailureKeepsCurrentConfig(t *testing.T) {

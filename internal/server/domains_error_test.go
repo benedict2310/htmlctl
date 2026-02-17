@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"testing"
@@ -178,8 +179,8 @@ func TestDomainsGetDeleteValidationAndReloadFailureBranch(t *testing.T) {
 		t.Fatalf("GET deleted domain error = %v", err)
 	}
 	getResp.Body.Close()
-	if getResp.StatusCode != http.StatusNotFound {
-		t.Fatalf("expected 404 after delete, got %d", getResp.StatusCode)
+	if getResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected domain restored after failed reload, got status %d", getResp.StatusCode)
 	}
 }
 
@@ -209,5 +210,83 @@ func TestDomainsCreateDeleteWithoutReloader(t *testing.T) {
 	deleteResp.Body.Close()
 	if deleteResp.StatusCode != http.StatusNoContent {
 		t.Fatalf("expected 204 delete without reloader, got %d", deleteResp.StatusCode)
+	}
+}
+
+func TestDomainsInternalDatabaseErrors(t *testing.T) {
+	srv := startTestServer(t)
+	baseURL := "http://" + srv.Addr()
+	seedDomainWebsiteEnv(t, srv, "futurelab", "staging")
+	srv.caddyReloader = nil
+
+	if err := srv.db.Close(); err != nil {
+		t.Fatalf("Close() db error = %v", err)
+	}
+
+	listResp, err := http.Get(baseURL + "/api/v1/domains")
+	if err != nil {
+		t.Fatalf("GET /domains error = %v", err)
+	}
+	listResp.Body.Close()
+	if listResp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 list on closed db, got %d", listResp.StatusCode)
+	}
+
+	getResp, err := http.Get(baseURL + "/api/v1/domains/futurelab.studio")
+	if err != nil {
+		t.Fatalf("GET /domains/{domain} error = %v", err)
+	}
+	getResp.Body.Close()
+	if getResp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 get on closed db, got %d", getResp.StatusCode)
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, baseURL+"/api/v1/domains/futurelab.studio", nil)
+	if err != nil {
+		t.Fatalf("new delete request: %v", err)
+	}
+	deleteResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("DELETE /domains/{domain} error = %v", err)
+	}
+	deleteResp.Body.Close()
+	if deleteResp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 delete on closed db, got %d", deleteResp.StatusCode)
+	}
+
+	srv.db = nil
+}
+
+func TestIsDomainUniqueConstraintError(t *testing.T) {
+	srv := startTestServer(t)
+	seedDomainWebsiteEnv(t, srv, "futurelab", "staging")
+
+	q := dbpkg.NewQueries(srv.db)
+	websiteRow, err := q.GetWebsiteByName(context.Background(), "futurelab")
+	if err != nil {
+		t.Fatalf("GetWebsiteByName() error = %v", err)
+	}
+	envRow, err := q.GetEnvironmentByName(context.Background(), websiteRow.ID, "staging")
+	if err != nil {
+		t.Fatalf("GetEnvironmentByName() error = %v", err)
+	}
+	if _, err := q.InsertDomainBinding(context.Background(), dbpkg.DomainBindingRow{
+		Domain:        "futurelab.studio",
+		EnvironmentID: envRow.ID,
+	}); err != nil {
+		t.Fatalf("InsertDomainBinding() error = %v", err)
+	}
+	_, err = q.InsertDomainBinding(context.Background(), dbpkg.DomainBindingRow{
+		Domain:        "futurelab.studio",
+		EnvironmentID: envRow.ID,
+	})
+	if err == nil {
+		t.Fatalf("expected duplicate insert error")
+	}
+	if !isDomainUniqueConstraintError(err) {
+		t.Fatalf("expected unique constraint classification, got %v", err)
+	}
+	if isDomainUniqueConstraintError(fmt.Errorf("not unique")) {
+		t.Fatalf("expected non-unique error to be rejected")
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,15 +27,23 @@ type releasesResponse struct {
 	Website         string            `json:"website"`
 	Environment     string            `json:"environment"`
 	ActiveReleaseID *string           `json:"activeReleaseId,omitempty"`
+	Limit           int               `json:"limit"`
+	Offset          int               `json:"offset"`
 	Releases        []releaseListItem `json:"releases"`
 }
 
 type releaseListItem struct {
 	ReleaseID string `json:"releaseId"`
+	Actor     string `json:"actor"`
 	Status    string `json:"status"`
 	CreatedAt string `json:"createdAt"`
 	Active    bool   `json:"active"`
 }
+
+const (
+	defaultReleaseHistoryLimit = 20
+	maxReleaseHistoryLimit     = 200
+)
 
 func (s *Server) handleRelease(w http.ResponseWriter, r *http.Request) {
 	website, env, ok := parseReleasePath(r.URL.Path)
@@ -56,7 +65,7 @@ func (s *Server) handleRelease(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lock := s.applyLock(website)
+	lock := s.environmentLock(website, env)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -128,6 +137,12 @@ func (s *Server) handleListReleases(w http.ResponseWriter, r *http.Request, webs
 		writeAPIError(w, http.StatusServiceUnavailable, "server is not ready", nil)
 		return
 	}
+	limit, offset, err := parseListReleasesPagination(r)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid query parameters", []string{err.Error()})
+		return
+	}
+
 	q := dbpkg.NewQueries(s.db)
 	websiteRow, err := q.GetWebsiteByName(r.Context(), website)
 	if err != nil {
@@ -147,17 +162,43 @@ func (s *Server) handleListReleases(w http.ResponseWriter, r *http.Request, webs
 		writeAPIError(w, http.StatusInternalServerError, "lookup environment failed", []string{err.Error()})
 		return
 	}
-	releases, err := q.ListReleasesByEnvironment(r.Context(), envRow.ID)
+	releases, err := q.ListReleasesByEnvironmentPage(r.Context(), envRow.ID, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, "list releases failed", []string{err.Error()})
 		return
 	}
+
+	releaseIDs := make([]string, 0, len(releases))
+	for _, rel := range releases {
+		releaseIDs = append(releaseIDs, rel.ID)
+	}
+	actorByReleaseID := map[string]string{}
+	actors, err := q.ListLatestReleaseActors(r.Context(), envRow.ID, releaseIDs)
+	if err != nil {
+		s.logger.Warn("release history actor lookup failed; using unknown actors", "website", websiteRow.Name, "environment", envRow.Name, "error", err)
+	} else {
+		actorByReleaseID = actors
+	}
+
 	items := make([]releaseListItem, 0, len(releases))
 	for _, rel := range releases {
 		active := envRow.ActiveReleaseID != nil && *envRow.ActiveReleaseID == rel.ID
+		status := strings.TrimSpace(rel.Status)
+		switch {
+		case active:
+			status = "active"
+		case status == "" || status == "active":
+			status = "previous"
+		}
+		actor := "unknown"
+		auditActor := strings.TrimSpace(actorByReleaseID[rel.ID])
+		if auditActor != "" {
+			actor = auditActor
+		}
 		items = append(items, releaseListItem{
 			ReleaseID: rel.ID,
-			Status:    rel.Status,
+			Actor:     actor,
+			Status:    status,
 			CreatedAt: rel.CreatedAt,
 			Active:    active,
 		})
@@ -166,8 +207,40 @@ func (s *Server) handleListReleases(w http.ResponseWriter, r *http.Request, webs
 		Website:         websiteRow.Name,
 		Environment:     envRow.Name,
 		ActiveReleaseID: envRow.ActiveReleaseID,
+		Limit:           limit,
+		Offset:          offset,
 		Releases:        items,
 	})
+}
+
+func parseListReleasesPagination(r *http.Request) (int, int, error) {
+	limit := defaultReleaseHistoryLimit
+	offset := 0
+
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil {
+			return 0, 0, fmt.Errorf("invalid limit: %w", err)
+		}
+		if v < 0 {
+			return 0, 0, fmt.Errorf("limit must be >= 0")
+		}
+		limit = v
+	}
+	if raw := strings.TrimSpace(r.URL.Query().Get("offset")); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil {
+			return 0, 0, fmt.Errorf("invalid offset: %w", err)
+		}
+		if v < 0 {
+			return 0, 0, fmt.Errorf("offset must be >= 0")
+		}
+		offset = v
+	}
+	if limit > maxReleaseHistoryLimit {
+		limit = maxReleaseHistoryLimit
+	}
+	return limit, offset, nil
 }
 
 func parseReleasePath(pathValue string) (website, env string, ok bool) {

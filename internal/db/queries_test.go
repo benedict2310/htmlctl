@@ -183,3 +183,122 @@ func TestDeleteAssetsNotInHandlesLargeKeepSet(t *testing.T) {
 		t.Fatalf("expected 2 assets remaining, got %d", len(rows))
 	}
 }
+
+func TestListReleasesByEnvironmentPage(t *testing.T) {
+	q, cleanup := setupDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	envID, err := q.InsertEnvironment(ctx, EnvironmentRow{WebsiteID: websiteID, Name: "staging"})
+	if err != nil {
+		t.Fatalf("InsertEnvironment() error = %v", err)
+	}
+
+	ids := []string{
+		"01ARZ3NDEKTSV4RRFFQ69G5FAA",
+		"01ARZ3NDEKTSV4RRFFQ69G5FAB",
+		"01ARZ3NDEKTSV4RRFFQ69G5FAC",
+	}
+	for _, id := range ids {
+		if err := q.InsertRelease(ctx, ReleaseRow{
+			ID:            id,
+			EnvironmentID: envID,
+			ManifestJSON:  "{}",
+			OutputHashes:  "{}",
+			BuildLog:      "",
+			Status:        "active",
+		}); err != nil {
+			t.Fatalf("InsertRelease(%q) error = %v", id, err)
+		}
+	}
+
+	page, err := q.ListReleasesByEnvironmentPage(ctx, envID, 2, 1)
+	if err != nil {
+		t.Fatalf("ListReleasesByEnvironmentPage() error = %v", err)
+	}
+	if len(page) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(page))
+	}
+	if page[0].ID != "01ARZ3NDEKTSV4RRFFQ69G5FAB" || page[1].ID != "01ARZ3NDEKTSV4RRFFQ69G5FAA" {
+		t.Fatalf("unexpected page order: %#v", page)
+	}
+}
+
+func TestListLatestReleaseActors(t *testing.T) {
+	q, cleanup := setupDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	envID, err := q.InsertEnvironment(ctx, EnvironmentRow{WebsiteID: websiteID, Name: "staging"})
+	if err != nil {
+		t.Fatalf("InsertEnvironment() error = %v", err)
+	}
+
+	releaseA := "01ARZ3NDEKTSV4RRFFQ69G5FAA"
+	releaseB := "01ARZ3NDEKTSV4RRFFQ69G5FAB"
+	for _, id := range []string{releaseA, releaseB} {
+		if err := q.InsertRelease(ctx, ReleaseRow{
+			ID:            id,
+			EnvironmentID: envID,
+			ManifestJSON:  "{}",
+			OutputHashes:  "{}",
+			BuildLog:      "",
+			Status:        "active",
+		}); err != nil {
+			t.Fatalf("InsertRelease(%q) error = %v", id, err)
+		}
+	}
+
+	if _, err := q.InsertAuditLog(ctx, AuditLogRow{
+		Actor:           "alice",
+		EnvironmentID:   &envID,
+		Operation:       "release.activate",
+		ResourceSummary: "activated release A",
+		ReleaseID:       &releaseA,
+		MetadataJSON:    "{}",
+	}); err != nil {
+		t.Fatalf("InsertAuditLog(releaseA/alice) error = %v", err)
+	}
+	if _, err := q.InsertAuditLog(ctx, AuditLogRow{
+		Actor:           "bob",
+		EnvironmentID:   &envID,
+		Operation:       "rollback",
+		ResourceSummary: "activated release A via rollback",
+		ReleaseID:       &releaseA,
+		MetadataJSON:    "{}",
+	}); err != nil {
+		t.Fatalf("InsertAuditLog(releaseA/bob) error = %v", err)
+	}
+	if _, err := q.InsertAuditLog(ctx, AuditLogRow{
+		Actor:           "ci",
+		EnvironmentID:   &envID,
+		Operation:       "release.activate",
+		ResourceSummary: "activated release B",
+		ReleaseID:       &releaseB,
+		MetadataJSON:    "{}",
+	}); err != nil {
+		t.Fatalf("InsertAuditLog(releaseB/ci) error = %v", err)
+	}
+
+	actors, err := q.ListLatestReleaseActors(ctx, envID, []string{releaseA, releaseB, "missing"})
+	if err != nil {
+		t.Fatalf("ListLatestReleaseActors() error = %v", err)
+	}
+	if actors[releaseA] != "bob" {
+		t.Fatalf("expected releaseA actor bob, got %q", actors[releaseA])
+	}
+	if actors[releaseB] != "ci" {
+		t.Fatalf("expected releaseB actor ci, got %q", actors[releaseB])
+	}
+	if _, ok := actors["missing"]; ok {
+		t.Fatalf("did not expect actor for missing release id")
+	}
+}

@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -61,11 +62,47 @@ func (c *APIClient) ListEnvironments(ctx context.Context, website string) (Envir
 }
 
 func (c *APIClient) ListReleases(ctx context.Context, website, environment string) (ReleasesResponse, error) {
+	const pageSize = 200
+
+	var out ReleasesResponse
+	offset := 0
+	for {
+		page, err := c.ListReleasesPage(ctx, website, environment, pageSize, offset)
+		if err != nil {
+			return ReleasesResponse{}, err
+		}
+		if offset == 0 {
+			out.Website = page.Website
+			out.Environment = page.Environment
+			out.ActiveReleaseID = page.ActiveReleaseID
+		}
+		out.Releases = append(out.Releases, page.Releases...)
+		if len(page.Releases) < pageSize {
+			break
+		}
+		offset += len(page.Releases)
+	}
+	out.Offset = 0
+	out.Limit = len(out.Releases)
+	return out, nil
+}
+
+func (c *APIClient) ListReleasesPage(ctx context.Context, website, environment string, limit, offset int) (ReleasesResponse, error) {
 	path := fmt.Sprintf(
 		"/api/v1/websites/%s/environments/%s/releases",
 		url.PathEscape(strings.TrimSpace(website)),
 		url.PathEscape(strings.TrimSpace(environment)),
 	)
+	query := url.Values{}
+	if limit > 0 {
+		query.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		query.Set("offset", strconv.Itoa(offset))
+	}
+	if encoded := query.Encode(); encoded != "" {
+		path = path + "?" + encoded
+	}
 	req, err := c.newRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return ReleasesResponse{}, err
@@ -146,6 +183,48 @@ func (c *APIClient) CreateRelease(ctx context.Context, website, environment stri
 	var out ReleaseCreateResponse
 	if err := c.do(req, &out); err != nil {
 		return ReleaseCreateResponse{}, err
+	}
+	return out, nil
+}
+
+func (c *APIClient) Rollback(ctx context.Context, website, environment string) (RollbackResponse, error) {
+	path := fmt.Sprintf(
+		"/api/v1/websites/%s/environments/%s/rollback",
+		url.PathEscape(strings.TrimSpace(website)),
+		url.PathEscape(strings.TrimSpace(environment)),
+	)
+	req, err := c.newRequest(ctx, http.MethodPost, path, nil)
+	if err != nil {
+		return RollbackResponse{}, err
+	}
+	var out RollbackResponse
+	if err := c.do(req, &out); err != nil {
+		return RollbackResponse{}, err
+	}
+	return out, nil
+}
+
+func (c *APIClient) Promote(ctx context.Context, website, fromEnv, toEnv string) (PromoteResponse, error) {
+	path := fmt.Sprintf(
+		"/api/v1/websites/%s/promote",
+		url.PathEscape(strings.TrimSpace(website)),
+	)
+	body, err := json.Marshal(map[string]string{
+		"from": strings.TrimSpace(fromEnv),
+		"to":   strings.TrimSpace(toEnv),
+	})
+	if err != nil {
+		return PromoteResponse{}, fmt.Errorf("marshal promote payload: %w", err)
+	}
+	req, err := c.newRequest(ctx, http.MethodPost, path, bytes.NewReader(body))
+	if err != nil {
+		return PromoteResponse{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	var out PromoteResponse
+	if err := c.do(req, &out); err != nil {
+		return PromoteResponse{}, err
 	}
 	return out, nil
 }

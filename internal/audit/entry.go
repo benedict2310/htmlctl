@@ -9,6 +9,8 @@ const (
 	OperationApply           = "apply"
 	OperationReleaseBuild    = "release.build"
 	OperationReleaseActivate = "release.activate"
+	OperationRollback        = "rollback"
+	OperationPromote         = "promote"
 )
 
 type Entry struct {

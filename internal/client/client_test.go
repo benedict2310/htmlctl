@@ -128,6 +128,199 @@ func TestListReleasesMapsConflictAndServerErrors(t *testing.T) {
 	}
 }
 
+func TestListReleasesPageBuildsPaginationQuery(t *testing.T) {
+	mock := &mockTransport{
+		doFn: func(ctx context.Context, req *http.Request) (*http.Response, error) {
+			if req.URL.Path != "/api/v1/websites/futurelab/environments/staging/releases" {
+				t.Fatalf("unexpected path %s", req.URL.Path)
+			}
+			if req.URL.RawQuery != "limit=5&offset=10" {
+				t.Fatalf("unexpected query %q", req.URL.RawQuery)
+			}
+			return jsonResponse(http.StatusOK, `{"website":"futurelab","environment":"staging","limit":5,"offset":10,"releases":[]}`), nil
+		},
+	}
+	api := New(mock)
+	out, err := api.ListReleasesPage(context.Background(), "futurelab", "staging", 5, 10)
+	if err != nil {
+		t.Fatalf("ListReleasesPage() error = %v", err)
+	}
+	if out.Limit != 5 || out.Offset != 10 {
+		t.Fatalf("unexpected pagination fields: %#v", out)
+	}
+}
+
+func TestListReleasesFetchesAllPages(t *testing.T) {
+	call := 0
+	mock := &mockTransport{
+		doFn: func(ctx context.Context, req *http.Request) (*http.Response, error) {
+			call++
+			if req.URL.Path != "/api/v1/websites/futurelab/environments/staging/releases" {
+				t.Fatalf("unexpected path %s", req.URL.Path)
+			}
+			switch call {
+			case 1:
+				if req.URL.RawQuery != "limit=200" {
+					t.Fatalf("unexpected first query %q", req.URL.RawQuery)
+				}
+				return jsonResponse(http.StatusOK, `{
+  "website":"futurelab",
+  "environment":"staging",
+  "activeReleaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "limit":200,
+  "offset":0,
+  "releases":[{"releaseId":"A","status":"active","createdAt":"2026-01-01T00:00:00Z","active":true}]
+}`), nil
+			case 2:
+				if req.URL.RawQuery != "limit=200&offset=1" {
+					t.Fatalf("unexpected second query %q", req.URL.RawQuery)
+				}
+				return jsonResponse(http.StatusOK, `{
+  "website":"futurelab",
+  "environment":"staging",
+  "activeReleaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "limit":200,
+  "offset":1,
+  "releases":[]
+}`), nil
+			default:
+				t.Fatalf("unexpected extra call %d", call)
+			}
+			return nil, nil
+		},
+	}
+
+	api := New(mock)
+	out, err := api.ListReleases(context.Background(), "futurelab", "staging")
+	if err != nil {
+		t.Fatalf("ListReleases() error = %v", err)
+	}
+	if len(out.Releases) != 1 || out.Releases[0].ReleaseID != "A" {
+		t.Fatalf("unexpected ListReleases payload: %#v", out)
+	}
+}
+
+func TestRollbackBuildsExpectedRequest(t *testing.T) {
+	mock := &mockTransport{
+		doFn: func(ctx context.Context, req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodPost {
+				t.Fatalf("expected POST, got %s", req.Method)
+			}
+			if req.URL.Path != "/api/v1/websites/futurelab/environments/staging/rollback" {
+				t.Fatalf("unexpected path %s", req.URL.Path)
+			}
+			return jsonResponse(http.StatusOK, `{"website":"futurelab","environment":"staging","fromReleaseId":"A","toReleaseId":"B"}`), nil
+		},
+	}
+	api := New(mock)
+	out, err := api.Rollback(context.Background(), "futurelab", "staging")
+	if err != nil {
+		t.Fatalf("Rollback() error = %v", err)
+	}
+	if out.FromReleaseID != "A" || out.ToReleaseID != "B" {
+		t.Fatalf("unexpected rollback response: %#v", out)
+	}
+}
+
+func TestPromoteBuildsExpectedRequest(t *testing.T) {
+	var gotBody string
+	mock := &mockTransport{
+		doFn: func(ctx context.Context, req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodPost {
+				t.Fatalf("expected POST, got %s", req.Method)
+			}
+			if req.URL.Path != "/api/v1/websites/futurelab/promote" {
+				t.Fatalf("unexpected path %s", req.URL.Path)
+			}
+			if req.Header.Get("Content-Type") != "application/json" {
+				t.Fatalf("expected JSON content type, got %q", req.Header.Get("Content-Type"))
+			}
+			body, err := io.ReadAll(req.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			gotBody = string(body)
+			return jsonResponse(http.StatusOK, `{"website":"futurelab","fromEnvironment":"staging","toEnvironment":"prod","sourceReleaseId":"A","releaseId":"B","fileCount":3,"hash":"sha256:abc","hashVerified":true,"strategy":"hardlink"}`), nil
+		},
+	}
+	api := New(mock)
+	out, err := api.Promote(context.Background(), "futurelab", "staging", "prod")
+	if err != nil {
+		t.Fatalf("Promote() error = %v", err)
+	}
+	if !strings.Contains(gotBody, `"from":"staging"`) || !strings.Contains(gotBody, `"to":"prod"`) {
+		t.Fatalf("unexpected promote payload body: %s", gotBody)
+	}
+	if out.ReleaseID != "B" || !out.HashVerified {
+		t.Fatalf("unexpected promote response: %#v", out)
+	}
+}
+
+func TestCreateReleaseBuildsExpectedRequest(t *testing.T) {
+	mock := &mockTransport{
+		doFn: func(ctx context.Context, req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodPost {
+				t.Fatalf("expected POST, got %s", req.Method)
+			}
+			if req.URL.Path != "/api/v1/websites/futurelab/environments/staging/releases" {
+				t.Fatalf("unexpected path %s", req.URL.Path)
+			}
+			return jsonResponse(http.StatusCreated, `{"website":"futurelab","environment":"staging","releaseId":"R1","status":"active"}`), nil
+		},
+	}
+	api := New(mock)
+	out, err := api.CreateRelease(context.Background(), "futurelab", "staging")
+	if err != nil {
+		t.Fatalf("CreateRelease() error = %v", err)
+	}
+	if out.ReleaseID != "R1" {
+		t.Fatalf("unexpected CreateRelease response: %#v", out)
+	}
+}
+
+func TestGetLogsBuildsExpectedRequest(t *testing.T) {
+	mock := &mockTransport{
+		doFn: func(ctx context.Context, req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodGet {
+				t.Fatalf("expected GET, got %s", req.Method)
+			}
+			if req.URL.Path != "/api/v1/websites/futurelab/environments/staging/logs" {
+				t.Fatalf("unexpected path %s", req.URL.Path)
+			}
+			if req.URL.RawQuery != "limit=50" {
+				t.Fatalf("unexpected query %q", req.URL.RawQuery)
+			}
+			return jsonResponse(http.StatusOK, `{"entries":[],"total":0,"limit":50,"offset":0}`), nil
+		},
+	}
+	api := New(mock)
+	out, err := api.GetLogs(context.Background(), "futurelab", "staging", 50)
+	if err != nil {
+		t.Fatalf("GetLogs() error = %v", err)
+	}
+	if out.Limit != 50 {
+		t.Fatalf("unexpected GetLogs response: %#v", out)
+	}
+}
+
+func TestMapTransportErrorBranches(t *testing.T) {
+	tests := []struct {
+		err      error
+		wantText string
+	}{
+		{transport.ErrSSHHostKey, "ssh host key verification failed"},
+		{transport.ErrSSHAgentUnavailable, "ssh agent unavailable"},
+		{transport.ErrSSHUnreachable, "ssh host unreachable"},
+		{transport.ErrSSHTunnel, "ssh tunnel failed"},
+	}
+	for _, tc := range tests {
+		got := mapTransportError(tc.err)
+		if !strings.Contains(got.Error(), tc.wantText) {
+			t.Fatalf("expected %q in error %v", tc.wantText, got)
+		}
+	}
+}
+
 func TestGetStatusMapsTransportErrors(t *testing.T) {
 	mock := &mockTransport{
 		doFn: func(ctx context.Context, req *http.Request) (*http.Response, error) {

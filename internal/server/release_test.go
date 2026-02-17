@@ -128,6 +128,42 @@ func TestReleaseEndpointFailureRecordsFailedStatus(t *testing.T) {
 	if len(releases) == 0 || releases[0].Status != "failed" {
 		t.Fatalf("expected latest release status failed, got %#v", releases)
 	}
+
+	listResp, err := http.Get(baseURL + "/api/v1/websites/futurelab/environments/staging/releases")
+	if err != nil {
+		t.Fatalf("GET /releases error = %v", err)
+	}
+	defer listResp.Body.Close()
+	if listResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(listResp.Body)
+		t.Fatalf("expected 200, got %d body=%s", listResp.StatusCode, string(body))
+	}
+	var out releasesResponse
+	if err := json.NewDecoder(listResp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode releases response: %v", err)
+	}
+	if len(out.Releases) == 0 || out.Releases[0].Status != "failed" {
+		t.Fatalf("expected failed status in API response, got %#v", out.Releases)
+	}
+}
+
+func TestReleaseEndpointMethodNotAllowed(t *testing.T) {
+	srv := startTestServer(t)
+	baseURL := "http://" + srv.Addr()
+
+	req, err := http.NewRequest(http.MethodDelete, baseURL+"/api/v1/websites/futurelab/environments/staging/releases", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("DELETE /releases error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 405, got %d body=%s", resp.StatusCode, string(b))
+	}
 }
 
 func applySampleSite(t *testing.T, baseURL string) {

@@ -1,0 +1,29 @@
+==========================================
+E4-S1 PI Review Log
+==========================================
+Timestamp: 2026-02-16T21:31:24Z
+Branch: feat/epic4-release-history-rollback-promote
+Story: docs/stories/E4-S1-release-history.md
+==========================================
+
+Based on the review of the provided diff against Story E4-S1, here are the findings classified by severity:
+
+### P0: Missing Implementation (Blocker)
+*   **`internal/cli/cmd/rollout_history.go` (Missing)**: The story requires a new CLI command `htmlctl rollout history` (AC-1), but the implementation file is missing from the diff. `internal/cli/root.go:99` registers `newRolloutCmd()`, but the command definition is absent.
+*   **`internal/cli/cmd/rollout_history_test.go` (Missing)**: Corresponding unit tests for the CLI command are missing.
+*   **`internal/server/release_test.go` (Missing)**: The story requires unit tests for the server handler (`handler_releases_test.go` in plan), but no server-side handler tests are included in the diff to verify AC-5, AC-6, AC-7.
+
+### P1: Performance & Scalability
+*   **`internal/server/release.go:178`**: **N+1 Query Pattern**. The `handleListReleases` function iterates over the fetched releases and executes `q.GetLatestReleaseActor` (a SQL query) for *each* release. With the default limit of 20, this results in 21 database round-trips per request.
+    *   *Recommendation*: Modify `ListReleasesByEnvironmentPage` to `JOIN` the `audit_log` table or fetch actors in bulk to retrieve all data in a single query.
+
+### P2: Resilience & Error Handling
+*   **`internal/server/release.go:182`**: **Brittle Failure Mode**. If fetching the actor fails for a reason other than `sql.ErrNoRows` (e.g., transient DB load), the entire release list API fails with 500 Internal Server Error.
+    *   *Recommendation*: Log the error and fall back to `actor: "unknown"` to ensure the release list remains accessible even if audit logs are temporarily unavailable.
+
+### P2: Out of Scope / Code Hygiene
+*   **`internal/client/client.go:95,112`**: The `Rollback` and `Promote` methods are outside the scope of E4-S1 (Release History).
+*   **`internal/client/types.go:97-113`**: `RollbackResponse` and `PromoteResponse` types are out of scope.
+
+### P2: Minor Logic/Style
+*   **`internal/db/queries.go:305`**: The sort order `ORDER BY created_at DESC, id DESC` is valid, but since ULIDs are monotonically increasing, sorting by `id DESC` alone is sufficient and potentially faster if `id` is the primary key. (Story Architecture note: "Leveraging ULID natural sort order").

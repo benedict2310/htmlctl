@@ -1,7 +1,7 @@
 # E4-S3 - Promote (Artifact Promotion)
 
 **Epic:** Epic 4 — Promotion and rollback
-**Status:** Not Started
+**Status:** Done
 **Priority:** P1 (Critical Path)
 **Estimated Effort:** 3 days
 **Dependencies:** E4-S1 (release history), E2-S4 (release management), E2-S5 (audit log)
@@ -182,12 +182,42 @@ As an operator or AI agent, I want to promote a verified staging release to prod
 
 ## Implementation Summary
 
-(TBD after implementation.)
+Implemented promotion end-to-end with artifact parity verification and activation safety:
+- Added top-level CLI command `htmlctl promote website/<name> --from <source-env> --to <target-env>` in `internal/cli/promote_cmd.go`.
+- Added promotion API in `internal/server/promote.go`:
+  - `POST /api/v1/websites/{name}/promote`
+  - request validation (`from`/`to`)
+  - hash-mismatch and source-no-active conflict mapping
+  - promote audit entry emission.
+- Added core promotion logic in `internal/release/promote.go`:
+  - resolves active source release
+  - copies content with hard-link-first strategy and byte-copy fallback
+  - preserves symlinks when fallback copy is used
+  - regenerates target metadata files with lineage (`source_release_id`, `source_env`)
+  - verifies source/target content hash manifest equality before activation
+  - atomically finalizes directory and switches target `current` symlink
+  - rolls back symlink and filesystem state on failure.
+- Added pair-lock coordination for source/target environments in `internal/server/apply.go` and used it in promotion handler.
+- Added/updated tests:
+  - `internal/release/promote_test.go`
+  - `internal/server/promote_test.go`
+  - `internal/server/promote_branch_test.go`
+  - `internal/cli/promote_cmd_test.go`
+  - `internal/server/path_parse_test.go`.
 
 ## Code Review Findings
 
-(TBD by review agent.)
+`pi` review logs:
+- `docs/review-logs/E4-S3-review-pi-2026-02-16-215606.log`
+- `docs/review-logs/E4-S3-review-pi-2026-02-16-215953.log` (final)
+
+Findings addressed between review passes:
+- Fixed rollback cleanup ordering in promotion failure paths so symlink restoration happens before final directory cleanup.
+- Fixed copy fallback behavior to preserve symlink artifacts rather than dereferencing them.
+- Hardened file-close error handling in copy path.
+
+Final review reported no P0/P1 issues.
 
 ## Completion Status
 
-(TBD after merge.)
+Implemented, tested, and reviewed. Promotion now guarantees source/target artifact parity before activation and records lineage/audit metadata for traceability.

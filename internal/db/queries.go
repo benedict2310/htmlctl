@@ -288,7 +288,28 @@ func (q *Queries) GetReleaseByID(ctx context.Context, id string) (ReleaseRow, er
 }
 
 func (q *Queries) ListReleasesByEnvironment(ctx context.Context, environmentID int64) ([]ReleaseRow, error) {
-	rows, err := q.db.QueryContext(ctx, `SELECT id, environment_id, manifest_json, output_hashes, build_log, status, created_at FROM releases WHERE environment_id = ? ORDER BY created_at DESC, id DESC`, environmentID)
+	return q.listReleasesByEnvironment(ctx, environmentID, nil, nil)
+}
+
+func (q *Queries) ListReleasesByEnvironmentPage(ctx context.Context, environmentID int64, limit, offset int) ([]ReleaseRow, error) {
+	if limit < 0 {
+		limit = 0
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return q.listReleasesByEnvironment(ctx, environmentID, &limit, &offset)
+}
+
+func (q *Queries) listReleasesByEnvironment(ctx context.Context, environmentID int64, limit, offset *int) ([]ReleaseRow, error) {
+	query := `SELECT id, environment_id, manifest_json, output_hashes, build_log, status, created_at FROM releases WHERE environment_id = ? ORDER BY created_at DESC, id DESC`
+	args := []any{environmentID}
+	if limit != nil && offset != nil {
+		query += " LIMIT ? OFFSET ?"
+		args = append(args, *limit, *offset)
+	}
+
+	rows, err := q.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list releases by environment: %w", err)
 	}
@@ -306,6 +327,52 @@ func (q *Queries) ListReleasesByEnvironment(ctx context.Context, environmentID i
 		return nil, fmt.Errorf("iterate release rows: %w", err)
 	}
 	return out, nil
+}
+
+func (q *Queries) ListLatestReleaseActors(ctx context.Context, environmentID int64, releaseIDs []string) (map[string]string, error) {
+	actors := map[string]string{}
+	if len(releaseIDs) == 0 {
+		return actors, nil
+	}
+
+	args := make([]any, 0, len(releaseIDs)+1)
+	args = append(args, environmentID)
+	for _, id := range releaseIDs {
+		args = append(args, id)
+	}
+
+	query := `
+SELECT a.release_id, a.actor
+FROM audit_log a
+WHERE a.environment_id = ?
+  AND a.release_id IN (` + placeholders(len(releaseIDs)) + `)
+  AND a.id = (
+    SELECT a2.id
+    FROM audit_log a2
+    WHERE a2.environment_id = a.environment_id AND a2.release_id = a.release_id
+    ORDER BY a2.timestamp DESC, a2.id DESC
+    LIMIT 1
+  )`
+
+	rows, err := q.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list latest release actors: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var releaseID string
+		var actor string
+		if err := rows.Scan(&releaseID, &actor); err != nil {
+			return nil, fmt.Errorf("scan latest release actor row: %w", err)
+		}
+		actors[releaseID] = actor
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate latest release actor rows: %w", err)
+	}
+
+	return actors, nil
 }
 
 func (q *Queries) UpdateEnvironmentActiveRelease(ctx context.Context, environmentID int64, releaseID *string) error {

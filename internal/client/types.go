@@ -26,6 +26,7 @@ type EnvironmentsResponse struct {
 
 type Release struct {
 	ReleaseID string `json:"releaseId" yaml:"releaseId"`
+	Actor     string `json:"actor,omitempty" yaml:"actor,omitempty"`
 	Status    string `json:"status" yaml:"status"`
 	CreatedAt string `json:"createdAt" yaml:"createdAt"`
 	Active    bool   `json:"active" yaml:"active"`
@@ -35,6 +36,8 @@ type ReleasesResponse struct {
 	Website         string    `json:"website" yaml:"website"`
 	Environment     string    `json:"environment" yaml:"environment"`
 	ActiveReleaseID *string   `json:"activeReleaseId,omitempty" yaml:"activeReleaseId,omitempty"`
+	Limit           int       `json:"limit" yaml:"limit"`
+	Offset          int       `json:"offset" yaml:"offset"`
 	Releases        []Release `json:"releases" yaml:"releases"`
 }
 
@@ -89,6 +92,25 @@ type ReleaseCreateResponse struct {
 	ReleaseID         string  `json:"releaseId" yaml:"releaseId"`
 	PreviousReleaseID *string `json:"previousReleaseId,omitempty" yaml:"previousReleaseId,omitempty"`
 	Status            string  `json:"status" yaml:"status"`
+}
+
+type RollbackResponse struct {
+	Website       string `json:"website" yaml:"website"`
+	Environment   string `json:"environment" yaml:"environment"`
+	FromReleaseID string `json:"fromReleaseId" yaml:"fromReleaseId"`
+	ToReleaseID   string `json:"toReleaseId" yaml:"toReleaseId"`
+}
+
+type PromoteResponse struct {
+	Website         string `json:"website" yaml:"website"`
+	FromEnvironment string `json:"fromEnvironment" yaml:"fromEnvironment"`
+	ToEnvironment   string `json:"toEnvironment" yaml:"toEnvironment"`
+	SourceReleaseID string `json:"sourceReleaseId" yaml:"sourceReleaseId"`
+	ReleaseID       string `json:"releaseId" yaml:"releaseId"`
+	FileCount       int    `json:"fileCount" yaml:"fileCount"`
+	Hash            string `json:"hash" yaml:"hash"`
+	HashVerified    bool   `json:"hashVerified" yaml:"hashVerified"`
+	Strategy        string `json:"strategy" yaml:"strategy"`
 }
 
 type LogsResponse struct {

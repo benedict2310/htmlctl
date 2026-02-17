@@ -15,9 +15,9 @@ Implemented scope:
 - Epic 1: Local parser/validation/render/serve
 - Epic 2: Server daemon, desired state storage, apply ingestion, release build/activation, audit logs
 - Epic 3: Context config, SSH transport, remote `get/status/apply/logs/diff`
+- Epic 4: Release history, rollback (`rollout undo`), and artifact promotion (`promote`)
 
 Not yet implemented:
-- Epic 4: Rollback + promote commands
 - Epic 5: Domain/TLS/Caddy commands
 
 ## Build & Test
@@ -73,6 +73,10 @@ htmlctl apply -f ./site --context staging
 htmlctl status website/futurelab --context staging
 htmlctl logs website/futurelab --context staging
 htmlctl get releases --context staging
+htmlctl rollout history website/futurelab --context staging
+htmlctl promote website/futurelab --from staging --to prod --context staging
+htmlctl rollout history website/futurelab --context prod
+htmlctl rollout undo website/futurelab --context prod
 ```
 
 Dry run (diff-only, no upload/release):
@@ -91,6 +95,9 @@ htmlctl apply -f ./site --context staging --dry-run
 - `htmlctl logs website/<name>`
 - `htmlctl diff -f <site-dir>`
 - `htmlctl apply -f <site-dir>`
+- `htmlctl rollout history website/<name>`
+- `htmlctl rollout undo website/<name>`
+- `htmlctl promote website/<name> --from <env> --to <env>`
 - `htmlctl version`
 
 ## License

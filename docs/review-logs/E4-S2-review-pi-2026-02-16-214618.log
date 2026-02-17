@@ -1,0 +1,43 @@
+==========================================
+E4-S2 PI Review Log (Files)
+==========================================
+Timestamp: 2026-02-16T21:46:18Z
+
+Review of `E4-S2` rollback implementation.
+
+### Findings
+
+#### **P1: Unsafe Rollback Target Selection**
+The rollback logic blindly selects the immediate next release in the list (`releases[activeIdx+1]`) as the target, without validating its eligibility.
+- **Risk**: If the release history contains failed builds or skipped releases between the current active release and the previous working version (e.g., `[Current, FailedBuild, PreviousGood]`), the system will rollback to the `FailedBuild`.
+- **Impact**: High. Rolling back could break the site by pointing to a failed or incomplete release artifact.
+- **Recommendation**: Iterate forward from `activeIdx + 1` to find the first release where `Status` indicates a successful build/deployment (e.g., `active` or `inactive`).
+
+#### **P1: Implicit Sort Order Dependency**
+The implementation assumes `q.ListReleasesByEnvironment` returns releases in strictly descending chronological order (newest first).
+- **Risk**: If the underlying SQL query does not enforce `ORDER BY created_at DESC` (or similar), the returned order is undefined. `activeIdx + 1` could point to a newer release or a random one.
+- **Impact**: High. Unpredictable rollback behavior.
+- **Recommendation**: Verify the SQL query enforces order, or perform an in-memory sort within `Rollback` to guarantee safety.
+
+#### **P2: Crash Consistency (Atomicity)**
+The implementation switches the filesystem symlink *before* updating the database.
+- **Risk**: A crash (power loss, panic) occurring after `SwitchCurrentSymlink` but before `q.UpdateEnvironmentActiveRelease` results in an inconsistent state: the filesystem serves the "previous" version, but the database and API report the "current" version as active.
+- **Note**: The `defer` block handles *error* recovery, but not process crashes.
+- **Recommendation**: Consider if this risk is acceptable. Standard mitigation involves a write-ahead log or accepting the inconsistency and adding a reconciliation tool.
+
+#### **P2: History Scan Scalability**
+The code fetches the entire release history via `q.ListReleasesByEnvironment` to locate the current active release.
+- **Risk**: For environments with thousands of releases, this list operation will degrade in performance and memory usage.
+- **Impact**: Moderate. Latency increase over time.
+- **Recommendation**: Use a more targeted query to find the "previous" release (e.g., `SELECT * FROM releases WHERE created_at < (SELECT created_at FROM releases WHERE id = ?) ORDER BY created_at DESC LIMIT 1`).
+
+### Test Coverage
+- **Good**: `TestRollbackSuccessAndRepeatedUndo` verifies standard LIFO behavior.
+- **Good**: `TestRollbackReturnsNoPreviousReleaseError` covers the edge case of no history.
+- **Good**: `TestRollbackMissingReleaseDirectoryDoesNotMutateActiveState` verifies safety checks for missing artifacts.
+- **Missing**: No test case covers the "interleaved failed release" scenario (validating the P1 finding above).
+
+### Code Correctness
+- **Environment Locking**: Correctly implemented in `server/rollback.go` using `s.environmentLock`, preventing race conditions during concurrent requests.
+- **Directory Checks**: `os.Stat` correctly prevents switching to a non-existent directory.
+- **Input Sanitization**: Website and environment names are trimmed, preventing basic errors.

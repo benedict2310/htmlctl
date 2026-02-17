@@ -80,7 +80,7 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lock := s.applyLock(website)
+	lock := s.environmentLock(website, env)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -170,11 +170,43 @@ func writeAPIError(w http.ResponseWriter, status int, message string, details []
 	writeJSON(w, status, resp)
 }
 
-func (s *Server) applyLock(website string) *sync.Mutex {
-	key := website
+func (s *Server) environmentLock(website, env string) *sync.Mutex {
+	idx := s.environmentLockIndex(website, env)
+	return &s.applyLockStripes[idx]
+}
+
+func (s *Server) lockEnvironmentPair(website, envA, envB string) func() {
+	idxA := s.environmentLockIndex(website, envA)
+	idxB := s.environmentLockIndex(website, envB)
+
+	if idxA == idxB {
+		lock := &s.applyLockStripes[idxA]
+		lock.Lock()
+		return func() {
+			lock.Unlock()
+		}
+	}
+
+	firstIdx := idxA
+	secondIdx := idxB
+	if firstIdx > secondIdx {
+		firstIdx, secondIdx = secondIdx, firstIdx
+	}
+	first := &s.applyLockStripes[firstIdx]
+	second := &s.applyLockStripes[secondIdx]
+	first.Lock()
+	second.Lock()
+	return func() {
+		second.Unlock()
+		first.Unlock()
+	}
+}
+
+func (s *Server) environmentLockIndex(website, env string) uint32 {
+	key := website + "/" + env
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(key))
-	return &s.applyLockStripes[h.Sum32()%uint32(len(s.applyLockStripes))]
+	return h.Sum32() % uint32(len(s.applyLockStripes))
 }
 
 func summarizeAcceptedResources(accepted []state.AcceptedResource) string {

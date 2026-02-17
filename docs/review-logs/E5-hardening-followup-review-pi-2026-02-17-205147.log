@@ -1,0 +1,36 @@
+==========================================
+E5 Hardening Follow-up PI Review Log
+==========================================
+Tue Feb 17 20:51:47 CET 2026
+
+Prompt: Final post-fix review after non-root caddy setup and docker entrypoint updates.
+
+The post-fix review is complete. I have analyzed the uncommitted changes and verified the critical logic, security, and test coverage.
+
+### 1. Docker Runtime Security (CRITICAL FIX APPLIED)
+*   **Issue:** The `docker/htmlservd-ssh-entrypoint.sh` script (used for the SSH-enabled image) was running as `root` and creating the initial `Caddyfile` with root ownership.
+*   **Impact:** The `htmlservd` process (and the `caddy` child process) runs as user `htmlservd` (UID 10001). It would fail to overwrite the root-owned `Caddyfile` during a reload operation, causing domain updates to fail in the SSH container.
+*   **Fix:** I patched `docker/htmlservd-ssh-entrypoint.sh` to change ownership of the generated `Caddyfile` to `htmlservd:htmlservd`.
+*   **Verification:** `docker/htmlservd-entrypoint.sh` (standard image) was already correct as it runs entirely as the `htmlservd` user.
+
+### 2. Domain Rollback & Reconcile Logic
+*   **Locking:** The new `domainLock` with 256-way striping (hashed by domain name) correctly serializes operations for the same domain, preventing race conditions during the multi-step "DB Insert -> Reload -> Rollback" flow.
+*   **Rollback Identity:** The new `RestoreDomainBinding` query correctly preserves the original `ID`, `CreatedAt`, and `UpdatedAt` timestamps. This ensures that a failed delete operation (rolled back) restores the exact same state, maintaining audit trail integrity.
+*   **Reconcile Fallback:** The logic to call `reconcileDomainConfig` if a rollback fails is a robust "last resort" mechanism. It attempts to force Caddy to match the current DB state, resolving potential "zombie" configurations.
+*   **Concurrency:** `TestDomainsSameDomainDeleteCreateSerialized` confirms that a create operation waits for a pending delete/reload operation to finish, and correctly fails if the delete was rolled back (conflict).
+
+### 3. Test Gaps & Coverage
+*   **CLI UX:** `TestApplyCommandProgressAndRelease` covers the new "first deploy" hints.
+*   **Domain Logic:** `TestRestoreDomainBindingPreservesIdentity` covers the critical rollback data integrity.
+*   **Error Handling:** `TestDomainsGetDeleteValidationAndReloadFailureBranch` verifies the rollback path.
+*   **Execution:** All tests passed, including the new tests.
+
+### Summary
+The changes are solid. The critical permission issue in the SSH entrypoint has been fixed, and the domain management logic is robust against transient failures.
+
+**Files Ready for Commit:**
+- `internal/cli/` (UX improvements)
+- `internal/db/` (Rollback support)
+- `internal/server/` (Locking & Reconcile logic)
+- `docker/` (Security fix)
+- `Dockerfile` & `docs/` (New assets)

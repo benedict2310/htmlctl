@@ -149,6 +149,10 @@ func (s *Server) handleCreateDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	lock := s.domainLock(normalized)
+	lock.Lock()
+	defer lock.Unlock()
+
 	_, err = q.InsertDomainBinding(r.Context(), dbpkg.DomainBindingRow{
 		Domain:        normalized,
 		EnvironmentID: envRow.ID,
@@ -173,16 +177,29 @@ func (s *Server) handleCreateDomain(w http.ResponseWriter, r *http.Request) {
 		if err := s.caddyReloader.Reload(r.Context(), reason); err != nil {
 			s.logger.Error("caddy reload failed after domain add", "domain", normalized, "reason", reason, "error", err)
 			rolledBack, rollbackErr := q.DeleteDomainBindingByDomain(r.Context(), normalized)
+			rollbackInconclusive := !rolledBack
 			if rollbackErr != nil {
-				writeAPIError(w, http.StatusInternalServerError, "domain binding created but caddy reload failed and rollback failed", []string{err.Error(), rollbackErr.Error()})
+				if reconcileErr := s.reconcileDomainConfig(r.Context(), "add rollback failure "+normalized); reconcileErr != nil {
+					writeAPIError(w, http.StatusInternalServerError, "domain binding created but caddy reload failed and rollback failed", []string{err.Error(), rollbackErr.Error(), reconcileErr.Error()})
+					return
+				}
+				// Reconcile succeeded while DB rollback failed; keep the response based on the
+				// row already loaded before reload failure instead of forcing another DB read.
+				s.logger.Warn("caddy reconcile succeeded after failed domain add rollback", "domain", normalized)
+				rollbackInconclusive = false
+			}
+			if rollbackInconclusive {
+				reconciledRow, rowErr := q.GetDomainBindingByDomain(r.Context(), normalized)
+				if rowErr != nil {
+					writeAPIError(w, http.StatusInternalServerError, "domain binding created but caddy reload failed and rollback was inconclusive", []string{err.Error()})
+					return
+				}
+				row = reconciledRow
+			}
+			if rolledBack {
+				writeAPIError(w, http.StatusInternalServerError, "domain binding was rolled back because caddy reload failed", []string{err.Error()})
 				return
 			}
-			if !rolledBack {
-				writeAPIError(w, http.StatusInternalServerError, "domain binding created but caddy reload failed and rollback was inconclusive", []string{err.Error()})
-				return
-			}
-			writeAPIError(w, http.StatusInternalServerError, "domain binding was rolled back because caddy reload failed", []string{err.Error()})
-			return
 		}
 		s.logger.Info("caddy reload succeeded after domain add", "domain", normalized, "reason", reason)
 	}
@@ -197,6 +214,10 @@ func (s *Server) handleDeleteDomain(w http.ResponseWriter, r *http.Request, doma
 		writeAPIError(w, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
+
+	lock := s.domainLock(normalized)
+	lock.Lock()
+	defer lock.Unlock()
 
 	q := dbpkg.NewQueries(s.db)
 	row, err := q.GetDomainBindingByDomain(r.Context(), normalized)
@@ -223,16 +244,23 @@ func (s *Server) handleDeleteDomain(w http.ResponseWriter, r *http.Request, doma
 		reason := "domain.remove " + normalized
 		if err := s.caddyReloader.Reload(r.Context(), reason); err != nil {
 			s.logger.Error("caddy reload failed after domain remove", "domain", normalized, "reason", reason, "error", err)
-			_, rollbackErr := q.InsertDomainBinding(r.Context(), dbpkg.DomainBindingRow{
-				Domain:        normalized,
+			rollbackErr := q.RestoreDomainBinding(r.Context(), dbpkg.DomainBindingRow{
+				ID:            row.ID,
+				Domain:        row.Domain,
 				EnvironmentID: row.EnvironmentID,
+				CreatedAt:     row.CreatedAt,
+				UpdatedAt:     row.UpdatedAt,
 			})
 			if rollbackErr != nil {
-				writeAPIError(w, http.StatusInternalServerError, "domain binding removed but caddy reload failed and rollback failed", []string{err.Error(), rollbackErr.Error()})
+				if reconcileErr := s.reconcileDomainConfig(r.Context(), "remove rollback failure "+normalized); reconcileErr != nil {
+					writeAPIError(w, http.StatusInternalServerError, "domain binding removed but caddy reload failed and rollback failed", []string{err.Error(), rollbackErr.Error(), reconcileErr.Error()})
+					return
+				}
+				s.logger.Warn("caddy reconcile succeeded after failed domain remove rollback", "domain", normalized)
+			} else {
+				writeAPIError(w, http.StatusInternalServerError, "domain binding removal was rolled back because caddy reload failed", []string{err.Error()})
 				return
 			}
-			writeAPIError(w, http.StatusInternalServerError, "domain binding removal was rolled back because caddy reload failed", []string{err.Error()})
-			return
 		}
 		s.logger.Info("caddy reload succeeded after domain remove", "domain", normalized, "reason", reason)
 	}
@@ -304,4 +332,16 @@ func isDomainUniqueConstraintError(err error) bool {
 	}
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "unique constraint failed") && strings.Contains(msg, "domain_bindings.domain")
+}
+
+func (s *Server) reconcileDomainConfig(ctx context.Context, reason string) error {
+	if s.caddyReloader == nil {
+		return nil
+	}
+	reconcileReason := "domain.reconcile " + strings.TrimSpace(reason)
+	if err := s.caddyReloader.Reload(ctx, reconcileReason); err != nil {
+		return fmt.Errorf("reconcile caddy config: %w", err)
+	}
+	s.logger.Warn("caddy reconciliation reload succeeded", "reason", reconcileReason)
+	return nil
 }

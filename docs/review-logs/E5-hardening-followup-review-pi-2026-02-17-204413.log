@@ -1,0 +1,44 @@
+==========================================
+E5 Hardening Follow-up PI Review Log
+==========================================
+Tue Feb 17 20:44:13 CET 2026
+
+Prompt: Re-review after Docker hardening fixes (non-root htmlservd process, root SSH disabled), plus concurrency/rollback/doc updates.
+
+## Findings Summary
+
+### 1. Severity: High - Split-Brain Risk on Rollback Failure
+In `internal/server/domains.go`, the domain deletion workflow is non-atomic:
+1. Delete from DB (committed)
+2. Reload Caddy
+3. If Reload fails, Restore to DB
+
+If the process crashes between steps 1 and 2, or if step 3 fails (e.g., DB outage), the system enters a "split-brain" state: the domain is deleted from the DB but remains active in the Caddy load balancer. The current implementation logs this critical failure (`"domain binding removed but caddy reload failed and rollback failed"`) and returns a 500 error, but requires manual intervention to reconcile.
+
+### 2. Severity: Medium - SSH Key Injection via Environment Variable
+The `htmlservd-ssh` Docker image accepts `SSH_PUBLIC_KEY` via an environment variable. While public keys are not secrets, this pattern in `docker/htmlservd-ssh-entrypoint.sh` allows anyone with container inspection capabilities (or the ability to set env vars) to inject an authorized key, potentially gaining root-equivalent access to the container network context.
+*Mitigation:* This is acceptable for the intended use case (public key is not a credential), but typically mounting `authorized_keys` as a read-only volume is preferred for strict hardening.
+
+### 3. Severity: Low - CI/Test Flakiness Risk
+The `TestDomainsSameDomainDeleteCreateSerialized` test relies on `time.Sleep` (implicit in `select` with timeouts) to verify locking behavior. While the channel synchronization is robust, the 100ms timeout for verifying "create blocked" behavior could arguably be flaky on extremely slow CI runners.
+
+### 4. Severity: Low - Documentation Visibility
+New documentation directories (`docs/guides`, `docs/operations`, etc.) are present in the workspace but currently untracked. Ensure these are added to the commit.
+
+## Correctness & Hardening Verification
+
+*   **Concurrency:** The new `domainLockStripes` (256 stripes) correctly serializes operations on the same domain. The test `TestDomainsSameDomainDeleteCreateSerialized` confirms that a `Create` request cannot slip in between a failed `Delete` and its `Restore` rollback.
+*   **Docker Hardening:**
+    *   `htmlservd` runs as non-root (UID 10001).
+    *   `htmlservd-ssh` correctly drops privileges to `htmlservd` for the application process while keeping `sshd` as root (standard requirement).
+    *   `authorized_keys` are correctly `chmod 600`.
+*   **Testing Coverage:**
+    *   New DB restoration logic is covered by `TestRestoreDomainBindingPreservesIdentity`.
+    *   CLI "first deploy hint" logic is covered by `TestApplyCommandProgressAndRelease`.
+    *   Domain rollback logic is covered by `TestDomainsGetDeleteValidationAndReloadFailureBranch`.
+
+## Recommendations
+
+1.  **Accept Risk (Split-Brain):** The split-brain risk is inherent to the distributed state (DB + Caddy). For this iteration, the error logging is sufficient, but a future "reconciliation" task (e.g., startup check) should be considered.
+2.  **Commit:** Stage all changes, including the new `docs/` and `docker/` directories.
+3.  **Docs:** Ensure `docs/operations/domain-hardening.md` (referenced in file list but not in diff) is reviewed if it contains new operational procedures.

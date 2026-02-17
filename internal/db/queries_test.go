@@ -375,6 +375,60 @@ func TestDomainBindingCRUD(t *testing.T) {
 	}
 }
 
+func TestRestoreDomainBindingPreservesIdentity(t *testing.T) {
+	q, cleanup := setupDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	envID, err := q.InsertEnvironment(ctx, EnvironmentRow{WebsiteID: websiteID, Name: "staging"})
+	if err != nil {
+		t.Fatalf("InsertEnvironment() error = %v", err)
+	}
+	if _, err := q.InsertDomainBinding(ctx, DomainBindingRow{
+		Domain:        "futurelab.studio",
+		EnvironmentID: envID,
+	}); err != nil {
+		t.Fatalf("InsertDomainBinding() error = %v", err)
+	}
+
+	before, err := q.GetDomainBindingByDomain(ctx, "futurelab.studio")
+	if err != nil {
+		t.Fatalf("GetDomainBindingByDomain(before) error = %v", err)
+	}
+	deleted, err := q.DeleteDomainBindingByDomain(ctx, "futurelab.studio")
+	if err != nil {
+		t.Fatalf("DeleteDomainBindingByDomain() error = %v", err)
+	}
+	if !deleted {
+		t.Fatalf("expected deleted=true")
+	}
+
+	if err := q.RestoreDomainBinding(ctx, DomainBindingRow{
+		ID:            before.ID,
+		Domain:        before.Domain,
+		EnvironmentID: before.EnvironmentID,
+		CreatedAt:     before.CreatedAt,
+		UpdatedAt:     before.UpdatedAt,
+	}); err != nil {
+		t.Fatalf("RestoreDomainBinding() error = %v", err)
+	}
+
+	after, err := q.GetDomainBindingByDomain(ctx, "futurelab.studio")
+	if err != nil {
+		t.Fatalf("GetDomainBindingByDomain(after) error = %v", err)
+	}
+	if after.ID != before.ID {
+		t.Fatalf("expected stable id %d, got %d", before.ID, after.ID)
+	}
+	if after.CreatedAt != before.CreatedAt || after.UpdatedAt != before.UpdatedAt {
+		t.Fatalf("expected stable timestamps before=(%s,%s) after=(%s,%s)", before.CreatedAt, before.UpdatedAt, after.CreatedAt, after.UpdatedAt)
+	}
+}
+
 func TestDomainBindingUniqueConstraint(t *testing.T) {
 	q, cleanup := setupDB(t)
 	defer cleanup()

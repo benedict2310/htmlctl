@@ -1,0 +1,29 @@
+==========================================
+E5 Hardening Follow-up PI Review Log
+==========================================
+Tue Feb 17 21:11:25 CET 2026
+
+Prompt: Re-review after rollbackInconclusive comment + strengthened recovery test assertion.
+
+The code in `internal/server/domains.go` and `internal/server/domains_error_test.go` has been reviewed. The implementation demonstrates robust error handling, concurrency control, and test coverage for complex failure scenarios (rollback failures).
+
+**Findings**
+
+### 1. Verification Required: Caddy Reload Consistency (Medium Severity)
+In `handleCreateDomain` and `handleDeleteDomain`, the recovery logic assumes that a successful `s.reconcileDomainConfig()` (which calls `Reload`) will synchronize Caddy with the *current* database state.
+
+*   **Context:** If a DB rollback fails (leaving the DB in a modified state) but the subsequent reconcile succeeds, the code treats this as a successful operation (returns 201 or 204).
+*   **Risk:** If `caddyReloader.Reload` does not force a fresh read from the database (e.g., if it relies on cached or passed-in state), Caddy might remain out of sync with the DB (which has the phantom row from the failed rollback).
+*   **Recommendation:** Verify that the `Reload` implementation triggers a full config regeneration based on the database content.
+
+### 2. Logic Complexity: `rollbackInconclusive` Handling (Low Severity)
+The `rollbackInconclusive` logic in `handleCreateDomain` handles the edge case where the rollback delete fails.
+*   **Observation:** If `q.DeleteDomainBindingByDomain` returns an error (e.g., DB closed), `rollbackInconclusive` is set to `false`. The code then skips the 500 error block if `reconcile` succeeds.
+*   **Implication:** This relies on the "reconcile success" being the source of truth for the system's final state, effectively ignoring the DB error. This is acceptable design for availability but relies heavily on the "Reload Consistency" point above.
+
+### 3. Test Reliability: `blockingDeleteReloadFailure` (Low Severity)
+The test helper `blockingDeleteReloadFailure` in `domains_error_test.go` correctly simulates a race condition by blocking only on `domain.remove`.
+*   **Observation:** The test logic using `time.After(100 * time.Millisecond)` to verify the Create operation is blocked is slightly non-deterministic but acceptable for this scope. The explicit channel coordination (`started`, `release`) makes it reasonably stable.
+
+### Conclusion
+The code is of high quality and safely handles the "dual-write" problem (DB + Caddy) by prioritizing eventual consistency via reconciliation when atomic rollbacks fail. No critical bugs found.

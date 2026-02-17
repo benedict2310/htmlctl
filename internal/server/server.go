@@ -31,9 +31,10 @@ type Server struct {
 	httpServer *http.Server
 	errCh      chan error
 
-	auditLogger      audit.Logger
-	applyLockStripes [256]sync.Mutex
-	caddyReloader    caddyReloader
+	auditLogger       audit.Logger
+	applyLockStripes  [256]sync.Mutex
+	domainLockStripes [256]sync.Mutex
+	caddyReloader     caddyReloader
 }
 
 func New(cfg Config, logger *slog.Logger, version string) (*Server, error) {

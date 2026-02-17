@@ -1,0 +1,30 @@
+==========================================
+E5 Hardening Follow-up PI Review Log
+==========================================
+Tue Feb 17 20:56:34 CET 2026
+
+Prompt: Final review on current diff after all fixes/tests/e2e.
+
+The uncommitted changes introduce domain-level locking to prevent race conditions during creation/deletion and implement a "best-effort" recovery strategy when Caddy reloading fails.
+
+**Severity-Ranked Findings**
+
+1.  **Medium Severity: Potential Client-Side State Mismatch during Recovery**
+    *   **Location:** `internal/server/domains.go` (Both `handleCreateDomain` and `handleDeleteDomain`)
+    *   **Issue:** In the edge case where the Caddy reload fails, the subsequent DB rollback *also* fails, but the final `reconcileDomainConfig` succeeds, the server successfully aligns Caddy with the DB (the domain is active). However, if the subsequent `GetDomainBindingByDomain` (in create) fails (e.g., due to the same transient DB issue that caused rollback failure), the API returns a `500 Internal Server Error`.
+    *   **Impact:** The client receives an error indicating failure, but the domain is actually live and active. A retry by the user would result in a `409 Conflict`.
+    *   **Recommendation:** This is a known trade-off in distributed systems without 2PC. Ensure the client-side CLI handles `409 Conflict` on retry gracefully if the intention was to create it.
+
+2.  **Low Severity: Misleading Success Log on Recovery**
+    *   **Location:** `internal/server/domains.go`
+    *   **Issue:** In `handleDeleteDomain`, if the code enters the recovery path (Reload Fail -> Rollback Fail -> Reconcile Success), it falls through to the end of the function where it logs: `s.logger.Info("caddy reload succeeded after domain remove", ...)` and returns `200 OK`.
+    *   **Impact:** The log message implies a clean execution, masking the fact that the initial reload and the DB rollback both failed. Although `s.logger.Warn` is called earlier, the final log line might be confusing during incident investigation.
+    *   **Recommendation:** Adjust the control flow to return immediately after the successful recovery warning, or update the final log message to reflect the recovery status.
+
+3.  **Low Severity: Hardcoded dependency on `previousReleaseId` string**
+    *   **Location:** `internal/cli/apply_cmd.go`
+    *   **Issue:** The "First deploy" hint logic relies on `releaseResp.PreviousReleaseID == nil`.
+    *   **Impact:** Correctness depends on the API correctly returning `null` (or nil in Go struct) for the first release. If the API returns an empty string or zero-value UUID, the hint won't show. Given the current `json` unmarshaling, this should be fine, but worth verifying against API contracts.
+
+**Summary**
+The changes significantly improve concurrency safety (`domainLock`) and data integrity (restoring exact IDs on rollback). The introduced logic for "reconciling" Caddy config when standard rollback fails makes the system more robust against partial failures. No critical bugs or regressions were found.

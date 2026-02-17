@@ -175,6 +175,11 @@ func (s *Server) environmentLock(website, env string) *sync.Mutex {
 	return &s.applyLockStripes[idx]
 }
 
+func (s *Server) domainLock(domain string) *sync.Mutex {
+	idx := s.domainLockIndex(domain)
+	return &s.domainLockStripes[idx]
+}
+
 func (s *Server) lockEnvironmentPair(website, envA, envB string) func() {
 	idxA := s.environmentLockIndex(website, envA)
 	idxB := s.environmentLockIndex(website, envB)
@@ -207,6 +212,12 @@ func (s *Server) environmentLockIndex(website, env string) uint32 {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(key))
 	return h.Sum32() % uint32(len(s.applyLockStripes))
+}
+
+func (s *Server) domainLockIndex(domain string) uint32 {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(domain))
+	return h.Sum32() % uint32(len(s.domainLockStripes))
 }
 
 func summarizeAcceptedResources(accepted []state.AcceptedResource) string {

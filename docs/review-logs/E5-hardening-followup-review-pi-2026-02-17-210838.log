@@ -1,0 +1,30 @@
+==========================================
+E5 Hardening Follow-up PI Review Log
+==========================================
+Tue Feb 17 21:08:38 CET 2026
+
+Prompt: Review the new domain-add reconcile mismatch fix and tests.
+
+Based on the review of `internal/server/domains.go` and `internal/server/domains_error_test.go` (and verification via `go test`), here are the findings ranked by severity.
+
+### Severity: Medium
+
+1.  **Questionable Test Logic in `TestDomainsCreateUsesKnownRowAfterReconcileRecovery`**
+    *   **Location:** `internal/server/domains_error_test.go`
+    *   **Observation:** The test uses a mock reloader that calls `srv.db.Close()` to simulate a rollback failure (by ensuring the DB delete fails). However, the test expects the overall API call to return `201 Created`.
+    *   **Issue:** For the API to return `201`, the final call to `q.GetDomainBindingByDomain` (at the end of `handleCreateDomain`) must succeed. Standard `database/sql` behavior dictates that queries on a closed `*sql.DB` should fail. The fact that this test passes suggests either `sqlite3` driver behavior allows queries after close in this context, or the test is not isolating the failure as intended. Relying on "closed DB allows reads" is fragile and may not reflect production behavior (where a closed/failed DB would result in a 500 error, failing the test expectation).
+
+### Severity: Low
+
+2.  **Implicit Assumption in "Roll Forward" Recovery**
+    *   **Location:** `internal/server/domains.go` (lines 177-194 in `handleCreateDomain`)
+    *   **Observation:** If `rollbackErr` is not nil (DB delete failed), the code attempts `reconcileDomainConfig`. If that succeeds, it proceeds to treat the operation as successful (`rollbackInconclusive = false`).
+    *   **Issue:** This relies on the assumption that "DB delete failed" implies "Row still exists". While the new locking (`s.domainLock`) significantly reduces concurrent interference, if the delete failed because the row was already gone (and error was non-nil for some other reason), the subsequent `GetDomainBindingByDomain` will fail, returning a 500 error despite the log claiming "reconcile succeeded". This "success after failure" path is safe but relies on implicit state.
+
+3.  **Complex Variable Logic (`rollbackInconclusive`)**
+    *   **Location:** `internal/server/domains.go`
+    *   **Observation:** The variable `rollbackInconclusive` is initialized to `!rolledBack` and then forced to `false` if `rollbackErr != nil` and reconcile succeeds.
+    *   **Issue:** The logic is somewhat difficult to follow. Specifically, `rollbackInconclusive` acts as a flag for "we are not sure if the row exists, so check DB". Forcing it to `false` when `rollbackErr` occurs skips the verification check, assuming the row exists. A comment clarifying this state transition would improve maintainability.
+
+### Verification
+All tests in `internal/server` passed, confirming the code functions as currently implemented, but the validity of the failure simulation in the test mentioned above remains the primary concern.

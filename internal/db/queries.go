@@ -408,6 +408,22 @@ func (q *Queries) InsertDomainBinding(ctx context.Context, in DomainBindingRow) 
 	return lastInsertID("insert domain binding", res)
 }
 
+func (q *Queries) RestoreDomainBinding(ctx context.Context, in DomainBindingRow) error {
+	_, err := q.db.ExecContext(
+		ctx,
+		`INSERT INTO domain_bindings(id, domain, environment_id, created_at, updated_at) VALUES(?, ?, ?, ?, ?)`,
+		in.ID,
+		in.Domain,
+		in.EnvironmentID,
+		in.CreatedAt,
+		in.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("restore domain binding: %w", err)
+	}
+	return nil
+}
+
 func (q *Queries) GetDomainBindingByDomain(ctx context.Context, domain string) (DomainBindingResolvedRow, error) {
 	var out DomainBindingResolvedRow
 	err := q.db.QueryRowContext(ctx, `

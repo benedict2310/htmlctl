@@ -13,4 +13,5 @@ dist/
 
 # Local temp/work files
 tmp/
+.tmp/
 .artifacts/

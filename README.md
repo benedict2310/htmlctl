@@ -31,6 +31,21 @@ or:
 go test ./...
 ```
 
+## Docker
+
+Build packaged images:
+
+```bash
+docker build --target htmlctl -t htmlctl:local .
+docker build --target htmlservd -t htmlservd:local .
+docker build --target htmlservd-ssh -t htmlservd-ssh:local .
+```
+
+See:
+
+- `docs/guides/first-deploy-docker.md` for first deployment walkthrough
+- `docs/reference/docker-images.md` for image/runtime details
+
 ## Quick Start (Local)
 
 Render and preview a site directory:
@@ -87,6 +102,8 @@ Dry run (diff-only, no upload/release):
 htmlctl apply -f ./site --context staging --dry-run
 ```
 
+On a first deploy, `htmlctl apply` now prints a follow-up hint to bind a domain.
+
 ## Implemented Commands
 
 - `htmlctl render`
@@ -102,6 +119,12 @@ htmlctl apply -f ./site --context staging --dry-run
 - `htmlctl promote website/<name> --from <env> --to <env>`
 - `htmlctl domain add|list|remove|verify`
 - `htmlctl version`
+
+## Documentation
+
+- `docs/README.md` documentation index
+- `docs/stories/` story specs and acceptance criteria
+- `docs/review-logs/` PI/code review logs
 
 ## License
 

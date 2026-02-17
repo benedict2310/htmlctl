@@ -1,0 +1,43 @@
+==========================================
+E5 Hardening Follow-up PI Review Log
+==========================================
+Tue Feb 17 20:47:49 CET 2026
+
+Prompt: Final re-review after reconciliation patch + docker security fixes.
+
+Final review of uncommitted changes and current codebase state.
+
+### Severity-Ranked Findings
+
+#### 1. CRITICAL: Docker Security & Functionality
+**File:** `docker/htmlservd-ssh-entrypoint.sh`, `Dockerfile`
+- **Root Caddy Execution:** The `htmlservd-ssh` image runs Caddy as `root` (`/usr/local/bin/caddy run ... &`). This is a severe security risk for an exposed web server. Caddy should run as the `htmlservd` user (uid 10001) or drop privileges.
+- **Missing Capabilities:** The base `htmlservd` image creates a non-root user but does not grant `CAP_NET_BIND_SERVICE` to the Caddy binary. Caddy will fail to bind to ports 80/443 if configured to do so.
+- **Broken Base Image:** The `htmlservd` image `ENTRYPOINT` only starts `htmlservd` (the control plane). It does **not** start Caddy. Since `htmlservd` expects to reload a running Caddy instance via API, this image is non-functional for serving traffic unless used as a sidecar (undocumented/unconfigured).
+
+#### 2. HIGH: Unverified Domain Reconcile Logic
+**File:** `internal/server/domains.go`
+- **Logic Gaps:** The new `reconcileDomainConfig` logic attempts to recover from a failed rollback (DB operation failure) by retrying Caddy reload.
+    - In `handleCreateDomain`: If rollback (DB delete) fails but reconcile (Caddy reload) succeeds, the API returns **Success** (implicit 200). This assumes the transient failure was resolved and the domain is active. While "eventually consistent", this relies on the assumption that `Reload` succeeded with the *new* configuration.
+    - In `handleDeleteDomain`: If rollback (DB restore) fails but reconcile succeeds, it proceeds to success. This effectively becomes a "force delete" (DB deletion persisted, Caddy eventually updated).
+- **Missing Tests:** `internal/server/domains_error_test.go` only tests the successful rollback path. The paths where rollback fails (database error) and reconcile is attempted are **completely untested**.
+
+#### 3. MEDIUM: Incomplete Documentation & Git State
+**File:** `docs/`, `.gitignore`
+- **Untracked Documentation:** The `docs/` directory is untracked.
+- **Review Artifacts:** `docs/review-logs/` contains timestamped logs that should likely be `.gitignore`'d rather than committed.
+- **CLI Feedback:** The improved CLI feedback in `internal/cli/apply_cmd.go` ("Next: run 'htmlctl domain add ...'") is good and well-tested (`internal/cli/apply_cmd_test.go`), but user guides in `docs/` (if any) should reflect this workflow.
+
+### Recommendations
+
+1.  **Fix Docker Entrypoints:**
+    - Modify `docker/htmlservd-ssh-entrypoint.sh` to run Caddy as `htmlservd` (using `su-exec` or `runuser` if available, or just `su -s`).
+    - Grant capabilities: `setcap cap_net_bind_service=+ep /usr/local/bin/caddy` in `Dockerfile`.
+    - Fix base `htmlservd` image to start Caddy (or document sidecar requirement explicitly).
+
+2.  **Add Tests for Reconcile:**
+    - Extend `TestDomainsGetDeleteValidationAndReloadFailureBranch` in `internal/server/domains_error_test.go` to mock a DB failure during rollback (`DeleteDomainBindingByDomain` or `RestoreDomainBinding`) and verify the reconcile behavior.
+
+3.  **Cleanup:**
+    - Add `docs/review-logs/` to `.gitignore`.
+    - `git add docs/` (excluding logs).

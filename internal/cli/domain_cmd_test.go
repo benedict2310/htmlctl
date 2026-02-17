@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDomainAddCommand(t *testing.T) {
@@ -332,5 +333,28 @@ func TestDomainParentCommandShowsHelp(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "Manage custom domain bindings") {
 		t.Fatalf("unexpected domain help output: %s", out.String())
+	}
+}
+
+func TestLookupDomainHostDefaultImplementation(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	addresses, err := lookupDomainHost(ctx, "localhost")
+	if err != nil {
+		t.Fatalf("lookupDomainHost(localhost) error = %v", err)
+	}
+	if len(addresses) == 0 {
+		t.Fatalf("expected at least one localhost address")
+	}
+}
+
+func TestVerifyDomainTLSDefaultImplementationError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	_, err := verifyDomainTLS(ctx, "127.0.0.1")
+	if err == nil {
+		t.Fatalf("expected TLS verification error when no TLS listener is present")
 	}
 }

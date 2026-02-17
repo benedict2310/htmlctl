@@ -1,7 +1,7 @@
 # E5-S3 - Reload Caddy Safely
 
 **Epic:** Epic 5 — Domains + TLS via Caddy
-**Status:** Not Started
+**Status:** Implemented
 **Priority:** P1 (Critical Path)
 **Estimated Effort:** 2 days
 **Dependencies:** E5-S2 (Caddy config generation)
@@ -95,24 +95,24 @@ As an operator, I want htmlservd to validate and reload Caddy configuration safe
 
 ## 6. Acceptance Criteria
 
-- [ ] AC-1: `caddy.Reloader.Reload()` generates a new Caddyfile from current domain bindings, validates it via `caddy validate`, writes it atomically, and triggers `caddy reload`.
-- [ ] AC-2: If `caddy validate` fails, the existing Caddyfile is not modified, and the error (including Caddy's stderr output) is returned to the caller.
-- [ ] AC-3: If `caddy reload` fails after the Caddyfile has been replaced, the backup Caddyfile is restored, and the error is returned to the caller.
-- [ ] AC-4: Before replacing the active Caddyfile, a backup copy is created at the configured backup path.
-- [ ] AC-5: Concurrent calls to `Reload()` are serialized via a mutex — only one reload runs at a time.
-- [ ] AC-6: The Caddy binary path is configurable; if the binary is not found, a clear error message is returned (not a panic).
-- [ ] AC-7: Domain binding API handlers (create and delete) trigger a config regeneration and Caddy reload after the database operation succeeds.
-- [ ] AC-8: Reload success and failure events are logged with structured context (trigger reason, error details).
-- [ ] AC-9: All unit tests pass using a mock command runner (no Caddy binary required for tests).
+- [x] AC-1: `caddy.Reloader.Reload()` generates a new Caddyfile from current domain bindings, validates it via `caddy validate`, writes it atomically, and triggers `caddy reload`.
+- [x] AC-2: If `caddy validate` fails, the existing Caddyfile is not modified, and the error (including Caddy's stderr output) is returned to the caller.
+- [x] AC-3: If `caddy reload` fails after the Caddyfile has been replaced, the backup Caddyfile is restored, and the error is returned to the caller.
+- [x] AC-4: Before replacing the active Caddyfile, a backup copy is created at the configured backup path.
+- [x] AC-5: Concurrent calls to `Reload()` are serialized via a mutex — only one reload runs at a time.
+- [x] AC-6: The Caddy binary path is configurable; if the binary is not found, a clear error message is returned (not a panic).
+- [x] AC-7: Domain binding API handlers (create and delete) trigger a config regeneration and Caddy reload after the database operation succeeds.
+- [x] AC-8: Reload success and failure events are logged with structured context (trigger reason, error details).
+- [x] AC-9: All unit tests pass using a mock command runner (no Caddy binary required for tests).
 
 ## 7. Verification Plan
 
 ### Automated Tests
 
-- [ ] Unit tests for the full reload sequence (generate -> validate -> write -> reload) using mock command runner
-- [ ] Unit tests for each failure mode: validation failure, reload failure, missing binary
-- [ ] Unit test for backup creation and restoration
-- [ ] Unit test for concurrent reload serialization
+- [x] Unit tests for the full reload sequence (generate -> validate -> write -> reload) using mock command runner
+- [x] Unit tests for each failure mode: validation failure, reload failure, missing binary
+- [x] Unit test for backup creation and restoration
+- [x] Unit test for concurrent reload serialization
 - [ ] Integration test (skipped without Caddy): real validate + reload with a simple Caddyfile
 
 ### Manual Tests
@@ -147,12 +147,32 @@ As an operator, I want htmlservd to validate and reload Caddy configuration safe
 
 ## Implementation Summary
 
-(TBD after implementation.)
+Implemented safe Caddy reload orchestration and server integration:
+- Added `internal/caddy/reloader.go` with serialized reload flow:
+  1. Generate config
+  2. Write temp config
+  3. Validate with `caddy validate`
+  4. Backup active config
+  5. Atomically activate new config
+  6. Reload with `caddy reload`
+  7. Restore backup on reload failure
+- Added command execution abstraction in `internal/caddy/command.go` and tests in `internal/caddy/command_test.go`.
+- Wired reloader initialization in `internal/server/server.go` with configurable paths/binary from `internal/server/config.go`.
+- Integrated reload triggers in domain handlers (`internal/server/domains.go`) for create/delete.
+- Added structured success/failure logging for reload outcomes including trigger reason.
+- Added failure/branch coverage tests in `internal/caddy/reloader_test.go` and `internal/server/domains_*_test.go`.
 
 ## Code Review Findings
 
-(TBD by review agent.)
+`pi` review logs:
+- `docs/review-logs/E5-S3-review-pi-2026-02-17-183100.log` (iteration 1; requested AC-8 success logging)
+- `docs/review-logs/E5-S3-review-pi-2026-02-17-183643.log` (final)
+
+Final review verdict: **Merge**.
+
+Findings addressed between iterations:
+- Added structured success logging (and reason field) for reload events in domain handlers to satisfy AC-8.
 
 ## Completion Status
 
-(TBD after merge.)
+Implemented, tested, and reviewed.

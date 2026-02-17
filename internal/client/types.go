@@ -113,6 +113,19 @@ type PromoteResponse struct {
 	Strategy        string `json:"strategy" yaml:"strategy"`
 }
 
+type DomainBinding struct {
+	ID          int64  `json:"id" yaml:"id"`
+	Domain      string `json:"domain" yaml:"domain"`
+	Website     string `json:"website" yaml:"website"`
+	Environment string `json:"environment" yaml:"environment"`
+	CreatedAt   string `json:"createdAt" yaml:"createdAt"`
+	UpdatedAt   string `json:"updatedAt" yaml:"updatedAt"`
+}
+
+type DomainBindingsResponse struct {
+	Domains []DomainBinding `json:"domains" yaml:"domains"`
+}
+
 type LogsResponse struct {
 	Entries []AuditLogEntry `json:"entries" yaml:"entries"`
 	Total   int             `json:"total" yaml:"total"`

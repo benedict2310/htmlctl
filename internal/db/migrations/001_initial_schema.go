@@ -107,9 +107,16 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp);
 `
 
 func All() []Migration {
-	return []Migration{{
-		Version: 1,
-		Name:    "initial_schema",
-		UpSQL:   initialSchemaSQL,
-	}}
+	return []Migration{
+		{
+			Version: 1,
+			Name:    "initial_schema",
+			UpSQL:   initialSchemaSQL,
+		},
+		{
+			Version: 2,
+			Name:    "domain_bindings",
+			UpSQL:   domainBindingsSchemaSQL,
+		},
+	}
 }

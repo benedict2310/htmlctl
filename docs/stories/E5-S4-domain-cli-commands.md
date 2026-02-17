@@ -1,7 +1,7 @@
 # E5-S4 - htmlctl domain add/verify CLI Commands
 
 **Epic:** Epic 5 — Domains + TLS via Caddy
-**Status:** Not Started
+**Status:** Implemented
 **Priority:** P1 (Critical Path)
 **Estimated Effort:** 3 days
 **Dependencies:** E5-S1 (DomainBinding resource), E5-S2 (Caddy config generation), E5-S3 (Caddy reload), E3-S3 (remote command framework)
@@ -100,28 +100,28 @@ As an operator, I want to manage custom domains for my website environments from
 
 ## 6. Acceptance Criteria
 
-- [ ] AC-1: `htmlctl domain add <domain> --context <ctx>` creates a domain binding on the server and prints a success message including the domain, website, and environment. Server-side config regeneration and Caddy reload happen automatically (via E5-S1/S2/S3).
-- [ ] AC-2: `htmlctl domain add` with an invalid domain name prints the validation error returned by the server (400 response).
-- [ ] AC-3: `htmlctl domain add` with an already-bound domain prints a conflict error (409 response).
-- [ ] AC-4: `htmlctl domain list --context <ctx>` displays all domain bindings for the context's website in a table with columns: DOMAIN, ENVIRONMENT, CREATED.
-- [ ] AC-5: `htmlctl domain list` with no bindings prints a message indicating no domains are configured.
-- [ ] AC-6: `htmlctl domain remove <domain> --context <ctx>` deletes the domain binding and prints a success message. Server-side config regeneration and Caddy reload happen automatically.
-- [ ] AC-7: `htmlctl domain remove` with a non-existent domain prints a not-found error (404 response).
-- [ ] AC-8: `htmlctl domain verify <domain> --context <ctx>` performs a DNS lookup and reports whether the domain resolves (and to which IP addresses).
-- [ ] AC-9: `htmlctl domain verify` performs a TLS check by connecting to the domain over HTTPS and reports whether the certificate is valid, its issuer, and expiry date.
-- [ ] AC-10: `htmlctl domain verify` clearly reports each check's status (pass/fail) with actionable guidance on failures (e.g., "DNS not configured — add an A record pointing to your server").
-- [ ] AC-11: All commands require the `--context` flag (or use the current-context from config) and fail with a clear error if no context is available.
-- [ ] AC-12: All unit tests pass.
+- [x] AC-1: `htmlctl domain add <domain> --context <ctx>` creates a domain binding on the server and prints a success message including the domain, website, and environment. Server-side config regeneration and Caddy reload happen automatically (via E5-S1/S2/S3).
+- [x] AC-2: `htmlctl domain add` with an invalid domain name prints the validation error returned by the server (400 response).
+- [x] AC-3: `htmlctl domain add` with an already-bound domain prints a conflict error (409 response).
+- [x] AC-4: `htmlctl domain list --context <ctx>` displays all domain bindings for the context's website in a table with columns: DOMAIN, ENVIRONMENT, CREATED.
+- [x] AC-5: `htmlctl domain list` with no bindings prints a message indicating no domains are configured.
+- [x] AC-6: `htmlctl domain remove <domain> --context <ctx>` deletes the domain binding and prints a success message. Server-side config regeneration and Caddy reload happen automatically.
+- [x] AC-7: `htmlctl domain remove` with a non-existent domain prints a not-found error (404 response).
+- [x] AC-8: `htmlctl domain verify <domain> --context <ctx>` performs a DNS lookup and reports whether the domain resolves (and to which IP addresses).
+- [x] AC-9: `htmlctl domain verify` performs a TLS check by connecting to the domain over HTTPS and reports whether the certificate is valid, its issuer, and expiry date.
+- [x] AC-10: `htmlctl domain verify` clearly reports each check's status (pass/fail) with actionable guidance on failures (e.g., "DNS not configured — add an A record pointing to your server").
+- [x] AC-11: All commands require the `--context` flag (or use the current-context from config) and fail with a clear error if no context is available.
+- [x] AC-12: All unit tests pass.
 
 ## 7. Verification Plan
 
 ### Automated Tests
 
-- [ ] Unit tests for CLI argument parsing and validation for all four subcommands
-- [ ] Unit tests for domain client HTTP methods with mock server
-- [ ] Unit tests for DNS lookup logic with mock resolver (or test against known domains)
-- [ ] Unit tests for TLS verification logic with mock TLS server
-- [ ] Unit tests for table output formatting
+- [x] Unit tests for CLI argument parsing and validation for all four subcommands
+- [x] Unit tests for domain client HTTP methods with mock server
+- [x] Unit tests for DNS lookup logic with mock resolver (or test against known domains)
+- [x] Unit tests for TLS verification logic with mock TLS server
+- [x] Unit tests for table output formatting
 
 ### Manual Tests
 
@@ -207,12 +207,34 @@ Caddy configuration updated and reloaded.
 
 ## Implementation Summary
 
-(TBD after implementation.)
+Implemented domain command group and client API integration:
+- Added `htmlctl domain` command group in `internal/cli/domain_cmd.go` with subcommands:
+  - `domain add <domain>`
+  - `domain list`
+  - `domain remove <domain>`
+  - `domain verify <domain>`
+- Added DNS + TLS verification workflow in `domain verify` with explicit timeouts and structured PASS/FAIL/SKIP output.
+- Added domain API client methods and response types in:
+  - `internal/client/client.go`
+  - `internal/client/types.go`
+- Registered `domain` command in root command wiring.
+- Added CLI/client tests in:
+  - `internal/cli/domain_cmd_test.go`
+  - `internal/client/client_test.go`
+  - `internal/cli/root_test.go`
+- Verified command behavior end-to-end with matching server endpoints from E5-S1/S3.
 
 ## Code Review Findings
 
-(TBD by review agent.)
+`pi` review logs:
+- `docs/review-logs/E5-S4-review-pi-2026-02-17-183532.log` (final)
+
+Final review verdict: **Merge**.
+
+Notes from review:
+- No P0/P1 issues.
+- P2 observation: this story was delivered as a vertical slice and includes server-side pieces to ensure full working flow.
 
 ## Completion Status
 
-(TBD after merge.)
+Implemented, tested, and reviewed.

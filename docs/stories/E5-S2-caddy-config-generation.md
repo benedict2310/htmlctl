@@ -1,7 +1,7 @@
 # E5-S2 - Generate Caddy Config Snippets
 
 **Epic:** Epic 5 — Domains + TLS via Caddy
-**Status:** Not Started
+**Status:** Implemented
 **Priority:** P1 (Critical Path)
 **Estimated Effort:** 2 days
 **Dependencies:** E5-S1 (DomainBinding resource)
@@ -84,24 +84,24 @@ As an operator, I want htmlservd to automatically generate Caddy configuration f
 
 ## 6. Acceptance Criteria
 
-- [ ] AC-1: A `caddy.GenerateConfig()` function reads all DomainBinding records from the store and returns a complete Caddyfile as a string.
-- [ ] AC-2: Each domain binding produces a Caddyfile site block with the domain as the site address and a `file_server` directive with `root` set to the environment's `current/` symlink path (e.g., `/var/lib/htmlservd/websites/{website}/envs/{env}/current`).
-- [ ] AC-3: Multiple domains bound to the same environment produce separate site blocks, each pointing to the same `current/` directory.
-- [ ] AC-4: The generated Caddyfile is deterministic: given the same set of domain bindings, the output is byte-identical across invocations (domains sorted alphabetically).
-- [ ] AC-5: A `caddy.WriteConfig()` function writes the generated Caddyfile to the configured path atomically (write to temp file, then rename).
-- [ ] AC-6: When no domain bindings exist, the generator produces a valid minimal Caddyfile (empty or with only global options block).
-- [ ] AC-7: The Caddyfile path is configurable via htmlservd configuration with a sensible default (`/etc/caddy/Caddyfile`).
-- [ ] AC-8: All unit tests pass, covering single-domain, multi-domain, multi-environment, and zero-binding scenarios.
+- [x] AC-1: A `caddy.GenerateConfig()` function reads all DomainBinding records from the store and returns a complete Caddyfile as a string.
+- [x] AC-2: Each domain binding produces a Caddyfile site block with the domain as the site address and a `file_server` directive with `root` set to the environment's `current/` symlink path (e.g., `/var/lib/htmlservd/websites/{website}/envs/{env}/current`).
+- [x] AC-3: Multiple domains bound to the same environment produce separate site blocks, each pointing to the same `current/` directory.
+- [x] AC-4: The generated Caddyfile is deterministic: given the same set of domain bindings, the output is byte-identical across invocations (domains sorted alphabetically).
+- [x] AC-5: A `caddy.WriteConfig()` function writes the generated Caddyfile to the configured path atomically (write to temp file, then rename).
+- [x] AC-6: When no domain bindings exist, the generator produces a valid minimal Caddyfile (empty or with only global options block).
+- [x] AC-7: The Caddyfile path is configurable via htmlservd configuration with a sensible default (`/etc/caddy/Caddyfile`).
+- [x] AC-8: All unit tests pass, covering single-domain, multi-domain, multi-environment, and zero-binding scenarios.
 
 ## 7. Verification Plan
 
 ### Automated Tests
 
-- [ ] Unit tests for template rendering with various domain/environment combinations
-- [ ] Unit tests for full config generation from mock DomainBinding store
-- [ ] Test deterministic output ordering
-- [ ] Test atomic file write (temp file + rename pattern)
-- [ ] Test config generation with zero bindings
+- [x] Unit tests for template rendering with various domain/environment combinations
+- [x] Unit tests for full config generation from mock DomainBinding store
+- [x] Test deterministic output ordering
+- [x] Test atomic file write (temp file + rename pattern)
+- [x] Test config generation with zero bindings
 
 ### Manual Tests
 
@@ -153,12 +153,28 @@ staging.futurelab.studio {
 
 ## Implementation Summary
 
-(TBD after implementation.)
+Implemented deterministic Caddyfile generation and atomic write support:
+- Added `internal/caddy/config.go`:
+  - `GenerateConfig([]Site)` for deterministic site block generation (sorted by domain).
+  - `WriteConfig(path, content)` for atomic config writes via temp file + rename.
+- Added `internal/server/caddy.go` to resolve domain bindings from DB and map them to Caddy roots under `<dataDir>/websites/<website>/envs/<env>/current`.
+- Added `CaddyfilePath` config support in `internal/server/config.go` with env override `HTMLSERVD_CADDYFILE_PATH`.
+- Added comprehensive tests in:
+  - `internal/caddy/config_test.go`
+  - `internal/server/caddy_test.go`
+  - `internal/server/config_test.go`
 
 ## Code Review Findings
 
-(TBD by review agent.)
+`pi` review logs:
+- `docs/review-logs/E5-S2-review-pi-2026-02-17-182513.log` (final)
+
+Final review verdict: **Merge**.
+
+Notes from review:
+- No P0/P1 issues.
+- P2 observations: keep service permissions aligned with configured Caddyfile path and keep helper placement consistent with server package boundaries.
 
 ## Completion Status
 
-(TBD after merge.)
+Implemented, tested, and reviewed.

@@ -1,0 +1,34 @@
+==========================================
+E5-S2 PI Review Log
+==========================================
+Story: docs/stories/E5-S2-caddy-config-generation.md
+Agent: pi
+Timestamp: Tue Feb 17 18:25:13 CET 2026
+==========================================
+
+# Review Findings: E5-S2 (Generate Caddy Config Snippets)
+
+**Verdict:** MERGE
+
+The implementation is high quality and strictly follows the story requirements. All Acceptance Criteria are met with appropriate tests. The deviation from the draft plan (omitting a separate `template.go`) is justified by the simplicity of the logic.
+
+## AC Coverage
+
+| ID | Description | Status | Evidence |
+|----|-------------|--------|----------|
+| AC-1 | Generate from Store | **PASS** | `internal/server/caddy.go` reads DB and calls generator. |
+| AC-2 | Site Block Format | **PASS** | `internal/caddy/config.go` generates `root * <path>` and `file_server`. |
+| AC-3 | Multi-Domain/Env | **PASS** | Iteration logic handles multiple sites pointing to respective env roots. |
+| AC-4 | Deterministic | **PASS** | `GenerateConfig` sorts sites by domain before writing. |
+| AC-5 | Atomic Write | **PASS** | `WriteConfig` uses `os.CreateTemp` and `os.Rename`. |
+| AC-6 | Empty/Minimal | **PASS** | Returns `# managed by htmlservd` comment when sites slice is empty. |
+| AC-7 | Configurable Path | **PASS** | Added `CaddyfilePath` to `internal/server/config.go`. |
+| AC-8 | Unit Tests | **PASS** | Comprehensive tests in `internal/caddy/config_test.go` and `internal/server/caddy_test.go`. |
+
+## Findings
+
+**None (P0/P1).**
+
+**P2 (Minor/Observation):**
+- **Unexported Helper:** `generateCaddyConfig` in `internal/server/caddy.go` is unexported. This assumes the future "Reload" logic (E5-S3) will reside within the `server` package. If E5-S3 is implemented elsewhere, this may need to be exported.
+- **Directory Permissions:** `WriteConfig` attempts `os.MkdirAll` for the config directory. Ensure the service runs with sufficient permissions if the target is `/etc/caddy`.

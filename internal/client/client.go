@@ -229,6 +229,74 @@ func (c *APIClient) Promote(ctx context.Context, website, fromEnv, toEnv string)
 	return out, nil
 }
 
+func (c *APIClient) CreateDomainBinding(ctx context.Context, domain, website, environment string) (DomainBinding, error) {
+	payload, err := json.Marshal(map[string]string{
+		"domain":      strings.TrimSpace(domain),
+		"website":     strings.TrimSpace(website),
+		"environment": strings.TrimSpace(environment),
+	})
+	if err != nil {
+		return DomainBinding{}, fmt.Errorf("marshal domain binding payload: %w", err)
+	}
+	req, err := c.newRequest(ctx, http.MethodPost, "/api/v1/domains", bytes.NewReader(payload))
+	if err != nil {
+		return DomainBinding{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	var out DomainBinding
+	if err := c.do(req, &out); err != nil {
+		return DomainBinding{}, err
+	}
+	return out, nil
+}
+
+func (c *APIClient) ListDomainBindings(ctx context.Context, website, environment string) (DomainBindingsResponse, error) {
+	pathValue := "/api/v1/domains"
+	query := url.Values{}
+	if v := strings.TrimSpace(website); v != "" {
+		query.Set("website", v)
+	}
+	if v := strings.TrimSpace(environment); v != "" {
+		query.Set("environment", v)
+	}
+	if encoded := query.Encode(); encoded != "" {
+		pathValue += "?" + encoded
+	}
+	req, err := c.newRequest(ctx, http.MethodGet, pathValue, nil)
+	if err != nil {
+		return DomainBindingsResponse{}, err
+	}
+
+	var out DomainBindingsResponse
+	if err := c.do(req, &out); err != nil {
+		return DomainBindingsResponse{}, err
+	}
+	return out, nil
+}
+
+func (c *APIClient) GetDomainBinding(ctx context.Context, domain string) (DomainBinding, error) {
+	pathValue := "/api/v1/domains/" + url.PathEscape(strings.TrimSpace(domain))
+	req, err := c.newRequest(ctx, http.MethodGet, pathValue, nil)
+	if err != nil {
+		return DomainBinding{}, err
+	}
+	var out DomainBinding
+	if err := c.do(req, &out); err != nil {
+		return DomainBinding{}, err
+	}
+	return out, nil
+}
+
+func (c *APIClient) DeleteDomainBinding(ctx context.Context, domain string) error {
+	pathValue := "/api/v1/domains/" + url.PathEscape(strings.TrimSpace(domain))
+	req, err := c.newRequest(ctx, http.MethodDelete, pathValue, nil)
+	if err != nil {
+		return err
+	}
+	return c.do(req, nil)
+}
+
 func (c *APIClient) GetLogs(ctx context.Context, website, environment string, limit int) (LogsResponse, error) {
 	path := fmt.Sprintf(
 		"/api/v1/websites/%s/environments/%s/logs",

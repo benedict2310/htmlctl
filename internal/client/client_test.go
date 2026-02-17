@@ -360,6 +360,80 @@ func TestGetDesiredStateManifestBuildsExpectedRequest(t *testing.T) {
 	}
 }
 
+func TestDomainBindingClientMethods(t *testing.T) {
+	var gotCreateBody string
+	mock := &mockTransport{
+		doFn: func(ctx context.Context, req *http.Request) (*http.Response, error) {
+			switch req.Method {
+			case http.MethodPost:
+				if req.URL.Path != "/api/v1/domains" {
+					t.Fatalf("unexpected create path %s", req.URL.Path)
+				}
+				body, err := io.ReadAll(req.Body)
+				if err != nil {
+					t.Fatalf("read create body: %v", err)
+				}
+				gotCreateBody = string(body)
+				return jsonResponse(http.StatusCreated, `{"id":1,"domain":"futurelab.studio","website":"futurelab","environment":"staging","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}`), nil
+			case http.MethodGet:
+				if req.URL.Path == "/api/v1/domains" {
+					if req.URL.RawQuery != "website=futurelab" {
+						t.Fatalf("unexpected list query %q", req.URL.RawQuery)
+					}
+					return jsonResponse(http.StatusOK, `{"domains":[{"id":1,"domain":"futurelab.studio","website":"futurelab","environment":"staging","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}]}`), nil
+				}
+				if req.URL.Path == "/api/v1/domains/futurelab.studio" {
+					return jsonResponse(http.StatusOK, `{"id":1,"domain":"futurelab.studio","website":"futurelab","environment":"staging","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}`), nil
+				}
+				t.Fatalf("unexpected GET path %s", req.URL.Path)
+			case http.MethodDelete:
+				if req.URL.Path != "/api/v1/domains/futurelab.studio" {
+					t.Fatalf("unexpected delete path %s", req.URL.Path)
+				}
+				return &http.Response{
+					StatusCode: http.StatusNoContent,
+					Header:     http.Header{"Content-Type": []string{"application/json"}},
+					Body:       io.NopCloser(strings.NewReader("")),
+				}, nil
+			}
+			t.Fatalf("unexpected method %s", req.Method)
+			return nil, nil
+		},
+	}
+
+	api := New(mock)
+	created, err := api.CreateDomainBinding(context.Background(), "futurelab.studio", "futurelab", "staging")
+	if err != nil {
+		t.Fatalf("CreateDomainBinding() error = %v", err)
+	}
+	if !strings.Contains(gotCreateBody, `"domain":"futurelab.studio"`) || !strings.Contains(gotCreateBody, `"website":"futurelab"`) || !strings.Contains(gotCreateBody, `"environment":"staging"`) {
+		t.Fatalf("unexpected create payload %s", gotCreateBody)
+	}
+	if created.Domain != "futurelab.studio" {
+		t.Fatalf("unexpected created domain: %#v", created)
+	}
+
+	listed, err := api.ListDomainBindings(context.Background(), "futurelab", "")
+	if err != nil {
+		t.Fatalf("ListDomainBindings() error = %v", err)
+	}
+	if len(listed.Domains) != 1 {
+		t.Fatalf("expected one listed domain, got %#v", listed.Domains)
+	}
+
+	got, err := api.GetDomainBinding(context.Background(), "futurelab.studio")
+	if err != nil {
+		t.Fatalf("GetDomainBinding() error = %v", err)
+	}
+	if got.Domain != "futurelab.studio" {
+		t.Fatalf("unexpected get domain response: %#v", got)
+	}
+
+	if err := api.DeleteDomainBinding(context.Background(), "futurelab.studio"); err != nil {
+		t.Fatalf("DeleteDomainBinding() error = %v", err)
+	}
+}
+
 type mockTransport struct {
 	doFn func(ctx context.Context, req *http.Request) (*http.Response, error)
 }

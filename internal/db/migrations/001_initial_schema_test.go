@@ -30,6 +30,7 @@ func TestInitialSchemaCreatesAllCoreTables(t *testing.T) {
 		"assets",
 		"releases",
 		"audit_log",
+		"domain_bindings",
 	}
 
 	for _, table := range expectedTables {

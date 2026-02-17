@@ -302,3 +302,103 @@ func TestListLatestReleaseActors(t *testing.T) {
 		t.Fatalf("did not expect actor for missing release id")
 	}
 }
+
+func TestDomainBindingCRUD(t *testing.T) {
+	q, cleanup := setupDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	stagingID, err := q.InsertEnvironment(ctx, EnvironmentRow{WebsiteID: websiteID, Name: "staging"})
+	if err != nil {
+		t.Fatalf("InsertEnvironment(staging) error = %v", err)
+	}
+	if _, err := q.InsertEnvironment(ctx, EnvironmentRow{WebsiteID: websiteID, Name: "prod"}); err != nil {
+		t.Fatalf("InsertEnvironment(prod) error = %v", err)
+	}
+
+	if _, err := q.InsertDomainBinding(ctx, DomainBindingRow{
+		Domain:        "futurelab.studio",
+		EnvironmentID: stagingID,
+	}); err != nil {
+		t.Fatalf("InsertDomainBinding() error = %v", err)
+	}
+
+	got, err := q.GetDomainBindingByDomain(ctx, "futurelab.studio")
+	if err != nil {
+		t.Fatalf("GetDomainBindingByDomain() error = %v", err)
+	}
+	if got.Domain != "futurelab.studio" || got.WebsiteName != "futurelab" || got.EnvironmentName != "staging" {
+		t.Fatalf("unexpected domain binding: %#v", got)
+	}
+
+	all, err := q.ListDomainBindings(ctx, "", "")
+	if err != nil {
+		t.Fatalf("ListDomainBindings(all) error = %v", err)
+	}
+	if len(all) != 1 {
+		t.Fatalf("expected 1 domain binding, got %d", len(all))
+	}
+
+	websiteFiltered, err := q.ListDomainBindings(ctx, "futurelab", "")
+	if err != nil {
+		t.Fatalf("ListDomainBindings(website) error = %v", err)
+	}
+	if len(websiteFiltered) != 1 {
+		t.Fatalf("expected 1 website-filtered domain binding, got %d", len(websiteFiltered))
+	}
+
+	envFiltered, err := q.ListDomainBindings(ctx, "", "staging")
+	if err != nil {
+		t.Fatalf("ListDomainBindings(environment) error = %v", err)
+	}
+	if len(envFiltered) != 1 {
+		t.Fatalf("expected 1 env-filtered domain binding, got %d", len(envFiltered))
+	}
+
+	deleted, err := q.DeleteDomainBindingByDomain(ctx, "futurelab.studio")
+	if err != nil {
+		t.Fatalf("DeleteDomainBindingByDomain() error = %v", err)
+	}
+	if !deleted {
+		t.Fatalf("expected deleted=true")
+	}
+	deleted, err = q.DeleteDomainBindingByDomain(ctx, "futurelab.studio")
+	if err != nil {
+		t.Fatalf("DeleteDomainBindingByDomain(second) error = %v", err)
+	}
+	if deleted {
+		t.Fatalf("expected deleted=false for second delete")
+	}
+}
+
+func TestDomainBindingUniqueConstraint(t *testing.T) {
+	q, cleanup := setupDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	envID, err := q.InsertEnvironment(ctx, EnvironmentRow{WebsiteID: websiteID, Name: "staging"})
+	if err != nil {
+		t.Fatalf("InsertEnvironment() error = %v", err)
+	}
+
+	if _, err := q.InsertDomainBinding(ctx, DomainBindingRow{
+		Domain:        "futurelab.studio",
+		EnvironmentID: envID,
+	}); err != nil {
+		t.Fatalf("InsertDomainBinding(first) error = %v", err)
+	}
+	if _, err := q.InsertDomainBinding(ctx, DomainBindingRow{
+		Domain:        "futurelab.studio",
+		EnvironmentID: envID,
+	}); err == nil {
+		t.Fatalf("expected unique constraint error on duplicate domain")
+	}
+}

@@ -30,7 +30,7 @@ func TestRootCommandNoArgsPrintsUsage(t *testing.T) {
 	if !strings.Contains(help, "Usage:") {
 		t.Fatalf("expected usage output, got: %s", help)
 	}
-	for _, sub := range []string{"config", "render", "serve", "get", "status", "diff", "apply", "rollout", "promote", "logs", "version"} {
+	for _, sub := range []string{"config", "render", "serve", "get", "status", "diff", "apply", "rollout", "promote", "domain", "logs", "version"} {
 		if !strings.Contains(help, sub) {
 			t.Fatalf("expected help output to include %q", sub)
 		}

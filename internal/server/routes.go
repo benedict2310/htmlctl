@@ -8,6 +8,8 @@ import (
 func registerAPIRoutes(mux *http.ServeMux, srv *Server) {
 	mux.HandleFunc("/api/v1/websites", srv.handleWebsites)
 	mux.HandleFunc("/api/v1/websites/", srv.handleWebsiteAPI)
+	mux.HandleFunc("/api/v1/domains", srv.handleDomains)
+	mux.HandleFunc("/api/v1/domains/", srv.handleDomains)
 }
 
 func (s *Server) handleWebsiteAPI(w http.ResponseWriter, r *http.Request) {

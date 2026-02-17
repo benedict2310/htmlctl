@@ -33,4 +33,7 @@ func TestParsePathsAllowPercentInDecodedSegments(t *testing.T) {
 	if gotWebsite, ok := parsePromotePath("/api/v1/websites/" + website + "/promote"); !ok || gotWebsite != website {
 		t.Fatalf("parsePromotePath() = (%q, %v)", gotWebsite, ok)
 	}
+	if gotDomain, ok := parseDomainItemPath("/api/v1/domains/futurelab.studio"); !ok || gotDomain != "futurelab.studio" {
+		t.Fatalf("parseDomainItemPath() = (%q, %v)", gotDomain, ok)
+	}
 }

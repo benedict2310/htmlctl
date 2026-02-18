@@ -44,6 +44,21 @@ func TestGenerateConfigRejectsInvalidSite(t *testing.T) {
 	}
 }
 
+func TestGenerateConfigWithAutoHTTPSDisabled(t *testing.T) {
+	cfg, err := GenerateConfigWithOptions([]Site{
+		{Domain: "futurelab.studio", Root: "/srv/futurelab/prod/current"},
+	}, ConfigOptions{DisableAutoHTTPS: true})
+	if err != nil {
+		t.Fatalf("GenerateConfigWithOptions() error = %v", err)
+	}
+	if !strings.Contains(cfg, "auto_https off") {
+		t.Fatalf("expected auto_https off in config, got:\n%s", cfg)
+	}
+	if !strings.Contains(cfg, "http://futurelab.studio {") {
+		t.Fatalf("expected explicit http site address in config, got:\n%s", cfg)
+	}
+}
+
 func TestWriteConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "Caddyfile")
 	if err := WriteConfig(path, "futurelab.studio {\n\tfile_server\n}\n"); err != nil {

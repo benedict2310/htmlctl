@@ -13,7 +13,15 @@ type Site struct {
 	Root   string
 }
 
+type ConfigOptions struct {
+	DisableAutoHTTPS bool
+}
+
 func GenerateConfig(sites []Site) (string, error) {
+	return GenerateConfigWithOptions(sites, ConfigOptions{})
+}
+
+func GenerateConfigWithOptions(sites []Site, opts ConfigOptions) (string, error) {
 	ordered := append([]Site(nil), sites...)
 	sort.Slice(ordered, func(i, j int) bool {
 		return ordered[i].Domain < ordered[j].Domain
@@ -21,6 +29,11 @@ func GenerateConfig(sites []Site) (string, error) {
 
 	var b strings.Builder
 	b.WriteString("# managed by htmlservd\n")
+	if opts.DisableAutoHTTPS {
+		b.WriteString("{\n")
+		b.WriteString("\tauto_https off\n")
+		b.WriteString("}\n")
+	}
 	if len(ordered) == 0 {
 		return b.String(), nil
 	}
@@ -34,7 +47,11 @@ func GenerateConfig(sites []Site) (string, error) {
 		if root == "" {
 			return "", fmt.Errorf("site root is required for domain %q", domain)
 		}
-		fmt.Fprintf(&b, "%s {\n", domain)
+		siteAddress := domain
+		if opts.DisableAutoHTTPS {
+			siteAddress = "http://" + domain
+		}
+		fmt.Fprintf(&b, "%s {\n", siteAddress)
 		fmt.Fprintf(&b, "\troot * %s\n", root)
 		b.WriteString("\tfile_server\n")
 		b.WriteString("}\n\n")

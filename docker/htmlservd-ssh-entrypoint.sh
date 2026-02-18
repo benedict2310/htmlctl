@@ -17,14 +17,37 @@ if [[ ! -f /etc/ssh/ssh_host_ed25519_key ]]; then
 fi
 
 CADDYFILE_PATH="${HTMLSERVD_CADDYFILE_PATH:-/etc/caddy/Caddyfile}"
+CADDY_BOOTSTRAP_MODE="${HTMLSERVD_CADDY_BOOTSTRAP_MODE:-preview}"
+CADDY_BOOTSTRAP_LISTEN="${HTMLSERVD_CADDY_BOOTSTRAP_LISTEN:-:80}"
+PREVIEW_WEBSITE="${HTMLSERVD_PREVIEW_WEBSITE:-futurelab}"
+PREVIEW_ENV="${HTMLSERVD_PREVIEW_ENV:-staging}"
+PREVIEW_ROOT_DEFAULT="${HTMLSERVD_DATA_DIR:-/var/lib/htmlservd}/websites/${PREVIEW_WEBSITE}/envs/${PREVIEW_ENV}/current"
+PREVIEW_ROOT="${HTMLSERVD_PREVIEW_ROOT:-${PREVIEW_ROOT_DEFAULT}}"
 mkdir -p "$(dirname "${CADDYFILE_PATH}")"
 if [[ ! -f "${CADDYFILE_PATH}" ]]; then
-	cat > "${CADDYFILE_PATH}" <<'EOF'
-# bootstrap caddy config for first startup
-:18080 {
+	case "${CADDY_BOOTSTRAP_MODE,,}" in
+	preview)
+		cat > "${CADDYFILE_PATH}" <<EOF
+# bootstrap caddy config for first startup (preview mode)
+${CADDY_BOOTSTRAP_LISTEN} {
+	root * ${PREVIEW_ROOT}
+	file_server
+}
+EOF
+		;;
+	bootstrap)
+		cat > "${CADDYFILE_PATH}" <<EOF
+# bootstrap caddy config for first startup (bootstrap mode)
+${CADDY_BOOTSTRAP_LISTEN} {
 	respond "htmlservd caddy bootstrap"
 }
 EOF
+		;;
+	*)
+		echo "unsupported HTMLSERVD_CADDY_BOOTSTRAP_MODE: ${CADDY_BOOTSTRAP_MODE} (expected preview|bootstrap)" >&2
+		exit 1
+		;;
+	esac
 	# Fix ownership so htmlservd can overwrite it
 	chown htmlservd:htmlservd "${CADDYFILE_PATH}"
 fi

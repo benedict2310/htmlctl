@@ -1,0 +1,104 @@
+name: Docker E2E
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  docker-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker Images
+        run: |
+          docker build --target htmlservd-ssh -t htmlservd-ssh:ci .
+          docker build --target htmlctl -t htmlctl:ci .
+
+      - name: Run End-to-End Smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          STATE_DIR="$PWD/.tmp/ci-e2e"
+          mkdir -p "$STATE_DIR"/{data,caddy}
+
+          ssh-keygen -t ed25519 -N '' -f "$STATE_DIR/id_ed25519" >/dev/null
+
+          docker network create htmlctl-net >/dev/null 2>&1 || true
+          docker rm -f htmlservd-first-deploy >/dev/null 2>&1 || true
+
+          cleanup() {
+            docker rm -f htmlservd-first-deploy >/dev/null 2>&1 || true
+            docker network rm htmlctl-net >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run -d \
+            --name htmlservd-first-deploy \
+            --network htmlctl-net \
+            -p 23222:22 \
+            -p 19420:9400 \
+            -p 18080:80 \
+            -e SSH_PUBLIC_KEY="$(cat "$STATE_DIR/id_ed25519.pub")" \
+            -e HTMLSERVD_CADDY_BOOTSTRAP_MODE=preview \
+            -e HTMLSERVD_PREVIEW_WEBSITE=futurelab \
+            -e HTMLSERVD_PREVIEW_ENV=staging \
+            -e HTMLSERVD_CADDY_AUTO_HTTPS=false \
+            -v "$STATE_DIR/data:/var/lib/htmlservd" \
+            -v "$STATE_DIR/caddy:/etc/caddy" \
+            htmlservd-ssh:ci >/dev/null
+
+          for i in $(seq 1 40); do
+            if curl -sf http://127.0.0.1:19420/healthz >/dev/null; then
+              break
+            fi
+            sleep 1
+            if [[ "$i" -eq 40 ]]; then
+              echo "health check failed" >&2
+              exit 1
+            fi
+          done
+
+          docker run --rm --network htmlctl-net -v "$STATE_DIR:/work" alpine:3.20 sh -lc '
+            apk add --no-cache openssh-client >/dev/null
+            ssh-keyscan -p 22 -H htmlservd-first-deploy > /work/known_hosts
+          '
+
+          cat > "$STATE_DIR/htmlctl-config.yaml" <<'YAML'
+          apiVersion: htmlctl.dev/v1
+          current-context: local-staging
+          contexts:
+            - name: local-staging
+              server: ssh://htmlservd@htmlservd-first-deploy:22
+              website: futurelab
+              environment: staging
+              port: 9400
+          YAML
+
+          docker run --rm \
+            --network htmlctl-net \
+            -e HTMLCTL_CONFIG=/work/.tmp/ci-e2e/htmlctl-config.yaml \
+            -e HTMLCTL_SSH_KNOWN_HOSTS_PATH=/home/htmlctl/.ssh/known_hosts \
+            -v "$PWD:/work" \
+            -v "$STATE_DIR/id_ed25519:/home/htmlctl/.ssh/id_ed25519:ro" \
+            -v "$STATE_DIR/known_hosts:/home/htmlctl/.ssh/known_hosts:ro" \
+            -w /work \
+            htmlctl:ci apply -f testdata/valid-site --context local-staging
+
+          curl -sf http://127.0.0.1:18080/ | grep -q "Futurelab"
+
+          docker run --rm \
+            --network htmlctl-net \
+            -e HTMLCTL_CONFIG=/work/.tmp/ci-e2e/htmlctl-config.yaml \
+            -e HTMLCTL_SSH_KNOWN_HOSTS_PATH=/home/htmlctl/.ssh/known_hosts \
+            -v "$PWD:/work" \
+            -v "$STATE_DIR/id_ed25519:/home/htmlctl/.ssh/id_ed25519:ro" \
+            -v "$STATE_DIR/known_hosts:/home/htmlctl/.ssh/known_hosts:ro" \
+            -w /work \
+            htmlctl:ci domain add futurelab.localtest.me --context local-staging
+
+          curl -sf -H "Host: futurelab.localtest.me" http://127.0.0.1:18080/ | grep -q "Futurelab"

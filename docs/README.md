@@ -18,6 +18,7 @@
 ## Operations Notes
 
 - `docs/operations/domain-hardening.md` - domain rollback metadata preservation and same-domain concurrency locking behavior.
+- `scripts/clean-dev-state.sh` - clean `.tmp` dev/runtime state safely when mixed ownership appears.
 
 ## Review Logs
 

@@ -28,6 +28,7 @@ type Config struct {
 	CaddyfilePath         string `yaml:"caddyfilePath"`
 	CaddyBinaryPath       string `yaml:"caddyBinaryPath"`
 	CaddyConfigBackupPath string `yaml:"caddyConfigBackupPath"`
+	CaddyAutoHTTPS        bool   `yaml:"caddyAutoHTTPS"`
 }
 
 func DefaultConfig() Config {
@@ -41,6 +42,7 @@ func DefaultConfig() Config {
 		CaddyfilePath:         DefaultCaddyfilePath,
 		CaddyBinaryPath:       DefaultCaddyBinary,
 		CaddyConfigBackupPath: "",
+		CaddyAutoHTTPS:        true,
 	}
 }
 
@@ -91,6 +93,13 @@ func LoadConfig(configPath string) (Config, error) {
 	}
 	if v := strings.TrimSpace(os.Getenv("HTMLSERVD_CADDY_CONFIG_BACKUP")); v != "" {
 		cfg.CaddyConfigBackupPath = v
+	}
+	if v := strings.TrimSpace(os.Getenv("HTMLSERVD_CADDY_AUTO_HTTPS")); v != "" {
+		parsed, err := strconv.ParseBool(v)
+		if err != nil {
+			return cfg, fmt.Errorf("parse HTMLSERVD_CADDY_AUTO_HTTPS=%q: %w", v, err)
+		}
+		cfg.CaddyAutoHTTPS = parsed
 	}
 
 	if err := cfg.Validate(); err != nil {

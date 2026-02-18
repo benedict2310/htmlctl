@@ -21,6 +21,9 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.CaddyfilePath != DefaultCaddyfilePath || cfg.CaddyBinaryPath != DefaultCaddyBinary {
 		t.Fatalf("unexpected caddy defaults: %#v", cfg)
 	}
+	if !cfg.CaddyAutoHTTPS {
+		t.Fatalf("expected CaddyAutoHTTPS default true")
+	}
 }
 
 func TestLoadConfigFromFile(t *testing.T) {
@@ -55,12 +58,13 @@ func TestLoadConfigEnvOverridesFile(t *testing.T) {
 	t.Setenv("HTMLSERVD_CADDYFILE_PATH", "/tmp/caddy/Caddyfile")
 	t.Setenv("HTMLSERVD_CADDY_BINARY", "/usr/local/bin/caddy")
 	t.Setenv("HTMLSERVD_CADDY_CONFIG_BACKUP", "/tmp/caddy/Caddyfile.bak")
+	t.Setenv("HTMLSERVD_CADDY_AUTO_HTTPS", "false")
 
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	if cfg.BindAddr != "127.0.0.3" || cfg.Port != 9700 || cfg.DataDir != "/tmp/override" || cfg.LogLevel != "warn" || cfg.DBPath != "/tmp/override/db.sqlite" || cfg.DBWAL || cfg.CaddyfilePath != "/tmp/caddy/Caddyfile" || cfg.CaddyBinaryPath != "/usr/local/bin/caddy" || cfg.CaddyConfigBackupPath != "/tmp/caddy/Caddyfile.bak" {
+	if cfg.BindAddr != "127.0.0.3" || cfg.Port != 9700 || cfg.DataDir != "/tmp/override" || cfg.LogLevel != "warn" || cfg.DBPath != "/tmp/override/db.sqlite" || cfg.DBWAL || cfg.CaddyfilePath != "/tmp/caddy/Caddyfile" || cfg.CaddyBinaryPath != "/usr/local/bin/caddy" || cfg.CaddyConfigBackupPath != "/tmp/caddy/Caddyfile.bak" || cfg.CaddyAutoHTTPS {
 		t.Fatalf("unexpected overridden config: %#v", cfg)
 	}
 }
@@ -98,6 +102,17 @@ func TestLoadConfigInvalidEnvDBWAL(t *testing.T) {
 		t.Fatalf("expected db wal parse error")
 	}
 	if !strings.Contains(err.Error(), "HTMLSERVD_DB_WAL") {
+		t.Fatalf("expected env var mention in error, got %v", err)
+	}
+}
+
+func TestLoadConfigInvalidEnvCaddyAutoHTTPS(t *testing.T) {
+	t.Setenv("HTMLSERVD_CADDY_AUTO_HTTPS", "not-a-bool")
+	_, err := LoadConfig("")
+	if err == nil {
+		t.Fatalf("expected caddy auto https parse error")
+	}
+	if !strings.Contains(err.Error(), "HTMLSERVD_CADDY_AUTO_HTTPS") {
 		t.Fatalf("expected env var mention in error, got %v", err)
 	}
 }

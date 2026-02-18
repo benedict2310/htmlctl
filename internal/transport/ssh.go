@@ -30,6 +30,7 @@ type SSHConfig struct {
 	RemoteAddr     string
 	Timeout        time.Duration
 	KnownHostsPath string
+	PrivateKeyPath string
 	HostKeyCB      ssh.HostKeyCallback
 	AuthMethods    []ssh.AuthMethod
 }
@@ -135,7 +136,7 @@ func NewSSHTransport(ctx context.Context, cfg SSHConfig) (*SSHTransport, error) 
 
 	hostKeyCB := cfg.HostKeyCB
 	if hostKeyCB == nil {
-		hostKeyCB, err = knownHostsCallback(cfg.KnownHostsPath)
+		hostKeyCB, err = knownHostsCallback(resolveKnownHostsPath(cfg.KnownHostsPath))
 		if err != nil {
 			return nil, err
 		}
@@ -146,11 +147,16 @@ func NewSSHTransport(ctx context.Context, cfg SSHConfig) (*SSHTransport, error) 
 	if len(authMethods) == 0 {
 		authMethod, closer, err := authMethodFromSSHAgent()
 		if err != nil {
-			return nil, err
-		}
-		authMethods = []ssh.AuthMethod{authMethod}
-		if closer != nil {
-			closers = append(closers, closer)
+			authMethod, keyErr := authMethodFromPrivateKey(resolvePrivateKeyPath(cfg.PrivateKeyPath))
+			if keyErr != nil {
+				return nil, fmt.Errorf("%w: %v; private key fallback failed: %v", ErrSSHAgentUnavailable, err, keyErr)
+			}
+			authMethods = []ssh.AuthMethod{authMethod}
+		} else {
+			authMethods = []ssh.AuthMethod{authMethod}
+			if closer != nil {
+				closers = append(closers, closer)
+			}
 		}
 	}
 

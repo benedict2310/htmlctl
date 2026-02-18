@@ -46,6 +46,10 @@ See:
 - `docs/guides/first-deploy-docker.md` for first deployment walkthrough
 - `docs/reference/docker-images.md` for image/runtime details
 
+For local Docker dev-state cleanup:
+
+- `scripts/clean-dev-state.sh` (cleans `.tmp` safely, with Docker fallback for root-owned files)
+
 ## Quick Start (Local)
 
 Render and preview a site directory:

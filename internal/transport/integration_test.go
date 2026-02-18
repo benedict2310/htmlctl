@@ -4,6 +4,9 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -127,6 +130,44 @@ func TestSSHTransportAuthFailureClassification(t *testing.T) {
 	}
 	if !errors.Is(err, ErrSSHAuth) {
 		t.Fatalf("expected ErrSSHAuth, got %v", err)
+	}
+}
+
+func TestSSHTransportUsesPrivateKeyFallbackWhenAgentUnavailable(t *testing.T) {
+	t.Setenv("SSH_AUTH_SOCK", "")
+
+	backendAddr, shutdownBackend := startHTTPBackend(t)
+	defer shutdownBackend()
+
+	allowedSigner, privateKeyPath := newRSASignerWithPrivateKeyFile(t)
+	srv := startSSHServer(t, allowedSigner.PublicKey())
+	defer srv.Close()
+
+	knownHostsPath := writeKnownHostsFile(t, srv.addr, srv.hostSigner.PublicKey())
+	tr, err := NewSSHTransport(t.Context(), SSHConfig{
+		ServerURL:      fmt.Sprintf("ssh://tester@%s", srv.addr),
+		RemoteAddr:     backendAddr,
+		KnownHostsPath: knownHostsPath,
+		PrivateKeyPath: privateKeyPath,
+		Timeout:        3 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewSSHTransport() error = %v", err)
+	}
+	defer tr.Close()
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://placeholder/healthz", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	resp, err := tr.Do(t.Context(), req)
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || strings.TrimSpace(string(body)) != "ok:/healthz" {
+		t.Fatalf("unexpected fallback response status=%d body=%q", resp.StatusCode, string(body))
 	}
 }
 
@@ -293,6 +334,29 @@ func newSigner(t *testing.T) ssh.Signer {
 		t.Fatalf("new signer: %v", err)
 	}
 	return signer
+}
+
+func newRSASignerWithPrivateKeyFile(t *testing.T) (ssh.Signer, string) {
+	t.Helper()
+
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate rsa key: %v", err)
+	}
+	signer, err := ssh.NewSignerFromKey(privateKey)
+	if err != nil {
+		t.Fatalf("new signer from rsa key: %v", err)
+	}
+
+	block := &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+	}
+	path := filepath.Join(t.TempDir(), "id_rsa")
+	if err := os.WriteFile(path, pem.EncodeToMemory(block), 0o600); err != nil {
+		t.Fatalf("write private key: %v", err)
+	}
+	return signer, path
 }
 
 func writeKnownHostsFile(t *testing.T, addr string, hostKey ssh.PublicKey) string {

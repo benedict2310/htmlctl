@@ -30,5 +30,7 @@ func (s *Server) generateCaddyConfig(ctx context.Context) (string, error) {
 			Root:   filepath.ToSlash(root),
 		})
 	}
-	return caddy.GenerateConfig(sites)
+	return caddy.GenerateConfigWithOptions(sites, caddy.ConfigOptions{
+		DisableAutoHTTPS: !s.cfg.CaddyAutoHTTPS,
+	})
 }

@@ -21,9 +21,14 @@ CADDY_BOOTSTRAP_MODE="${HTMLSERVD_CADDY_BOOTSTRAP_MODE:-preview}"
 CADDY_BOOTSTRAP_LISTEN="${HTMLSERVD_CADDY_BOOTSTRAP_LISTEN:-:80}"
 PREVIEW_WEBSITE="${HTMLSERVD_PREVIEW_WEBSITE:-futurelab}"
 PREVIEW_ENV="${HTMLSERVD_PREVIEW_ENV:-staging}"
-PREVIEW_ROOT_DEFAULT="${HTMLSERVD_DATA_DIR:-/var/lib/htmlservd}/websites/${PREVIEW_WEBSITE}/envs/${PREVIEW_ENV}/current"
+DATA_DIR="${HTMLSERVD_DATA_DIR:-/var/lib/htmlservd}"
+PREVIEW_ROOT_DEFAULT="${DATA_DIR}/websites/${PREVIEW_WEBSITE}/envs/${PREVIEW_ENV}/current"
 PREVIEW_ROOT="${HTMLSERVD_PREVIEW_ROOT:-${PREVIEW_ROOT_DEFAULT}}"
-mkdir -p "$(dirname "${CADDYFILE_PATH}")"
+CADDY_DIR="$(dirname "${CADDYFILE_PATH}")"
+mkdir -p "${DATA_DIR}" "${CADDY_DIR}"
+# Normalize mounted directory permissions so the non-root daemon can write runtime state.
+chown -R htmlservd:htmlservd "${DATA_DIR}" "${CADDY_DIR}"
+chmod u+rwx "${DATA_DIR}" "${CADDY_DIR}"
 if [[ ! -f "${CADDYFILE_PATH}" ]]; then
 	case "${CADDY_BOOTSTRAP_MODE,,}" in
 	preview)
@@ -52,10 +57,10 @@ EOF
 	chown htmlservd:htmlservd "${CADDYFILE_PATH}"
 fi
 
-su -s /bin/sh -c "/usr/local/bin/caddy run --config ${CADDYFILE_PATH} --adapter caddyfile" htmlservd &
+su -m -s /bin/sh -c "/usr/local/bin/caddy run --config ${CADDYFILE_PATH} --adapter caddyfile" htmlservd &
 caddy_pid=$!
 
-su -s /bin/sh -c "/usr/local/bin/htmlservd" htmlservd &
+su -m -s /bin/sh -c "/usr/local/bin/htmlservd" htmlservd &
 htmlservd_pid=$!
 
 /usr/sbin/sshd -D -e &

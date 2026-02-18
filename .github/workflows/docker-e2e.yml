@@ -25,6 +25,7 @@ jobs:
 
           STATE_DIR="$PWD/.tmp/ci-e2e"
           mkdir -p "$STATE_DIR"/{data,caddy}
+          chmod 0777 "$STATE_DIR/data" "$STATE_DIR/caddy"
 
           ssh-keygen -t ed25519 -N '' -f "$STATE_DIR/id_ed25519" >/dev/null
 
@@ -59,6 +60,11 @@ jobs:
             sleep 1
             if [[ "$i" -eq 40 ]]; then
               echo "health check failed" >&2
+              echo "::group::docker diagnostics"
+              docker ps -a || true
+              docker inspect htmlservd-first-deploy || true
+              docker logs htmlservd-first-deploy || true
+              echo "::endgroup::"
               exit 1
             fi
           done

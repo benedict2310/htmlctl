@@ -124,16 +124,6 @@ docker build --target htmlservd-ssh -t htmlservd-ssh:local .
 - `docs/reference/docker-images.md` for image/runtime details
 - `docs/stories/` for epic/story implementation specs
 
-## Project Status
-
-Epics E1-E5 are implemented:
-
-- E1: parser, validator, render, local serve
-- E2: server daemon, desired-state/apply/release/audit
-- E3: SSH transport and remote CLI workflows
-- E4: release history, rollback, promotion
-- E5: domain bindings and Caddy integration
-
 ## Contributing
 
 Use story-driven workflows in `docs/stories/` and validate with repository scripts:

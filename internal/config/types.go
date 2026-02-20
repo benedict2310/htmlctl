@@ -24,6 +24,7 @@ type Context struct {
 	Website     string `yaml:"website"`
 	Environment string `yaml:"environment"`
 	Port        int    `yaml:"port,omitempty"`
+	Token       string `yaml:"token,omitempty"`
 }
 
 // ContextInfo is the resolved context used by command and transport layers.
@@ -33,6 +34,7 @@ type ContextInfo struct {
 	Website     string
 	Environment string
 	RemotePort  int
+	Token       string
 }
 
 func (c *Config) normalize() {

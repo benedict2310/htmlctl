@@ -36,6 +36,9 @@ func (s *Server) handleWebsiteAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 func actorFromRequest(r *http.Request) string {
+	if state, ok := authStateFromContext(r.Context()); !ok || !state.actorTrusted {
+		return "local"
+	}
 	actor := strings.TrimSpace(r.Header.Get("X-Actor"))
 	if actor == "" {
 		return "local"

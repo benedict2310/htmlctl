@@ -89,6 +89,7 @@ func NewRootCmd(version string) *cobra.Command {
 
 	cmd.PersistentFlags().StringVar(&opts.contextOverride, "context", "", "Context name from htmlctl config")
 
+	cmd.AddCommand(newContextCmd())
 	cmd.AddCommand(newConfigCmd())
 	cmd.AddCommand(newRenderCmd())
 	cmd.AddCommand(newServeCmd())

@@ -24,11 +24,14 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if !cfg.CaddyAutoHTTPS {
 		t.Fatalf("expected CaddyAutoHTTPS default true")
 	}
+	if cfg.APIToken != "" {
+		t.Fatalf("expected APIToken default empty, got %q", cfg.APIToken)
+	}
 }
 
 func TestLoadConfigFromFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	content := []byte("bind: 127.0.0.2\nport: 9500\ndataDir: /tmp/htmlservd-data\nlogLevel: debug\n")
+	content := []byte("bind: 127.0.0.2\nport: 9500\ndataDir: /tmp/htmlservd-data\nlogLevel: debug\napi:\n  token: token-from-file\n")
 	if err := os.WriteFile(path, content, 0o644); err != nil {
 		t.Fatalf("write config file: %v", err)
 	}
@@ -39,6 +42,25 @@ func TestLoadConfigFromFile(t *testing.T) {
 	}
 	if cfg.BindAddr != "127.0.0.2" || cfg.Port != 9500 || cfg.DataDir != "/tmp/htmlservd-data" || cfg.LogLevel != "debug" {
 		t.Fatalf("unexpected file config: %#v", cfg)
+	}
+	if cfg.APIToken != "token-from-file" {
+		t.Fatalf("expected APIToken from file, got %q", cfg.APIToken)
+	}
+}
+
+func TestLoadConfigConflictingTokenFieldsFails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	content := []byte("bind: 127.0.0.2\nport: 9500\ndataDir: /tmp/htmlservd-data\nlogLevel: debug\napiToken: top-level-token\napi:\n  token: nested-token\n")
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		t.Fatalf("write config file: %v", err)
+	}
+
+	_, err := LoadConfig(path)
+	if err == nil {
+		t.Fatalf("expected conflict error")
+	}
+	if !strings.Contains(err.Error(), "apiToken and api.token must match") {
+		t.Fatalf("expected conflict detail, got %v", err)
 	}
 }
 
@@ -59,6 +81,7 @@ func TestLoadConfigEnvOverridesFile(t *testing.T) {
 	t.Setenv("HTMLSERVD_CADDY_BINARY", "/usr/local/bin/caddy")
 	t.Setenv("HTMLSERVD_CADDY_CONFIG_BACKUP", "/tmp/caddy/Caddyfile.bak")
 	t.Setenv("HTMLSERVD_CADDY_AUTO_HTTPS", "false")
+	t.Setenv("HTMLSERVD_API_TOKEN", "override-token")
 
 	cfg, err := LoadConfig(path)
 	if err != nil {
@@ -66,6 +89,9 @@ func TestLoadConfigEnvOverridesFile(t *testing.T) {
 	}
 	if cfg.BindAddr != "127.0.0.3" || cfg.Port != 9700 || cfg.DataDir != "/tmp/override" || cfg.LogLevel != "warn" || cfg.DBPath != "/tmp/override/db.sqlite" || cfg.DBWAL || cfg.CaddyfilePath != "/tmp/caddy/Caddyfile" || cfg.CaddyBinaryPath != "/usr/local/bin/caddy" || cfg.CaddyConfigBackupPath != "/tmp/caddy/Caddyfile.bak" || cfg.CaddyAutoHTTPS {
 		t.Fatalf("unexpected overridden config: %#v", cfg)
+	}
+	if cfg.APIToken != "override-token" {
+		t.Fatalf("expected APIToken env override, got %q", cfg.APIToken)
 	}
 }
 

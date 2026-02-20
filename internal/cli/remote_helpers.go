@@ -17,7 +17,7 @@ func runtimeAndClientFromCommand(cmd *cobra.Command) (*commandRuntime, *client.A
 	if rt.Transport == nil {
 		return nil, nil, fmt.Errorf("internal: transport is not initialized")
 	}
-	return rt, client.New(rt.Transport), nil
+	return rt, client.NewWithAuth(rt.Transport, rt.ResolvedContext.Name, rt.ResolvedContext.Token), nil
 }
 
 func parseWebsiteRef(v string) (string, error) {

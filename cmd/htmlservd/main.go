@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/benedict2310/htmlctl/internal/server"
@@ -24,6 +25,7 @@ func run(args []string) error {
 	fs := flag.NewFlagSet("htmlservd", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	configPath := fs.String("config", "", "Path to config file")
+	requireAuth := fs.Bool("require-auth", false, "Fail startup when api.token is not configured")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -31,6 +33,9 @@ func run(args []string) error {
 	cfg, err := server.LoadConfig(*configPath)
 	if err != nil {
 		return err
+	}
+	if *requireAuth && strings.TrimSpace(cfg.APIToken) == "" {
+		return fmt.Errorf("api authentication required but no token is configured (set api.token or HTMLSERVD_API_TOKEN)")
 	}
 
 	logger, err := server.NewLogger(cfg.LogLevel)

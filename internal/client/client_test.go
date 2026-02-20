@@ -38,6 +38,24 @@ func TestListWebsitesBuildsExpectedRequest(t *testing.T) {
 	}
 }
 
+func TestNewWithAuthAddsAuthorizationAndActorHeaders(t *testing.T) {
+	mock := &mockTransport{
+		doFn: func(ctx context.Context, req *http.Request) (*http.Response, error) {
+			if got := req.Header.Get("Authorization"); got != "Bearer test-token" {
+				t.Fatalf("expected authorization header, got %q", got)
+			}
+			if got := req.Header.Get("X-Actor"); got != "staging" {
+				t.Fatalf("expected actor header from context, got %q", got)
+			}
+			return jsonResponse(http.StatusOK, `{"websites":[]}`), nil
+		},
+	}
+	api := NewWithAuth(mock, "staging", "test-token")
+	if _, err := api.ListWebsites(context.Background()); err != nil {
+		t.Fatalf("ListWebsites() error = %v", err)
+	}
+}
+
 func TestApplyBundleSetsContentTypeAndDryRunQuery(t *testing.T) {
 	var body []byte
 	mock := &mockTransport{

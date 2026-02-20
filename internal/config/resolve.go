@@ -26,6 +26,7 @@ func ResolveContext(cfg Config, explicitName string) (ContextInfo, error) {
 			Website:     strings.TrimSpace(ctx.Website),
 			Environment: strings.TrimSpace(ctx.Environment),
 			RemotePort:  ctx.Port,
+			Token:       strings.TrimSpace(ctx.Token),
 		}, nil
 	}
 

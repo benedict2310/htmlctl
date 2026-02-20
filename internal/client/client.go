@@ -22,17 +22,27 @@ type APIClient struct {
 	transport transport.Transport
 	baseURL   string
 	actor     string
+	token     string
 }
 
 func New(tr transport.Transport) *APIClient {
-	actor := strings.TrimSpace(os.Getenv("USER"))
+	return NewWithAuth(tr, "", "")
+}
+
+func NewWithAuth(tr transport.Transport, actor, token string) *APIClient {
+	actor = strings.TrimSpace(actor)
+	token = strings.TrimSpace(token)
 	if actor == "" {
-		actor = "htmlctl"
+		actor = strings.TrimSpace(os.Getenv("USER"))
+		if actor == "" {
+			actor = "htmlctl"
+		}
 	}
 	return &APIClient{
 		transport: tr,
 		baseURL:   defaultBaseURL,
 		actor:     actor,
+		token:     token,
 	}
 }
 
@@ -324,6 +334,9 @@ func (c *APIClient) newRequest(ctx context.Context, method, path string, body io
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-Actor", c.actor)
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
 	return req, nil
 }
 
@@ -371,6 +384,8 @@ func mapAPIError(resp *http.Response) error {
 	switch resp.StatusCode {
 	case http.StatusBadRequest:
 		return fmt.Errorf("invalid request: %s", msg)
+	case http.StatusUnauthorized:
+		return fmt.Errorf("unauthorized: %s (configure context token or check server api token)", msg)
 	case http.StatusNotFound:
 		return fmt.Errorf("resource not found: %s (check website/environment and --context)", msg)
 	case http.StatusConflict:

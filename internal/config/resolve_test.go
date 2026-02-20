@@ -21,6 +21,7 @@ func TestResolveContextWithExplicitOverride(t *testing.T) {
 				Website:     "futurelab",
 				Environment: "prod",
 				Port:        8420,
+				Token:       "prod-token",
 			},
 		},
 	}
@@ -34,6 +35,9 @@ func TestResolveContextWithExplicitOverride(t *testing.T) {
 	}
 	if ctx.RemotePort != 8420 {
 		t.Fatalf("expected resolved remote port 8420, got %d", ctx.RemotePort)
+	}
+	if ctx.Token != "prod-token" {
+		t.Fatalf("expected resolved token, got %q", ctx.Token)
 	}
 }
 

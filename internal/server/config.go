@@ -19,16 +19,22 @@ const (
 )
 
 type Config struct {
-	BindAddr              string `yaml:"bind"`
-	Port                  int    `yaml:"port"`
-	DataDir               string `yaml:"dataDir"`
-	LogLevel              string `yaml:"logLevel"`
-	DBPath                string `yaml:"dbPath"`
-	DBWAL                 bool   `yaml:"dbWAL"`
-	CaddyfilePath         string `yaml:"caddyfilePath"`
-	CaddyBinaryPath       string `yaml:"caddyBinaryPath"`
-	CaddyConfigBackupPath string `yaml:"caddyConfigBackupPath"`
-	CaddyAutoHTTPS        bool   `yaml:"caddyAutoHTTPS"`
+	BindAddr              string    `yaml:"bind"`
+	Port                  int       `yaml:"port"`
+	DataDir               string    `yaml:"dataDir"`
+	LogLevel              string    `yaml:"logLevel"`
+	DBPath                string    `yaml:"dbPath"`
+	DBWAL                 bool      `yaml:"dbWAL"`
+	CaddyfilePath         string    `yaml:"caddyfilePath"`
+	CaddyBinaryPath       string    `yaml:"caddyBinaryPath"`
+	CaddyConfigBackupPath string    `yaml:"caddyConfigBackupPath"`
+	CaddyAutoHTTPS        bool      `yaml:"caddyAutoHTTPS"`
+	APIToken              string    `yaml:"apiToken,omitempty"`
+	API                   APIConfig `yaml:"api,omitempty"`
+}
+
+type APIConfig struct {
+	Token string `yaml:"token,omitempty"`
 }
 
 func DefaultConfig() Config {
@@ -43,6 +49,8 @@ func DefaultConfig() Config {
 		CaddyBinaryPath:       DefaultCaddyBinary,
 		CaddyConfigBackupPath: "",
 		CaddyAutoHTTPS:        true,
+		APIToken:              "",
+		API:                   APIConfig{},
 	}
 }
 
@@ -57,6 +65,14 @@ func LoadConfig(configPath string) (Config, error) {
 		if err := yaml.Unmarshal(b, &cfg); err != nil {
 			return cfg, fmt.Errorf("parse config file %s: %w", configPath, err)
 		}
+	}
+	cfg.APIToken = strings.TrimSpace(cfg.APIToken)
+	cfg.API.Token = strings.TrimSpace(cfg.API.Token)
+	if cfg.APIToken == "" {
+		cfg.APIToken = cfg.API.Token
+	}
+	if cfg.API.Token == "" {
+		cfg.API.Token = cfg.APIToken
 	}
 
 	if v := strings.TrimSpace(os.Getenv("HTMLSERVD_BIND")); v != "" {
@@ -101,6 +117,10 @@ func LoadConfig(configPath string) (Config, error) {
 		}
 		cfg.CaddyAutoHTTPS = parsed
 	}
+	if v := strings.TrimSpace(os.Getenv("HTMLSERVD_API_TOKEN")); v != "" {
+		cfg.APIToken = v
+		cfg.API.Token = v
+	}
 
 	if err := cfg.Validate(); err != nil {
 		return cfg, err
@@ -121,6 +141,10 @@ func (c Config) Validate() error {
 	}
 	if _, err := parseLogLevel(c.LogLevel); err != nil {
 		return err
+	}
+	if strings.TrimSpace(c.APIToken) != "" && strings.TrimSpace(c.API.Token) != "" &&
+		strings.TrimSpace(c.APIToken) != strings.TrimSpace(c.API.Token) {
+		return fmt.Errorf("apiToken and api.token must match when both are set")
 	}
 	return nil
 }

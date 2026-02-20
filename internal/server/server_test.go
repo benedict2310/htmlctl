@@ -49,6 +49,22 @@ func TestServerHealthAndVersion(t *testing.T) {
 		t.Fatalf("unexpected /healthz payload: %#v", health)
 	}
 
+	readyResp, err := http.Get(base + "/readyz")
+	if err != nil {
+		t.Fatalf("GET /readyz error = %v", err)
+	}
+	defer readyResp.Body.Close()
+	if readyResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 for /readyz, got %d", readyResp.StatusCode)
+	}
+	var ready map[string]string
+	if err := json.NewDecoder(readyResp.Body).Decode(&ready); err != nil {
+		t.Fatalf("decode /readyz response: %v", err)
+	}
+	if ready["status"] != "ok" {
+		t.Fatalf("unexpected /readyz payload: %#v", ready)
+	}
+
 	versionResp, err := http.Get(base + "/version")
 	if err != nil {
 		t.Fatalf("GET /version error = %v", err)

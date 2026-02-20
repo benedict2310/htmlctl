@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -60,5 +61,15 @@ func TestRunPortInUseFailure(t *testing.T) {
 	err = run([]string{"--config", cfgPath})
 	if err == nil {
 		t.Fatalf("expected run failure due to occupied port")
+	}
+}
+
+func TestRunRequireAuthWithoutTokenFails(t *testing.T) {
+	err := run([]string{"--require-auth"})
+	if err == nil {
+		t.Fatalf("expected require-auth failure without token")
+	}
+	if got := err.Error(); got == "" || !strings.Contains(got, "api authentication required") {
+		t.Fatalf("unexpected require-auth error: %v", err)
 	}
 }

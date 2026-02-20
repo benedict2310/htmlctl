@@ -57,7 +57,9 @@ func New(cfg Config, logger *slog.Logger, version string) (*Server, error) {
 
 	mux := http.NewServeMux()
 	registerHealthRoutes(mux, version)
-	registerAPIRoutes(mux, srv)
+	apiMux := http.NewServeMux()
+	registerAPIRoutes(apiMux, srv)
+	mux.Handle("/api/v1/", authMiddleware(cfg.APIToken, logger)(apiMux))
 	srv.httpServer = &http.Server{
 		Addr:         cfg.ListenAddr(),
 		Handler:      mux,
@@ -131,6 +133,10 @@ func (s *Server) Start() error {
 
 	if !isLoopbackHost(s.cfg.BindAddr) {
 		s.logger.Warn("binding to non-loopback address", "bind", s.cfg.BindAddr)
+	}
+	if strings.TrimSpace(s.cfg.APIToken) == "" {
+		s.logger.Warn("API authentication is disabled because no token is configured",
+			"hint", "set api.token in config or HTMLSERVD_API_TOKEN")
 	}
 
 	s.logger.Info("htmlservd starting",

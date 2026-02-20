@@ -81,6 +81,53 @@ func runCommandWithTransport(t *testing.T, args []string, tr *scriptedTransport)
 	return out.String(), errOut.String(), err
 }
 
+func TestRemoteCommandsSendContextTokenAsBearerHeader(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	content := `apiVersion: htmlctl.dev/v1
+current-context: staging
+contexts:
+  - name: staging
+    server: ssh://root@staging.example.com
+    website: futurelab
+    environment: staging
+    token: test-context-token
+`
+	if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv(config.EnvConfigPath, configPath)
+
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			if call != 0 {
+				t.Fatalf("unexpected call %d", call)
+			}
+			if got := req.Headers.Get("Authorization"); got != "Bearer test-context-token" {
+				t.Fatalf("expected bearer token header, got %q", got)
+			}
+			return jsonHTTPResponse(http.StatusOK, `{"websites":[]}`), nil
+		},
+	}
+
+	prevFactory := buildTransportForContext
+	buildTransportForContext = func(ctx context.Context, info config.ContextInfo, cfg transport.SSHConfig) (transport.Transport, error) {
+		return tr, nil
+	}
+	t.Cleanup(func() {
+		buildTransportForContext = prevFactory
+	})
+
+	cmd := NewRootCmd("test")
+	out := &bytes.Buffer{}
+	errOut := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(errOut)
+	cmd.SetArgs([]string{"get", "websites"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+}
+
 func jsonHTTPResponse(status int, body string) *http.Response {
 	return &http.Response{
 		StatusCode: status,

@@ -37,7 +37,7 @@ As an operator or AI agent, I want to configure named contexts (e.g., "staging",
 
 - XDG config path resolution (use `~/.htmlctl/` only in v1; XDG can be added later)
 - `htmlctl config set-context` interactive editing (users edit YAML directly in v1)
-- Token-based auth fields in context (post-v1)
+- Token-based auth fields in context (delivered later in E6-S1)
 - Config file locking for concurrent writes
 - Config file creation wizard / init command
 

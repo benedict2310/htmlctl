@@ -47,7 +47,7 @@ As an operator using `htmlctl apply`, I want the server to accept my bundle of r
 - Client-side bundle creation (handled by `htmlctl` CLI, Epic 3)
 - Component HTML validation (E1-S3, referenced but not implemented here)
 - Audit log writing (E2-S5; this story prepares the hook but does not implement the audit subsystem)
-- Authentication / authorization (post-v1)
+- Authentication / authorization at endpoint level (delivered in E6-S1)
 - Bundle compression (gzip/zstd; accept uncompressed tar in v1)
 
 ## 4. Architecture Alignment
@@ -57,7 +57,7 @@ As an operator using `htmlctl apply`, I want the server to accept my bundle of r
 - **Validation (Tech Spec Section 6):** Bundle validation requires verifying hashes from the client bundle manifest. This story implements hash verification. Component/page/asset validation rules are applied here if the validation engine is available.
 - **Agent-friendly partial apply (Tech Spec Section 9.3):** The server merges partial applies into the last known desired state. The manifest includes a `mode` field to distinguish full vs. partial.
 - **Concurrency:** Apply operations for the same website must be serialized because desired-state resources are website-scoped in v1. Use a per-website mutex to prevent concurrent applies from corrupting shared state.
-- **Security model (Tech Spec Section 7):** Endpoint is only accessible on localhost. No auth in v1.
+- **Security model (Tech Spec Section 7):** Endpoint is localhost-bound by default and, as of E6-S1, protected by bearer-token middleware when API auth is configured.
 
 ## 5. Implementation Plan (Draft)
 

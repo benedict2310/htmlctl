@@ -72,3 +72,21 @@
 | 5.4 | `htmlctl domain add/verify` | [E5-S4](stories/E5-S4-domain-cli-commands.md) |
 
 **Done when:** `futurelab.studio` serves prod over HTTPS and `staging.futurelab.studio` serves staging.
+
+---
+
+## Epic 6 — Security Hardening
+
+**Goal:** close all HIGH and MEDIUM findings from the 2026-02-20 security audit.
+
+| # | Story | File |
+|---|-------|------|
+| 6.1 | API authentication layer (Implemented) | [E6-S1](stories/E6-S1-api-authentication.md) |
+| 6.2 | Input name validation (path traversal + Caddyfile injection) | [E6-S2](stories/E6-S2-input-name-validation.md) |
+| 6.3 | HTML XSS hardening (renderer + component validator) | [E6-S3](stories/E6-S3-html-xss-hardening.md) |
+| 6.4 | SSH transport hardening | [E6-S4](stories/E6-S4-ssh-transport-hardening.md) |
+| 6.5 | Container & entrypoint security hardening | [E6-S5](stories/E6-S5-container-security-hardening.md) |
+| 6.6 | SQL query helper hardening | [E6-S6](stories/E6-S6-sql-query-hardening.md) |
+| 6.7 | API error response sanitization | [E6-S7](stories/E6-S7-api-error-sanitization.md) |
+
+**Done when:** all 16 audit findings (Vulns 1–16) are remediated and verified.

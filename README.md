@@ -28,6 +28,7 @@ Static websites are simple to build but often painful to operate at scale:
 - Immutable release history with atomic `current` pointer switches.
 - Fast rollback (`rollout undo`) and promotion (`promote`) using artifact hash parity.
 - SSH-tunneled remote control plane with context-aware CLI commands.
+- Bearer-token API authentication for all `/api/v1/*` operations.
 - Built-in domain lifecycle commands with Caddy config/reload integration.
 
 ## Key Features
@@ -60,6 +61,14 @@ contexts:
     website: futurelab
     environment: staging
     port: 9400
+    token: YOUR_API_TOKEN
+```
+
+Generate a token and set it on the context:
+
+```bash
+htmlctl context token generate
+htmlctl context set staging --token YOUR_API_TOKEN
 ```
 
 Deploy and inspect:
@@ -105,6 +114,7 @@ docker build --target htmlservd-ssh -t htmlservd-ssh:local .
 
 - `apply`
 - `config`
+- `context`
 - `diff`
 - `domain`
 - `get`

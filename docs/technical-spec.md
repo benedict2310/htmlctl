@@ -195,9 +195,12 @@ For any environment apply:
 
 - `htmlservd` binds to **127.0.0.1 only** by default.
 - Remote access is via **SSH tunnel** (recommended) or reverse-proxy private network.
-- Authentication options for v1:
-  - simplest: rely on SSH access + local API
-  - optional: token-based auth for non-SSH deployments (post-v1)
+- API authentication in v1:
+  - all `/api/v1/*` routes require `Authorization: Bearer <token>` when `api.token` (or `HTMLSERVD_API_TOKEN`) is configured.
+  - health routes (`/healthz`, `/readyz`) remain unauthenticated.
+  - if no API token is configured, the server starts with a prominent warning for rollout safety.
+  - operators can enforce token configuration at startup via `htmlservd --require-auth`.
+- token comparison uses constant-time checks (`crypto/subtle`).
 
 Audit log records:
 
@@ -222,17 +225,25 @@ Audit log records:
 `~/.htmlctl/config.yaml`:
 
 ```yaml
+apiVersion: htmlctl.dev/v1
 current-context: staging
 contexts:
   - name: staging
     server: ssh://root@yourserver
     website: futurelab
     environment: staging
+    token: "<shared-api-token>"
   - name: prod
     server: ssh://root@yourserver
     website: futurelab
     environment: prod
+    token: "<shared-api-token>"
 ```
+
+Token utilities:
+
+- `htmlctl context token generate` (prints a random 32-byte hex token)
+- `htmlctl context set <name> --token <token>`
 
 ### 9.2 Core commands
 

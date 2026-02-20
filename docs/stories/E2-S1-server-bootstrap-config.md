@@ -39,7 +39,7 @@ As a self-hosted operator, I want `htmlservd` to start reliably from a config fi
 - SQLite schema creation (E2-S2)
 - API routes beyond `/healthz` and `/version` (later stories)
 - TLS termination (handled by Caddy front proxy, Epic 5)
-- Authentication / token-based auth (post-v1)
+- Authentication / token-based auth (delivered later in E6-S1)
 - systemd unit file creation (separate deliverable)
 - Remote access / SSH tunnel setup (Epic 3)
 

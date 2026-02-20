@@ -57,7 +57,7 @@ As an operator, I want every state-changing operation recorded in a structured a
 - **CLI design (Tech Spec Section 9.2):** `htmlctl logs` retrieves audit entries. This story provides the server-side API that the CLI will call.
 - **Database schema (E2-S2):** The `audit_log` table is already defined in E2-S2. This story implements the Go service that writes to and reads from that table.
 - **Concurrency:** Audit log writes are append-only and do not require the per-environment build lock. They can be written within the same database transaction as the operation they record, or immediately after.
-- **Security model:** Audit entries are immutable once written. The API provides read-only access. In v1, no authorization is enforced on the logs endpoint (localhost-only access).
+- **Security model:** Audit entries are immutable once written. The API provides read-only access. As of E6-S1, API endpoints are protected by bearer-token middleware when `api.token` is configured.
 
 ## 5. Implementation Plan (Draft)
 
@@ -135,7 +135,7 @@ As an operator, I want every state-changing operation recorded in a structured a
 
 - **Risk:** Audit log table grows unbounded — **Mitigation:** Acceptable for v1 (metadata-only rows are small, ~500 bytes each). Add pruning/archival in a future story.
 - **Risk:** Audit write failure silently drops entries — **Mitigation:** Log audit write failures to the operational log (`slog.Error`). Do not fail the primary operation. Consider a retry mechanism in the future.
-- **Risk:** Actor identity is unreliable in v1 (no auth) — **Mitigation:** Default actor to `"local"`. Accept an optional `X-Actor` header for SSH tunnel scenarios where the proxy can inject identity. Document this limitation.
+- **Risk:** Actor identity could be spoofed if caller identity is trusted before authentication — **Mitigation:** As of E6-S1, `X-Actor` is only trusted after auth middleware validates the request; unauthenticated requests cannot write audit entries.
 - **Risk:** Clock skew causes out-of-order timestamps — **Mitigation:** Use server-local time consistently. ULIDs on releases already provide ordering; audit timestamps are supplementary.
 
 ## 10. Open Questions
@@ -143,7 +143,7 @@ As an operator, I want every state-changing operation recorded in a structured a
 - Should audit entries be written within the same database transaction as the operation, or in a separate transaction? Recommendation: same transaction when possible (ensures consistency); separate transaction for release activation (which involves symlink operations outside the DB).
 - Should the `resource_summary` be a structured JSON object or a human-readable string? Recommendation: human-readable string for v1 (easier to display in CLI); `metadata_json` carries structured data for programmatic access.
 - Should there be a `GET /api/v1/audit` endpoint for global (all-website) audit queries? Recommendation: not in v1; per-website is sufficient.
-- How should actor identity work with SSH tunnels? Recommendation: the SSH proxy (or CLI) sets an `X-Actor` header. The server trusts this header since the API is localhost-only.
+- How should actor identity work with SSH tunnels? Recommendation: the CLI sets `X-Actor`; the server only trusts it after API auth middleware validates the bearer token.
 
 ## 11. Research Notes
 
@@ -196,7 +196,7 @@ As an operator, I want every state-changing operation recorded in a structured a
 - Integrated audit writes into state-changing APIs:
   - `internal/server/apply.go` writes `apply` audit entries (non-dry-run) with actor, resource summary, and metadata.
   - `internal/server/release.go` writes `release.build` and `release.activate` entries with release IDs.
-  - Actor is sourced from `X-Actor` (default: `local`).
+  - Actor is sourced from `X-Actor` (default: `local`), and is only trusted after authentication middleware passes (E6-S1).
 - Added log retrieval APIs in `internal/server/logs.go`:
   - `GET /api/v1/websites/{website}/environments/{env}/logs`
   - `GET /api/v1/websites/{website}/logs`

@@ -27,6 +27,7 @@ docker build --target htmlservd-ssh -t htmlservd-ssh:local .
 - `HTMLSERVD_PREVIEW_ENV=staging`
 - `HTMLSERVD_PREVIEW_ROOT` (optional explicit override)
 - `HTMLSERVD_CADDY_AUTO_HTTPS=true` (set `false` for local plain-HTTP workflows)
+- `HTMLSERVD_API_TOKEN` (recommended; protects `/api/v1/*` with bearer auth)
 
 When `HTMLSERVD_CADDY_AUTO_HTTPS=false`, generated domain config uses explicit `http://<domain>` site addresses to avoid local ACME/TLS failures.
 
@@ -39,6 +40,12 @@ Exposed ports:
 
 - `9400` (`htmlservd` API)
 - `80/443` (Caddy)
+
+Auth behavior:
+
+- `/api/v1/*` requires `Authorization: Bearer <token>` when `HTMLSERVD_API_TOKEN` (or config `api.token`) is set.
+- `/healthz`, `/readyz`, `/version` remain unauthenticated.
+- `htmlservd --require-auth` forces startup failure if no API token is configured.
 
 ## Runtime Defaults (`htmlctl`)
 

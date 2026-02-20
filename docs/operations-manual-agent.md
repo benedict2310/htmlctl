@@ -1,12 +1,13 @@
 # htmlctl Operations Manual (Agent)
 
-This document is the operational source of truth for `htmlctl` + `htmlservd` based on Epics E1-E5 (`docs/stories/`).
+This document is the operational source of truth for `htmlctl` + `htmlservd` based on Epics E1-E6 (implemented through E6-S1 API auth) (`docs/stories/`).
 
 Status model:
 - Parser/renderer/validator/local serve: implemented.
 - Remote control plane over SSH tunnel: implemented.
 - Immutable releases + history + rollback + promote: implemented.
 - Domain bindings + Caddy config/reload + CLI domain operations: implemented.
+- API bearer authentication middleware + context tokens: implemented.
 
 Primary references:
 - `docs/technical-spec.md`
@@ -48,6 +49,7 @@ Primary references:
 - `HTMLSERVD_DB_PATH`, `HTMLSERVD_DB_WAL`
 - `HTMLSERVD_CADDY_BINARY`, `HTMLSERVD_CADDYFILE_PATH`, `HTMLSERVD_CADDY_CONFIG_BACKUP`
 - `HTMLSERVD_CADDY_AUTO_HTTPS` (`true` default)
+- `HTMLSERVD_API_TOKEN` (recommended for all non-localhost deployments)
 
 Docker entrypoint controls:
 - `HTMLSERVD_CADDY_BOOTSTRAP_MODE` (`preview|bootstrap`, default `preview`)
@@ -135,9 +137,10 @@ docker build --target htmlservd-ssh -t htmlservd-ssh:local .
 docker build --target htmlctl -t htmlctl:local .
 ```
 
-2. Start daemon container.
+2. Generate API token and start daemon container.
 
 ```bash
+API_TOKEN="$(htmlctl context token generate)"
 mkdir -p .tmp/first-deploy/{data,caddy,site}
 docker network create htmlctl-net >/dev/null 2>&1 || true
 docker rm -f htmlservd-first-deploy >/dev/null 2>&1 || true
@@ -152,6 +155,7 @@ docker run -d \
   -e HTMLSERVD_CADDY_BOOTSTRAP_MODE=preview \
   -e HTMLSERVD_PREVIEW_WEBSITE=futurelab \
   -e HTMLSERVD_PREVIEW_ENV=staging \
+  -e HTMLSERVD_API_TOKEN="$API_TOKEN" \
   -e HTMLSERVD_CADDY_AUTO_HTTPS=false \
   -v "$PWD/.tmp/first-deploy/data:/var/lib/htmlservd" \
   -v "$PWD/.tmp/first-deploy/caddy:/etc/caddy" \
@@ -162,13 +166,14 @@ docker run -d \
 
 ```bash
 curl -sf http://127.0.0.1:19420/healthz
+curl -sf http://127.0.0.1:19420/readyz
 ssh-keyscan -p 23222 -H 127.0.0.1 > .tmp/first-deploy/known_hosts
 ```
 
 4. Configure context.
 
 ```bash
-cat > .tmp/first-deploy/htmlctl-config.yaml <<'YAML'
+cat > .tmp/first-deploy/htmlctl-config.yaml <<YAML
 apiVersion: htmlctl.dev/v1
 current-context: local-staging
 contexts:
@@ -177,6 +182,7 @@ contexts:
     website: futurelab
     environment: staging
     port: 9400
+    token: ${API_TOKEN}
 YAML
 ```
 
@@ -215,11 +221,13 @@ contexts:
     website: futurelab
     environment: staging
     port: 9400
+    token: YOUR_SHARED_API_TOKEN
   - name: prod
     server: ssh://deploy@YOUR_HOST
     website: futurelab
     environment: prod
     port: 9400
+    token: YOUR_SHARED_API_TOKEN
 ```
 
 2. Daily cycle.
@@ -325,6 +333,8 @@ caddyBinaryPath: /usr/local/bin/caddy
 caddyfilePath: /etc/caddy/Caddyfile
 caddyConfigBackupPath: /etc/caddy/Caddyfile.bak
 caddyAutoHTTPS: true
+api:
+  token: "YOUR_SHARED_API_TOKEN"
 ```
 
 5. Create systemd unit `/etc/systemd/system/htmlservd.service`.
@@ -337,7 +347,7 @@ After=network.target
 [Service]
 User=htmlservd
 Group=htmlservd
-ExecStart=/usr/local/bin/htmlservd --config /etc/htmlservd/config.yaml
+ExecStart=/usr/local/bin/htmlservd --config /etc/htmlservd/config.yaml --require-auth
 Restart=always
 RestartSec=2
 LimitNOFILE=65535
@@ -353,6 +363,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now htmlservd
 sudo systemctl status htmlservd --no-pager
 curl -sf http://127.0.0.1:9400/healthz
+curl -sf http://127.0.0.1:9400/readyz
 ```
 
 7. Prepare SSH access for deploy user from workstation:
@@ -374,6 +385,7 @@ docker run -d \
   -p 80:80 \
   -p 443:443 \
   -e SSH_PUBLIC_KEY="$(cat ~/.ssh/id_ed25519.pub)" \
+  -e HTMLSERVD_API_TOKEN="YOUR_SHARED_API_TOKEN" \
   -v /srv/htmlservd/data:/var/lib/htmlservd \
   -v /srv/htmlservd/caddy:/etc/caddy \
   htmlservd-ssh:local
@@ -385,7 +397,12 @@ For local-like non-TLS dry environment, set `HTMLSERVD_CADDY_AUTO_HTTPS=false`.
 
 Health/version:
 - `GET /healthz`
+- `GET /readyz`
 - `GET /version`
+
+Authentication:
+- `/api/v1/*` endpoints require `Authorization: Bearer <token>` when server `api.token` (or `HTMLSERVD_API_TOKEN`) is configured.
+- health/version endpoints remain unauthenticated.
 
 Website/environment operations:
 - `GET /api/v1/websites`
@@ -411,6 +428,8 @@ Domain operations:
   - regenerate known hosts with `ssh-keyscan`.
 - `ssh agent unavailable`:
   - use `HTMLCTL_SSH_KEY_PATH` or mount key file (Docker).
+- `request failed (401)` / `unauthorized`:
+  - verify context `token` matches server token (`api.token` or `HTMLSERVD_API_TOKEN`).
 - local Docker preview not updating:
   - confirm preview env vars (`HTMLSERVD_PREVIEW_WEBSITE`, `HTMLSERVD_PREVIEW_ENV`) match context.
 - `domain verify` TLS fail in local/dev:
@@ -424,6 +443,7 @@ Before apply:
 - run `htmlctl diff`.
 - run `htmlctl apply --dry-run` for risky changes.
 - confirm target context (`htmlctl config current-context`).
+- confirm context has correct token (`htmlctl config view` or `htmlctl context set <name> --token ...`).
 
 After apply:
 - `htmlctl status`.
@@ -470,4 +490,3 @@ Manual equivalent:
 - apply site via SSH tunnel
 - verify `/blog`, `/about`, `/ora`
 - add domain and verify host-header route
-

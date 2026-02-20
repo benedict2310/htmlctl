@@ -11,6 +11,12 @@ docker build --target htmlctl -t htmlctl:local .
 
 ## 2. Start Server Container
 
+Generate a shared API token:
+
+```bash
+API_TOKEN="$(htmlctl context token generate)"
+```
+
 ```bash
 mkdir -p .tmp/first-deploy/{data,caddy,site}
 docker network create htmlctl-net >/dev/null 2>&1 || true
@@ -25,6 +31,7 @@ docker run -d \
   -e HTMLSERVD_CADDY_BOOTSTRAP_MODE=preview \
   -e HTMLSERVD_PREVIEW_WEBSITE=futurelab \
   -e HTMLSERVD_PREVIEW_ENV=staging \
+  -e HTMLSERVD_API_TOKEN="$API_TOKEN" \
   -e HTMLSERVD_CADDY_AUTO_HTTPS=false \
   -v "$PWD/.tmp/first-deploy/data:/var/lib/htmlservd" \
   -v "$PWD/.tmp/first-deploy/caddy:/etc/caddy" \
@@ -35,6 +42,7 @@ Health check:
 
 ```bash
 curl -sf http://127.0.0.1:19420/healthz
+curl -sf http://127.0.0.1:19420/readyz
 ```
 
 Trust host key for SSH transport:
@@ -46,7 +54,7 @@ ssh-keyscan -p 23222 -H 127.0.0.1 > .tmp/first-deploy/known_hosts
 ## 3. Prepare `htmlctl` Config
 
 ```bash
-cat > .tmp/first-deploy/htmlctl-config.yaml <<'YAML'
+cat > .tmp/first-deploy/htmlctl-config.yaml <<YAML
 apiVersion: htmlctl.dev/v1
 current-context: local-staging
 contexts:
@@ -55,6 +63,7 @@ contexts:
     website: futurelab
     environment: staging
     port: 9400
+    token: ${API_TOKEN}
 YAML
 ```
 
@@ -161,7 +170,7 @@ docker run --rm \
 Use this config for containerized `htmlctl` (Docker-to-host networking):
 
 ```bash
-cat > .tmp/first-deploy/htmlctl-config-container.yaml <<'YAML'
+cat > .tmp/first-deploy/htmlctl-config-container.yaml <<YAML
 apiVersion: htmlctl.dev/v1
 current-context: local-staging
 contexts:
@@ -170,6 +179,7 @@ contexts:
     website: futurelab
     environment: staging
     port: 9400
+    token: ${API_TOKEN}
 YAML
 ```
 
@@ -184,4 +194,5 @@ docker network rm htmlctl-net
 
 - `ssh host key verification failed`: regenerate `.tmp/first-deploy/known_hosts` with `ssh-keyscan`.
 - `ssh agent unavailable`: `htmlctl` now supports key-file fallback; mount/provide `~/.ssh/id_ed25519` or set `HTMLCTL_SSH_KEY_PATH`.
+- `unauthorized`: ensure `HTMLSERVD_API_TOKEN` matches the context `token` field.
 - Permission errors under `.tmp/first-deploy`: avoid overriding `HOME` into a bind-mounted path; use `HTMLCTL_SSH_KNOWN_HOSTS_PATH` instead (as shown above).

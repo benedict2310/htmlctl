@@ -120,6 +120,24 @@ func TestDomainsCreateBadRequestAndNotFoundBranches(t *testing.T) {
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("expected 404 for missing environment, got %d", resp.StatusCode)
 	}
+
+	resp, err = http.Post(baseURL+"/api/v1/domains", "application/json", bytes.NewBufferString(`{"domain":"futurelab.studio","website":"future.lab","environment":"staging"}`))
+	if err != nil {
+		t.Fatalf("POST invalid website name error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid website name, got %d", resp.StatusCode)
+	}
+
+	resp, err = http.Post(baseURL+"/api/v1/domains", "application/json", bytes.NewBufferString("{\"domain\":\"futurelab.studio\",\"website\":\"futurelab\",\"environment\":\"staging\\nprod\"}"))
+	if err != nil {
+		t.Fatalf("POST invalid environment name error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid environment name, got %d", resp.StatusCode)
+	}
 }
 
 func TestDomainsGetDeleteValidationAndReloadFailureBranch(t *testing.T) {

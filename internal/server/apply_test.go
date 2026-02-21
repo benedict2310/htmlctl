@@ -163,6 +163,49 @@ func TestApplyEndpointHashMismatch(t *testing.T) {
 	}
 }
 
+func TestApplyEndpointRejectsInvalidPathNames(t *testing.T) {
+	srv := startTestServer(t)
+	baseURL := "http://" + srv.Addr()
+
+	component := []byte("<section id=\"header\">Header</section>")
+
+	invalidWebsiteBundle := tarBody(t, map[string][]byte{
+		"components/header.html": component,
+	}, map[string]any{
+		"apiVersion": "htmlctl.dev/v1",
+		"kind":       "Bundle",
+		"mode":       "partial",
+		"website":    "future.lab",
+		"resources": []map[string]any{
+			{"kind": "Component", "name": "header", "file": "components/header.html", "hash": "sha256:" + sha256Hex(component)},
+		},
+	})
+
+	resp := postBundle(t, baseURL+"/api/v1/websites/future.lab/environments/staging/apply", invalidWebsiteBundle)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid website name, got %d", resp.StatusCode)
+	}
+
+	validWebsiteBundle := tarBody(t, map[string][]byte{
+		"components/header.html": component,
+	}, map[string]any{
+		"apiVersion": "htmlctl.dev/v1",
+		"kind":       "Bundle",
+		"mode":       "partial",
+		"website":    "futurelab",
+		"resources": []map[string]any{
+			{"kind": "Component", "name": "header", "file": "components/header.html", "hash": "sha256:" + sha256Hex(component)},
+		},
+	})
+
+	resp = postBundle(t, baseURL+"/api/v1/websites/futurelab/environments/prod%0Areverse_proxy/apply", validWebsiteBundle)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid environment name, got %d", resp.StatusCode)
+	}
+}
+
 func TestApplyEndpointFullModeDeletesMissingResources(t *testing.T) {
 	srv := startTestServer(t)
 	baseURL := "http://" + srv.Addr()

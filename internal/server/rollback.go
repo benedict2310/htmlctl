@@ -20,8 +20,16 @@ type rollbackResponse struct {
 }
 
 func (s *Server) handleRollback(w http.ResponseWriter, r *http.Request) {
-	website, env, ok := parseRollbackPath(r.URL.Path)
+	pathValue := r.URL.EscapedPath()
+	if pathValue == "" {
+		pathValue = r.URL.Path
+	}
+	website, env, ok, err := parseRollbackPath(pathValue)
 	if !ok {
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err.Error(), nil)
+			return
+		}
 		http.NotFound(w, r)
 		return
 	}
@@ -89,18 +97,24 @@ func (s *Server) handleRollback(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func parseRollbackPath(pathValue string) (website, env string, ok bool) {
+func parseRollbackPath(pathValue string) (website, env string, ok bool, err error) {
 	parts := strings.Split(strings.Trim(pathValue, "/"), "/")
 	if len(parts) != 7 {
-		return "", "", false
+		return "", "", false, nil
 	}
 	if parts[0] != "api" || parts[1] != "v1" || parts[2] != "websites" || parts[4] != "environments" || parts[6] != "rollback" {
-		return "", "", false
+		return "", "", false, nil
 	}
 	website = strings.TrimSpace(parts[3])
 	env = strings.TrimSpace(parts[5])
 	if website == "" || env == "" {
-		return "", "", false
+		return "", "", false, nil
 	}
-	return website, env, true
+	if err := validateResourceName(website); err != nil {
+		return website, env, false, fmt.Errorf("invalid website name %q: %w", website, err)
+	}
+	if err := validateResourceName(env); err != nil {
+		return website, env, false, fmt.Errorf("invalid environment name %q: %w", env, err)
+	}
+	return website, env, true, nil
 }

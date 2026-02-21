@@ -125,6 +125,58 @@ func TestBuilderBuildFailureRecordsFailedRelease(t *testing.T) {
 	}
 }
 
+func TestBuilderBuildRejectsInvalidStoredResourceNames(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name         string
+		updateQuery  string
+		updateName   string
+		expectSubstr string
+	}{
+		{
+			name:         "invalid component name",
+			updateQuery:  `UPDATE components SET name = ?`,
+			updateName:   "../evil",
+			expectSubstr: "invalid component name",
+		},
+		{
+			name:         "invalid page name",
+			updateQuery:  `UPDATE pages SET name = ?`,
+			updateName:   "index\nadmin",
+			expectSubstr: "invalid page name",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dataDir := t.TempDir()
+			db := openReleaseTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+			defer db.Close()
+			queries := dbpkg.NewQueries(db)
+			blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+
+			seedReleaseState(t, ctx, queries, blobStore)
+			if _, err := db.Exec(tc.updateQuery, tc.updateName); err != nil {
+				t.Fatalf("inject invalid name: %v", err)
+			}
+
+			builder, err := NewBuilder(db, blobStore, filepath.Join(dataDir, "websites"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+			if err != nil {
+				t.Fatalf("NewBuilder() error = %v", err)
+			}
+
+			_, err = builder.Build(ctx, "futurelab", "staging")
+			if err == nil {
+				t.Fatalf("expected build failure")
+			}
+			if !strings.Contains(err.Error(), tc.expectSubstr) {
+				t.Fatalf("expected error containing %q, got %v", tc.expectSubstr, err)
+			}
+		})
+	}
+}
+
 func openReleaseTestDB(t *testing.T, path string) *sql.DB {
 	t.Helper()
 	db, err := dbpkg.Open(dbpkg.DefaultOptions(path))

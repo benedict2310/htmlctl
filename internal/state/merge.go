@@ -16,6 +16,7 @@ import (
 	"github.com/benedict2310/htmlctl/internal/blob"
 	"github.com/benedict2310/htmlctl/internal/bundle"
 	dbpkg "github.com/benedict2310/htmlctl/internal/db"
+	"github.com/benedict2310/htmlctl/internal/names"
 	"github.com/benedict2310/htmlctl/pkg/model"
 	"gopkg.in/yaml.v3"
 )
@@ -137,6 +138,11 @@ func (a *Applier) Apply(ctx context.Context, websiteName, envName string, b bund
 
 	for _, res := range b.Manifest.Resources {
 		kind := strings.ToLower(strings.TrimSpace(res.Kind))
+		if kind == "component" || kind == "page" || kind == "stylebundle" {
+			if err := names.ValidateResourceName(res.Name); err != nil {
+				return out, badRequestf("invalid %s name %q: %v", kind, res.Name, err)
+			}
+		}
 		if res.Deleted {
 			resourceID := strings.TrimSpace(res.Name)
 			if (kind == "asset" || kind == "script") && strings.TrimSpace(res.File) != "" {

@@ -31,8 +31,16 @@ type promoteResponse struct {
 }
 
 func (s *Server) handlePromote(w http.ResponseWriter, r *http.Request) {
-	website, ok := parsePromotePath(r.URL.Path)
+	pathValue := r.URL.EscapedPath()
+	if pathValue == "" {
+		pathValue = r.URL.Path
+	}
+	website, ok, err := parsePromotePath(pathValue)
 	if !ok {
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err.Error(), nil)
+			return
+		}
 		http.NotFound(w, r)
 		return
 	}
@@ -55,6 +63,14 @@ func (s *Server) handlePromote(w http.ResponseWriter, r *http.Request) {
 	targetEnv := strings.TrimSpace(reqBody.To)
 	if sourceEnv == "" || targetEnv == "" {
 		writeAPIError(w, http.StatusBadRequest, "both from and to environments are required", nil)
+		return
+	}
+	if err := validateResourceName(sourceEnv); err != nil {
+		writeAPIError(w, http.StatusBadRequest, fmt.Sprintf("invalid source environment name %q: %v", sourceEnv, err), nil)
+		return
+	}
+	if err := validateResourceName(targetEnv); err != nil {
+		writeAPIError(w, http.StatusBadRequest, fmt.Sprintf("invalid target environment name %q: %v", targetEnv, err), nil)
 		return
 	}
 	if sourceEnv == targetEnv {
@@ -126,17 +142,20 @@ func (s *Server) handlePromote(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func parsePromotePath(pathValue string) (website string, ok bool) {
+func parsePromotePath(pathValue string) (website string, ok bool, err error) {
 	parts := strings.Split(strings.Trim(pathValue, "/"), "/")
 	if len(parts) != 5 {
-		return "", false
+		return "", false, nil
 	}
 	if parts[0] != "api" || parts[1] != "v1" || parts[2] != "websites" || parts[4] != "promote" {
-		return "", false
+		return "", false, nil
 	}
 	website = strings.TrimSpace(parts[3])
 	if website == "" {
-		return "", false
+		return "", false, nil
 	}
-	return website, true
+	if err := validateResourceName(website); err != nil {
+		return website, false, fmt.Errorf("invalid website name %q: %w", website, err)
+	}
+	return website, true, nil
 }

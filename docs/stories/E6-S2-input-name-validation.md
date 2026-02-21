@@ -1,7 +1,7 @@
 # E6-S2 - Input Name Validation
 
 **Epic:** Epic 6 — Security Hardening
-**Status:** Pending
+**Status:** Done
 **Priority:** P0 (Critical — path traversal + Caddyfile injection)
 **Estimated Effort:** 2 days
 **Dependencies:** E2-S3 (bundle ingestion), E5-S2 (Caddy config generation)
@@ -80,22 +80,22 @@ As a server operator, I want htmlservd to reject resource names that contain pat
 
 ## 6. Acceptance Criteria
 
-- [ ] AC-1: `POST /api/v1/websites/{w}/environments/{e}/apply` returns `400 Bad Request` when `{w}` or `{e}` contains `.`, `/`, `\n`, `{`, `}`, or any character outside `[a-zA-Z0-9_-]`.
-- [ ] AC-2: The same validation is enforced consistently across all path-parse helpers (`parseReleasePath`, `parsePromotePath`, `parseRollbackPath`).
-- [ ] AC-3: Bundle apply requests whose manifests contain component names or page names with path-unsafe characters are rejected at the state-merge layer with a descriptive error.
-- [ ] AC-4: `GenerateConfigWithOptions` returns an error (without writing the file) if any assembled root path contains a newline, `{`, or `}`.
-- [ ] AC-5: `materializeSource` in the release builder uses validated names for component and page file paths, mirroring the existing `sanitizeRelPath` pattern used for asset filenames.
-- [ ] AC-6: All existing tests continue to pass (existing test names are already safe).
-- [ ] AC-7: `validateResourceName` is the single canonical implementation; no ad-hoc string checks are duplicated across handlers.
+- [x] AC-1: `POST /api/v1/websites/{w}/environments/{e}/apply` returns `400 Bad Request` when `{w}` or `{e}` contains `.`, `/`, `\n`, `{`, `}`, or any character outside `[a-zA-Z0-9_-]`.
+- [x] AC-2: The same validation is enforced consistently across all path-parse helpers (`parseReleasePath`, `parsePromotePath`, `parseRollbackPath`).
+- [x] AC-3: Bundle apply requests whose manifests contain component names or page names with path-unsafe characters are rejected at the state-merge layer with a descriptive error.
+- [x] AC-4: `GenerateConfigWithOptions` returns an error (without writing the file) if any assembled root path contains a newline, `{`, or `}`.
+- [x] AC-5: `materializeSource` in the release builder uses validated names for component and page file paths, mirroring the existing `sanitizeRelPath` pattern used for asset filenames.
+- [x] AC-6: All existing tests continue to pass (existing test names are already safe).
+- [x] AC-7: `validateResourceName` is the single canonical implementation; no ad-hoc string checks are duplicated across handlers.
 
 ## 7. Verification Plan
 
 ### Automated Tests
 
-- [ ] `validateResourceName` unit tests: all valid/invalid cases pass.
-- [ ] Handler-level tests: traversal-style website and env names return 400.
-- [ ] State merge tests: invalid component/page names are rejected before DB write.
-- [ ] Caddy config test: newline in root path is caught.
+- [x] `validateResourceName` unit tests: all valid/invalid cases pass.
+- [x] Handler-level tests: traversal-style website and env names return 400.
+- [x] State merge tests: invalid component/page names are rejected before DB write.
+- [x] Caddy config test: newline in root path is caught.
 
 ### Manual Tests
 
@@ -117,3 +117,28 @@ As a server operator, I want htmlservd to reject resource names that contain pat
 
 - Should dots be allowed in names (e.g., for versioned environment names like `v1.0`)? Initial proposal: no, to keep `..` impossible without needing lookahead rules. Revisit if operator feedback requires it.
 - Max name length: 128 characters proposed. Confirm against any existing UI or CLI length constraints.
+
+---
+
+## 11. Implementation Summary
+
+- Added canonical resource-name validation in `internal/names/validate.go` and server wrapper in `internal/server/validate.go`.
+- Applied validation to API path parse points and payload fields:
+  - `internal/server/apply.go`
+  - `internal/server/release.go`
+  - `internal/server/rollback.go`
+  - `internal/server/promote.go`
+  - `internal/server/domains.go`
+- Enforced component/page name validation in state merge (`internal/state/merge.go`).
+- Added release builder guard for component/page filenames in `internal/release/builder.go` via `sanitizeResourceName`.
+- Added Caddy root-character defense in `internal/caddy/config.go` (`\n`, `{`, `}` rejected).
+- Added tests:
+  - `internal/server/validate_test.go`
+  - `internal/server/apply_test.go`
+  - `internal/server/path_parse_test.go`
+  - `internal/server/promote_test.go`
+  - `internal/server/domains_error_test.go`
+  - `internal/state/merge_test.go`
+  - `internal/release/builder_test.go`
+  - `internal/caddy/config_test.go`
+- Verification run: `go test ./...` (pass).

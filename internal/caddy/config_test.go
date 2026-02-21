@@ -42,6 +42,12 @@ func TestGenerateConfigRejectsInvalidSite(t *testing.T) {
 	if _, err := GenerateConfig([]Site{{Domain: "futurelab.studio", Root: ""}}); err == nil {
 		t.Fatalf("expected missing-root error")
 	}
+	if _, err := GenerateConfig([]Site{{Domain: "futurelab.studio", Root: "/srv/futurelab/\ncurrent"}}); err == nil {
+		t.Fatalf("expected forbidden-root-character error")
+	}
+	if _, err := GenerateConfig([]Site{{Domain: "futurelab.studio", Root: "/srv/futurelab/{current}"}}); err == nil {
+		t.Fatalf("expected forbidden-root-character error")
+	}
 }
 
 func TestGenerateConfigWithAutoHTTPSDisabled(t *testing.T) {

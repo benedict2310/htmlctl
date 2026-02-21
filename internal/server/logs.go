@@ -31,8 +31,16 @@ type auditEntryResponse struct {
 }
 
 func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
-	website, env, envScoped, ok := parseLogsPath(r.URL.Path)
+	pathValue := r.URL.EscapedPath()
+	if pathValue == "" {
+		pathValue = r.URL.Path
+	}
+	website, env, envScoped, ok, err := parseLogsPath(pathValue)
 	if !ok {
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err.Error(), nil)
+			return
+		}
 		http.NotFound(w, r)
 		return
 	}
@@ -99,30 +107,39 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func parseLogsPath(pathValue string) (website string, env string, envScoped bool, ok bool) {
+func parseLogsPath(pathValue string) (website string, env string, envScoped bool, ok bool, err error) {
 	parts := strings.Split(strings.Trim(pathValue, "/"), "/")
 	if len(parts) == 7 {
 		if parts[0] != "api" || parts[1] != "v1" || parts[2] != "websites" || parts[4] != "environments" || parts[6] != "logs" {
-			return "", "", false, false
+			return "", "", false, false, nil
 		}
 		website = strings.TrimSpace(parts[3])
 		env = strings.TrimSpace(parts[5])
 		if strings.TrimSpace(website) == "" || strings.TrimSpace(env) == "" {
-			return "", "", false, false
+			return "", "", false, false, nil
 		}
-		return website, env, true, true
+		if err := validateResourceName(website); err != nil {
+			return website, env, false, false, fmt.Errorf("invalid website name %q: %w", website, err)
+		}
+		if err := validateResourceName(env); err != nil {
+			return website, env, false, false, fmt.Errorf("invalid environment name %q: %w", env, err)
+		}
+		return website, env, true, true, nil
 	}
 	if len(parts) == 5 {
 		if parts[0] != "api" || parts[1] != "v1" || parts[2] != "websites" || parts[4] != "logs" {
-			return "", "", false, false
+			return "", "", false, false, nil
 		}
 		website = strings.TrimSpace(parts[3])
 		if strings.TrimSpace(website) == "" {
-			return "", "", false, false
+			return "", "", false, false, nil
 		}
-		return website, "", false, true
+		if err := validateResourceName(website); err != nil {
+			return website, "", false, false, fmt.Errorf("invalid website name %q: %w", website, err)
+		}
+		return website, "", false, true, nil
 	}
-	return "", "", false, false
+	return "", "", false, false, nil
 }
 
 func parseAuditFilter(values url.Values) (audit.Filter, error) {

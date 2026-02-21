@@ -106,8 +106,16 @@ func (s *Server) handleWebsites(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleEnvironments(w http.ResponseWriter, r *http.Request) {
-	website, ok := parseEnvironmentsPath(r.URL.Path)
+	pathValue := r.URL.EscapedPath()
+	if pathValue == "" {
+		pathValue = r.URL.Path
+	}
+	website, ok, err := parseEnvironmentsPath(pathValue)
 	if !ok {
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err.Error(), nil)
+			return
+		}
 		http.NotFound(w, r)
 		return
 	}
@@ -160,8 +168,16 @@ func (s *Server) handleEnvironments(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
-	website, env, ok := parseStatusPath(r.URL.Path)
+	pathValue := r.URL.EscapedPath()
+	if pathValue == "" {
+		pathValue = r.URL.Path
+	}
+	website, env, ok, err := parseStatusPath(pathValue)
 	if !ok {
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err.Error(), nil)
+			return
+		}
 		http.NotFound(w, r)
 		return
 	}
@@ -245,8 +261,16 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleManifest(w http.ResponseWriter, r *http.Request) {
-	website, env, ok := parseManifestPath(r.URL.Path)
+	pathValue := r.URL.EscapedPath()
+	if pathValue == "" {
+		pathValue = r.URL.Path
+	}
+	website, env, ok, err := parseManifestPath(pathValue)
 	if !ok {
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err.Error(), nil)
+			return
+		}
 		http.NotFound(w, r)
 		return
 	}
@@ -356,51 +380,66 @@ func (s *Server) handleManifest(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func parseEnvironmentsPath(pathValue string) (website string, ok bool) {
+func parseEnvironmentsPath(pathValue string) (website string, ok bool, err error) {
 	parts := strings.Split(strings.Trim(pathValue, "/"), "/")
 	if len(parts) != 5 {
-		return "", false
+		return "", false, nil
 	}
 	if parts[0] != "api" || parts[1] != "v1" || parts[2] != "websites" || parts[4] != "environments" {
-		return "", false
+		return "", false, nil
 	}
 	website = strings.TrimSpace(parts[3])
 	if strings.TrimSpace(website) == "" {
-		return "", false
+		return "", false, nil
 	}
-	return website, true
+	if err := validateResourceName(website); err != nil {
+		return website, false, fmt.Errorf("invalid website name %q: %w", website, err)
+	}
+	return website, true, nil
 }
 
-func parseStatusPath(pathValue string) (website, env string, ok bool) {
+func parseStatusPath(pathValue string) (website, env string, ok bool, err error) {
 	parts := strings.Split(strings.Trim(pathValue, "/"), "/")
 	if len(parts) != 7 {
-		return "", "", false
+		return "", "", false, nil
 	}
 	if parts[0] != "api" || parts[1] != "v1" || parts[2] != "websites" || parts[4] != "environments" || parts[6] != "status" {
-		return "", "", false
+		return "", "", false, nil
 	}
 	website = strings.TrimSpace(parts[3])
 	env = strings.TrimSpace(parts[5])
 	if strings.TrimSpace(website) == "" || strings.TrimSpace(env) == "" {
-		return "", "", false
+		return "", "", false, nil
 	}
-	return website, env, true
+	if err := validateResourceName(website); err != nil {
+		return website, env, false, fmt.Errorf("invalid website name %q: %w", website, err)
+	}
+	if err := validateResourceName(env); err != nil {
+		return website, env, false, fmt.Errorf("invalid environment name %q: %w", env, err)
+	}
+	return website, env, true, nil
 }
 
-func parseManifestPath(pathValue string) (website, env string, ok bool) {
+func parseManifestPath(pathValue string) (website, env string, ok bool, err error) {
 	parts := strings.Split(strings.Trim(pathValue, "/"), "/")
 	if len(parts) != 7 {
-		return "", "", false
+		return "", "", false, nil
 	}
 	if parts[0] != "api" || parts[1] != "v1" || parts[2] != "websites" || parts[4] != "environments" || parts[6] != "manifest" {
-		return "", "", false
+		return "", "", false, nil
 	}
 	website = strings.TrimSpace(parts[3])
 	env = strings.TrimSpace(parts[5])
 	if strings.TrimSpace(website) == "" || strings.TrimSpace(env) == "" {
-		return "", "", false
+		return "", "", false, nil
 	}
-	return website, env, true
+	if err := validateResourceName(website); err != nil {
+		return website, env, false, fmt.Errorf("invalid website name %q: %w", website, err)
+	}
+	if err := validateResourceName(env); err != nil {
+		return website, env, false, fmt.Errorf("invalid environment name %q: %w", env, err)
+	}
+	return website, env, true, nil
 }
 
 func addManifestEntry(byPath map[string]string, rawPath, rawHash string) error {

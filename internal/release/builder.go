@@ -20,6 +20,7 @@ import (
 	"github.com/benedict2310/htmlctl/internal/blob"
 	"github.com/benedict2310/htmlctl/internal/bundle"
 	dbpkg "github.com/benedict2310/htmlctl/internal/db"
+	"github.com/benedict2310/htmlctl/internal/names"
 	"github.com/benedict2310/htmlctl/pkg/loader"
 	"github.com/benedict2310/htmlctl/pkg/model"
 	"github.com/benedict2310/htmlctl/pkg/renderer"
@@ -417,16 +418,24 @@ func (b *Builder) materializeSource(ctx context.Context, sourceDir string, state
 	}
 
 	for _, row := range state.Components {
+		componentName, err := sanitizeResourceName(row.Name)
+		if err != nil {
+			return fmt.Errorf("invalid component name %q: %w", row.Name, err)
+		}
 		content, err := b.readBlob(ctx, row.ContentHash)
 		if err != nil {
 			return fmt.Errorf("load component %q blob: %w", row.Name, err)
 		}
-		if err := writeFile(filepath.Join(sourceDir, "components", row.Name+".html"), content); err != nil {
+		if err := writeFile(filepath.Join(sourceDir, "components", componentName+".html"), content); err != nil {
 			return fmt.Errorf("write component %q: %w", row.Name, err)
 		}
 	}
 
 	for _, row := range state.Pages {
+		pageName, err := sanitizeResourceName(row.Name)
+		if err != nil {
+			return fmt.Errorf("invalid page name %q: %w", row.Name, err)
+		}
 		layout := []model.PageLayoutItem{}
 		if strings.TrimSpace(row.LayoutJSON) != "" {
 			if err := json.Unmarshal([]byte(row.LayoutJSON), &layout); err != nil {
@@ -436,7 +445,7 @@ func (b *Builder) materializeSource(ctx context.Context, sourceDir string, state
 		pageDoc := model.Page{
 			APIVersion: model.APIVersionV1,
 			Kind:       model.KindPage,
-			Metadata:   model.Metadata{Name: row.Name},
+			Metadata:   model.Metadata{Name: pageName},
 			Spec: model.PageSpec{
 				Route:       row.Route,
 				Title:       row.Title,
@@ -448,7 +457,7 @@ func (b *Builder) materializeSource(ctx context.Context, sourceDir string, state
 		if err != nil {
 			return fmt.Errorf("marshal page %q yaml: %w", row.Name, err)
 		}
-		if err := writeFile(filepath.Join(sourceDir, "pages", row.Name+".page.yaml"), pageBytes); err != nil {
+		if err := writeFile(filepath.Join(sourceDir, "pages", pageName+".page.yaml"), pageBytes); err != nil {
 			return fmt.Errorf("write page %q file: %w", row.Name, err)
 		}
 	}
@@ -625,4 +634,11 @@ func sanitizeRelPath(p string) (string, error) {
 		return "", fmt.Errorf("path traversal is not allowed")
 	}
 	return clean, nil
+}
+
+func sanitizeResourceName(name string) (string, error) {
+	if err := names.ValidateResourceName(name); err != nil {
+		return "", err
+	}
+	return name, nil
 }

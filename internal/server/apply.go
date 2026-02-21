@@ -30,8 +30,16 @@ type applyResponse struct {
 }
 
 func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
-	website, env, ok := parseApplyPath(r.URL.Path)
+	pathValue := r.URL.EscapedPath()
+	if pathValue == "" {
+		pathValue = r.URL.Path
+	}
+	website, env, ok, err := parseApplyPath(pathValue)
 	if !ok {
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err.Error(), nil)
+			return
+		}
 		http.NotFound(w, r)
 		return
 	}
@@ -146,20 +154,26 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func parseApplyPath(pathValue string) (website string, env string, ok bool) {
+func parseApplyPath(pathValue string) (website string, env string, ok bool, err error) {
 	parts := strings.Split(strings.Trim(pathValue, "/"), "/")
 	if len(parts) != 7 {
-		return "", "", false
+		return "", "", false, nil
 	}
 	if parts[0] != "api" || parts[1] != "v1" || parts[2] != "websites" || parts[4] != "environments" || parts[6] != "apply" {
-		return "", "", false
+		return "", "", false, nil
 	}
 	website = strings.TrimSpace(parts[3])
 	env = strings.TrimSpace(parts[5])
 	if strings.TrimSpace(website) == "" || strings.TrimSpace(env) == "" {
-		return "", "", false
+		return "", "", false, nil
 	}
-	return website, env, true
+	if err := validateResourceName(website); err != nil {
+		return website, env, false, fmt.Errorf("invalid website name %q: %w", website, err)
+	}
+	if err := validateResourceName(env); err != nil {
+		return website, env, false, fmt.Errorf("invalid environment name %q: %w", env, err)
+	}
+	return website, env, true, nil
 }
 
 func writeAPIError(w http.ResponseWriter, status int, message string, details []string) {

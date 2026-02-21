@@ -128,6 +128,14 @@ func (s *Server) handleCreateDomain(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, "website and environment are required", nil)
 		return
 	}
+	if err := validateResourceName(website); err != nil {
+		writeAPIError(w, http.StatusBadRequest, fmt.Sprintf("invalid website name %q: %v", website, err), nil)
+		return
+	}
+	if err := validateResourceName(environment); err != nil {
+		writeAPIError(w, http.StatusBadRequest, fmt.Sprintf("invalid environment name %q: %v", environment, err), nil)
+		return
+	}
 
 	q := dbpkg.NewQueries(s.db)
 	websiteRow, err := q.GetWebsiteByName(r.Context(), website)

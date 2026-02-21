@@ -47,6 +47,9 @@ func GenerateConfigWithOptions(sites []Site, opts ConfigOptions) (string, error)
 		if root == "" {
 			return "", fmt.Errorf("site root is required for domain %q", domain)
 		}
+		if strings.ContainsAny(root, "\n{}") {
+			return "", fmt.Errorf("site root for domain %q contains forbidden characters", domain)
+		}
 		siteAddress := domain
 		if opts.DisableAutoHTTPS {
 			siteAddress = "http://" + domain

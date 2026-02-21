@@ -195,6 +195,38 @@ func TestPromoteEndpointMissingFields(t *testing.T) {
 	}
 }
 
+func TestPromoteEndpointRejectsInvalidNames(t *testing.T) {
+	srv := startTestServer(t)
+	baseURL := "http://" + srv.Addr()
+
+	resp, err := http.Post(baseURL+"/api/v1/websites/future.lab/promote", "application/json", bytes.NewBufferString(`{"from":"staging","to":"prod"}`))
+	if err != nil {
+		t.Fatalf("POST /promote invalid website error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid website name, got %d", resp.StatusCode)
+	}
+
+	resp, err = http.Post(baseURL+"/api/v1/websites/futurelab/promote", "application/json", bytes.NewBufferString(`{"from":"staging\nblue","to":"prod"}`))
+	if err != nil {
+		t.Fatalf("POST /promote invalid from env error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid source env name, got %d", resp.StatusCode)
+	}
+
+	resp, err = http.Post(baseURL+"/api/v1/websites/futurelab/promote", "application/json", bytes.NewBufferString(`{"from":"staging","to":"prod{evil}"}`))
+	if err != nil {
+		t.Fatalf("POST /promote invalid to env error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid target env name, got %d", resp.StatusCode)
+	}
+}
+
 func ensureEnvironment(t *testing.T, db *sql.DB, website, env string) {
 	t.Helper()
 	q := dbpkg.NewQueries(db)

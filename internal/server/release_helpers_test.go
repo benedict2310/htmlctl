@@ -35,22 +35,22 @@ func TestParseListReleasesPagination(t *testing.T) {
 }
 
 func TestParseReleaseRollbackPromotePathsRejectInvalid(t *testing.T) {
-	if _, _, ok := parseReleasePath("/api/v1/websites/futurelab/environments/staging/release"); ok {
+	if _, _, ok, _ := parseReleasePath("/api/v1/websites/futurelab/environments/staging/release"); ok {
 		t.Fatalf("expected invalid release path to fail parsing")
 	}
-	if _, _, ok := parseReleasePath("/api/v1/websites//environments/staging/releases"); ok {
+	if _, _, ok, _ := parseReleasePath("/api/v1/websites//environments/staging/releases"); ok {
 		t.Fatalf("expected empty website release path to fail parsing")
 	}
-	if _, _, ok := parseRollbackPath("/api/v1/websites/futurelab/environments/staging/rollbacks"); ok {
+	if _, _, ok, _ := parseRollbackPath("/api/v1/websites/futurelab/environments/staging/rollbacks"); ok {
 		t.Fatalf("expected invalid rollback path to fail parsing")
 	}
-	if _, _, ok := parseRollbackPath("/api/v1/websites/futurelab/environments//rollback"); ok {
+	if _, _, ok, _ := parseRollbackPath("/api/v1/websites/futurelab/environments//rollback"); ok {
 		t.Fatalf("expected empty env rollback path to fail parsing")
 	}
-	if _, ok := parsePromotePath("/api/v1/websites//promote"); ok {
+	if _, ok, _ := parsePromotePath("/api/v1/websites//promote"); ok {
 		t.Fatalf("expected invalid promote path to fail parsing")
 	}
-	if _, ok := parsePromotePath("/api/v1/website/futurelab/promote"); ok {
+	if _, ok, _ := parsePromotePath("/api/v1/website/futurelab/promote"); ok {
 		t.Fatalf("expected malformed promote path to fail parsing")
 	}
 }

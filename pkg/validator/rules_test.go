@@ -91,6 +91,92 @@ func TestCustomAllowlistOverride(t *testing.T) {
 	}
 }
 
+func TestValidateComponentRejectsInlineEventHandlers(t *testing.T) {
+	tests := []struct {
+		name        string
+		html        string
+		wantErrText string
+	}{
+		{
+			name:        "reject onerror",
+			html:        `<section id="x"><img src="x" onerror="evil()"></section>`,
+			wantErrText: `attribute "onerror"`,
+		},
+		{
+			name:        "reject onclick",
+			html:        `<section id="x" onclick="evil()">text</section>`,
+			wantErrText: `attribute "onclick"`,
+		},
+		{
+			name:        "reject nested onclick",
+			html:        `<section id="x"><div><p onclick="evil()">text</p></div></section>`,
+			wantErrText: `attribute "onclick"`,
+		},
+		{
+			name:        "reject onload",
+			html:        `<section id="x"><img src="x" onload="evil()"></section>`,
+			wantErrText: `attribute "onload"`,
+		},
+		{
+			name:        "reject onmouseover",
+			html:        `<section id="x"><div onmouseover="evil()">text</div></section>`,
+			wantErrText: `attribute "onmouseover"`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			errs := ValidateComponent(&model.Component{Name: "x", HTML: tc.html})
+			if len(errs) == 0 {
+				t.Fatalf("expected event-handler validation error, got none")
+			}
+			found := false
+			for _, err := range errs {
+				if err.Rule == "event-handler-disallow" && strings.Contains(err.Message, tc.wantErrText) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Fatalf("expected event-handler-disallow containing %q, got: %#v", tc.wantErrText, errs)
+			}
+		})
+	}
+}
+
+func TestValidateComponentAllowsNonEventAttributes(t *testing.T) {
+	errs := ValidateComponent(&model.Component{
+		Name: "x",
+		HTML: `<section id="x"><a href="page.html" class="btn" style="color:red">link</a></section>`,
+	})
+	if len(errs) != 0 {
+		t.Fatalf("expected non-event attributes to be accepted, got: %v", errs)
+	}
+}
+
+func TestValidateComponentReportsAllUnsafeHTMLViolations(t *testing.T) {
+	errs := ValidateComponent(&model.Component{
+		Name: "x",
+		HTML: `<section id="x" onclick="evil()"><script>bad()</script></section>`,
+	})
+	if len(errs) < 2 {
+		t.Fatalf("expected multiple unsafe html violations, got: %#v", errs)
+	}
+
+	var hasScript, hasEvent bool
+	for _, err := range errs {
+		if err.Rule == "script-disallow" {
+			hasScript = true
+		}
+		if err.Rule == "event-handler-disallow" {
+			hasEvent = true
+		}
+	}
+	if !hasScript || !hasEvent {
+		t.Fatalf("expected both script-disallow and event-handler-disallow, got: %#v", errs)
+	}
+}
+
 func mustReadComponentFixture(t *testing.T, name string) string {
 	t.Helper()
 	path := filepath.Join("..", "..", "testdata", "components", name)

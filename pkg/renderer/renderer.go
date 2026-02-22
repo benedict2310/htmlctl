@@ -2,6 +2,7 @@ package renderer
 
 import (
 	"fmt"
+	"html/template"
 	"os"
 	"path/filepath"
 	"sort"
@@ -42,7 +43,7 @@ func Render(site *model.Site, outputDir string) error {
 			Title:       page.Spec.Title,
 			Description: page.Spec.Description,
 			StyleHrefs:  []string{statics.TokensHref, statics.DefaultHref},
-			ContentHTML: contentHTML,
+			ContentHTML: template.HTML(contentHTML),
 			ScriptSrc:   statics.ScriptSrc,
 		})
 		if err != nil {

@@ -16,6 +16,9 @@ func authMethodFromSSHAgent() (ssh.AuthMethod, io.Closer, error) {
 	if sockPath == "" {
 		return nil, nil, fmt.Errorf("%w: SSH_AUTH_SOCK is not set", ErrSSHAgentUnavailable)
 	}
+	if err := validateAgentSocket(sockPath); err != nil {
+		return nil, nil, err
+	}
 
 	conn, err := net.Dial("unix", sockPath)
 	if err != nil {

@@ -12,8 +12,8 @@ func TestNewSSHTransportFromContextUsesContextServer(t *testing.T) {
 	_, err := NewSSHTransportFromContext(t.Context(), config.ContextInfo{
 		Server: "ssh://root@127.0.0.1:1",
 	}, SSHConfig{
-		HostKeyCB:   ssh.InsecureIgnoreHostKey(),
-		AuthMethods: []ssh.AuthMethod{ssh.Password("unused")},
+		KnownHostsPath: writeEmptyKnownHostsFile(t),
+		AuthMethods:    []ssh.AuthMethod{ssh.Password("unused")},
 	})
 	if err == nil {
 		t.Fatalf("expected connection failure")
@@ -28,8 +28,8 @@ func TestNewSSHTransportFromContextUsesConfiguredRemotePort(t *testing.T) {
 		Server:     "ssh://root@127.0.0.1:1",
 		RemotePort: 70000,
 	}, SSHConfig{
-		HostKeyCB:   ssh.InsecureIgnoreHostKey(),
-		AuthMethods: []ssh.AuthMethod{ssh.Password("unused")},
+		KnownHostsPath: writeEmptyKnownHostsFile(t),
+		AuthMethods:    []ssh.AuthMethod{ssh.Password("unused")},
 	})
 	if err == nil {
 		t.Fatalf("expected remote address validation failure")

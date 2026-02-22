@@ -1,7 +1,7 @@
 # E6-S5 - Container & Entrypoint Security Hardening
 
 **Epic:** Epic 6 — Security Hardening
-**Status:** Pending
+**Status:** Implemented
 **Priority:** P0 (Critical — command injection in production entrypoint)
 **Estimated Effort:** 1 day
 **Dependencies:** None (standalone shell/Dockerfile changes)
@@ -54,7 +54,7 @@ As an infrastructure operator, I want the htmlservd container entrypoints to be 
 
 ### 5.1 Files to Create
 
-- None — all changes are in existing files.
+- `scripts/test-entrypoint-security.sh` — shell-level validation tests for entrypoint hardening checks.
 
 ### 5.2 Files to Modify
 
@@ -82,27 +82,28 @@ As an infrastructure operator, I want the htmlservd container entrypoints to be 
 
 ## 6. Acceptance Criteria
 
-- [ ] AC-1: `htmlservd-ssh-entrypoint.sh` passes `$CADDYFILE_PATH` as a shell argument (not interpolated in a `su -c "..."` string); a value like `/etc/caddy/Caddyfile; id` does not execute the `id` command.
-- [ ] AC-2: Both entrypoints validate `CADDY_BOOTSTRAP_LISTEN` and `PREVIEW_ROOT` before writing the Caddyfile; values containing `\n`, `{`, or `}` cause the script to exit with a non-zero status and a descriptive error message.
-- [ ] AC-3: The `authorized_keys` entry written from `SSH_PUBLIC_KEY` is prefixed with `restrict,port-forwarding `, disabling all other SSH options by default.
-- [ ] AC-4: `PermitTunnel no` is set in the Dockerfile sshd configuration.
-- [ ] AC-5: The Docker E2E test passes end-to-end (SSH login, apply, verify) after all changes.
-- [ ] AC-6: A container started with a valid `SSH_PUBLIC_KEY` and env vars allows `htmlctl apply` to succeed normally.
-- [ ] AC-7: A container started with `HTMLSERVD_PREVIEW_ROOT` containing a newline fails to start with a clear error log message.
+- [x] AC-1: `htmlservd-ssh-entrypoint.sh` passes `$CADDYFILE_PATH` as a shell argument (not interpolated in a `su -c "..."` string); a value like `/etc/caddy/Caddyfile; id` does not execute the `id` command.
+- [x] AC-2: Both entrypoints validate `CADDY_BOOTSTRAP_LISTEN` and `PREVIEW_ROOT` before writing the Caddyfile; values containing `\n`, `{`, or `}` cause the script to exit with a non-zero status and a descriptive error message.
+- [x] AC-3: The `authorized_keys` entry written from `SSH_PUBLIC_KEY` is prefixed with `restrict,port-forwarding `, disabling all other SSH options by default.
+- [x] AC-4: `PermitTunnel no` is set in the Dockerfile sshd configuration.
+- [x] AC-5: The Docker E2E test passes end-to-end (SSH login, apply, verify) after all changes.
+- [x] AC-6: A container started with a valid `SSH_PUBLIC_KEY` and env vars allows `htmlctl apply` to succeed normally.
+- [x] AC-7: A container started with `HTMLSERVD_PREVIEW_ROOT` containing a newline fails to start with a clear error log message.
 
 ## 7. Verification Plan
 
 ### Automated Tests
 
-- [ ] Docker E2E workflow (`.github/workflows/docker-e2e.yml`) passes with all changes applied.
-- [ ] Shell validation unit tests: injected values are rejected; valid values are accepted.
+- [x] Docker E2E workflow steps (run locally with identical commands) pass with all changes applied.
+- [x] Shell validation unit tests: injected values are rejected; valid values are accepted.
+- [x] `go test ./...` passes after entrypoint and Dockerfile hardening changes.
 
 ### Manual Tests
 
-- [ ] Build the image; start container with `HTMLSERVD_CADDYFILE_PATH='/etc/caddy/Caddyfile; id'`; confirm `id` output does not appear in container logs.
-- [ ] Start container with `HTMLSERVD_PREVIEW_ROOT='/srv }reverse_proxy http://evil'`; confirm container exits with error before writing the Caddyfile.
+- [x] Build the image; start container with `HTMLSERVD_CADDYFILE_PATH='/etc/caddy/Caddyfile; id'`; confirm `id` output does not appear in container logs.
+- [x] Start container with `HTMLSERVD_PREVIEW_ROOT='/srv }reverse_proxy http://evil'`; confirm container exits with error before writing the Caddyfile.
 - [ ] Attempt `ssh -w 0:0 htmlservd@host` after `PermitTunnel no`; confirm connection is rejected with `Tunnel forwarding disabled`.
-- [ ] Provide a `SSH_PUBLIC_KEY` prefixed with `command="id",`; confirm the `authorized_keys` entry contains `restrict,port-forwarding` and does not contain the original `command=` option.
+- [x] Provide a `SSH_PUBLIC_KEY` prefixed with `command="id",`; confirm the `authorized_keys` entry contains `restrict,port-forwarding` and does not contain the original `command=` option.
 
 ## 8. Performance / Reliability Considerations
 
@@ -119,3 +120,35 @@ As an infrastructure operator, I want the htmlservd container entrypoints to be 
 
 - Should the entrypoints fail-fast on any invalid env var, or should they warn and substitute a safe default? Leaning toward fail-fast for security-critical vars like `PREVIEW_ROOT` and `CADDYFILE_PATH`.
 - Should a minimal set of allowed key types be enforced for `SSH_PUBLIC_KEY` (e.g., reject RSA < 3072 bits)? Deferred to a future key-policy story.
+
+---
+
+## Implementation Summary
+
+- Hardened `docker/htmlservd-entrypoint.sh` and `docker/htmlservd-ssh-entrypoint.sh` with:
+  - top-of-file env-var security constraints documentation.
+  - fail-fast validation for `HTMLSERVD_CADDY_BOOTSTRAP_LISTEN` and `HTMLSERVD_PREVIEW_ROOT` (rejects newline, `{`, `}`).
+  - listen-address format + port-range validation (`:PORT`, `HOST:PORT`, `[IPv6]:PORT`).
+- Hardened SSH key handling in `docker/htmlservd-ssh-entrypoint.sh`:
+  - validates `SSH_PUBLIC_KEY` as a single bare key line with supported key type + `ssh-keygen` parse check.
+  - writes `authorized_keys` entries as `restrict,port-forwarding <key>`.
+- Removed shell-string command interpolation from SSH entrypoint startup path by running caddy/htmlservd through argument-safe user-switch execution (`runuser -u htmlservd -- ...`, with `su` fallback).
+- Updated `Dockerfile` sshd config to `PermitTunnel no`.
+- Added `scripts/test-entrypoint-security.sh` and wired it into `.github/workflows/docker-e2e.yml` (`Entrypoint Security Validation` step).
+
+## Verification Evidence
+
+- Passed: `bash -n docker/htmlservd-entrypoint.sh docker/htmlservd-ssh-entrypoint.sh scripts/test-entrypoint-security.sh`
+- Passed: `bash scripts/test-entrypoint-security.sh`
+- Passed: `go test ./...`
+- Passed: Docker builds: `docker build --target htmlservd-ssh -t htmlservd-ssh:e6s5 .` and `docker build --target htmlctl -t htmlctl:e6s5 .`
+- Passed: image sshd config inspection: `docker run --rm --entrypoint sh htmlservd-ssh:e6s5 -lc \"grep -n '^PermitTunnel' /etc/ssh/sshd_config.d/htmlservd.conf\"` -> `PermitTunnel no`.
+- Passed: local run of `.github/workflows/docker-e2e.yml` command sequence (SSH login + `htmlctl apply` + domain add + HTTP verification), ending with `E2E smoke passed`.
+- Passed: malicious `HTMLSERVD_CADDYFILE_PATH='/etc/caddy/Caddyfile; id'` check with no `id` output in container logs.
+- Passed: newline `HTMLSERVD_PREVIEW_ROOT` startup rejection with `invalid HTMLSERVD_PREVIEW_ROOT`.
+- Passed: prefixed `SSH_PUBLIC_KEY='command=\"id\" ...'` startup rejection with `invalid SSH_PUBLIC_KEY`.
+- Attempted: `ssh -w 0:0` tunnel-forwarding probe; local client lacked `/dev/net/tun`, so the probe was inconclusive for remote-side `Tunnel forwarding disabled` message (Docker image still enforces `PermitTunnel no`).
+
+## Completion Status
+
+Implemented, with local Docker E2E and hardening checks passing; only the explicit `ssh -w` rejection message remains environment-limited for manual verification.

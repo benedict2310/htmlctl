@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,25 +15,28 @@ const (
 	envKnownHostsPath = "HTMLCTL_SSH_KNOWN_HOSTS_PATH"
 )
 
-func resolvePrivateKeyPath(explicit string) string {
+func resolvePrivateKeyPath(explicit string) (string, error) {
 	if v := strings.TrimSpace(explicit); v != "" {
-		return v
+		return sanitizePrivateKeyPath(v)
 	}
 	if v := strings.TrimSpace(os.Getenv(envSSHKeyPath)); v != "" {
-		return v
+		return sanitizePrivateKeyPath(v)
 	}
 
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("%w: resolve user home for private key path: %w", ErrSSHKeyPath, err)
 	}
 	for _, name := range []string{"id_ed25519", "id_rsa", "id_ecdsa"} {
-		path := filepath.Join(home, ".ssh", name)
+		path, err := sanitizePrivateKeyPath(filepath.Join(home, ".ssh", name))
+		if err != nil {
+			return "", err
+		}
 		if _, err := os.Stat(path); err == nil {
-			return path
+			return path, nil
 		}
 	}
-	return ""
+	return "", nil
 }
 
 func resolveKnownHostsPath(explicit string) string {
@@ -46,20 +50,85 @@ func resolveKnownHostsPath(explicit string) string {
 }
 
 func authMethodFromPrivateKey(path string) (ssh.AuthMethod, error) {
-	keyPath := strings.TrimSpace(path)
-	if keyPath == "" {
-		return nil, fmt.Errorf("private key path is empty")
+	keyPath, err := sanitizePrivateKeyPath(path)
+	if err != nil {
+		return nil, err
 	}
 
 	raw, err := os.ReadFile(keyPath)
 	if err != nil {
-		return nil, fmt.Errorf("read private key %s: %w", keyPath, err)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			return nil, fmt.Errorf("read private key: %w", os.ErrNotExist)
+		case errors.Is(err, os.ErrPermission):
+			return nil, fmt.Errorf("read private key: %w", os.ErrPermission)
+		default:
+			return nil, fmt.Errorf("read private key: %w", redactPathError(err))
+		}
 	}
 
 	signer, err := ssh.ParsePrivateKey(raw)
 	if err != nil {
-		return nil, fmt.Errorf("parse private key %s: %w", keyPath, err)
+		return nil, fmt.Errorf("parse private key: %w", err)
 	}
 
 	return ssh.PublicKeys(signer), nil
+}
+
+func sanitizePrivateKeyPath(input string) (string, error) {
+	path := strings.TrimSpace(input)
+	if path == "" {
+		return "", fmt.Errorf("%w: private key path is empty", ErrSSHKeyPath)
+	}
+	path = filepath.Clean(path)
+	if !filepath.IsAbs(path) {
+		abs, err := filepath.Abs(path)
+		if err != nil {
+			return "", fmt.Errorf("%w: resolve private key path: %w", ErrSSHKeyPath, err)
+		}
+		path = filepath.Clean(abs)
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("%w: resolve user home for private key path: %w", ErrSSHKeyPath, err)
+	}
+	homeResolved := filepath.Clean(home)
+	if evalHome, err := filepath.EvalSymlinks(homeResolved); err == nil {
+		homeResolved = filepath.Clean(evalHome)
+	}
+
+	pathResolved := path
+	if evalDir, err := filepath.EvalSymlinks(filepath.Dir(path)); err == nil {
+		pathResolved = filepath.Join(filepath.Clean(evalDir), filepath.Base(path))
+	}
+
+	rel, err := filepath.Rel(homeResolved, pathResolved)
+	if err != nil {
+		return "", fmt.Errorf("%w: validate private key path: %w", ErrSSHKeyPath, err)
+	}
+	if rel == "." {
+		return "", fmt.Errorf("%w: private key path must point to a file under user home directory", ErrSSHKeyPath)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return "", fmt.Errorf("%w: private key path must be within user home directory", ErrSSHKeyPath)
+	}
+
+	return path, nil
+}
+
+func redactPathError(err error) error {
+	var pathErr *os.PathError
+	if errors.As(err, &pathErr) && pathErr.Err != nil {
+		return pathErr.Err
+	}
+	var linkErr *os.LinkError
+	if errors.As(err, &linkErr) && linkErr.Err != nil {
+		return linkErr.Err
+	}
+	var syscallErr *os.SyscallError
+	if errors.As(err, &syscallErr) && syscallErr.Err != nil {
+		return syscallErr.Err
+	}
+	return err
 }

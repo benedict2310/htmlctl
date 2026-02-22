@@ -1,7 +1,7 @@
 # E6-S4 - SSH Transport Hardening
 
 **Epic:** Epic 6 — Security Hardening
-**Status:** Pending
+**Status:** Done
 **Priority:** P1 (High — MITM and credential exposure vectors)
 **Estimated Effort:** 1 day
 **Dependencies:** E3-S2 (SSH tunnel transport)
@@ -93,21 +93,21 @@ As an operator, I want the htmlctl SSH transport to always verify the remote hos
 
 ## 6. Acceptance Criteria
 
-- [ ] AC-1: `SSHConfig` no longer has a public `HostKeyCB` field; all production callers derive the host key callback from `known_hosts`.
-- [ ] AC-2: `NewSSHTransport` always calls `knownHostsCallback`; there is no code path in non-test builds that can supply an arbitrary `ssh.HostKeyCallback`.
-- [ ] AC-3: All transport tests pass using a test mechanism that does not expose `InsecureIgnoreHostKey` in the production API surface.
-- [ ] AC-4: `ssh_agent.go` verifies the socket path is owned by the current effective UID before dialing; mis-owned paths return a clear error.
-- [ ] AC-5: `ssh_agent.go` verifies the path resolves to a Unix socket (`os.ModeSocket`); regular files and directories return a clear error.
-- [ ] AC-6: `private_key.go` applies `filepath.Clean` to all key paths and rejects any path that does not resolve inside `os.UserHomeDir()`.
-- [ ] AC-7: Error messages for key-load failures do not include the resolved key file path in the string returned to the user.
+- [x] AC-1: `SSHConfig` no longer has a public `HostKeyCB` field; all production callers derive the host key callback from `known_hosts`.
+- [x] AC-2: `NewSSHTransport` always calls `knownHostsCallback`; there is no code path in non-test builds that can supply an arbitrary `ssh.HostKeyCallback`.
+- [x] AC-3: All transport tests pass using a test mechanism that does not expose `InsecureIgnoreHostKey` in the production API surface.
+- [x] AC-4: `ssh_agent.go` verifies the socket path is owned by the current effective UID before dialing; mis-owned paths return a clear error.
+- [x] AC-5: `ssh_agent.go` verifies the path resolves to a Unix socket (`os.ModeSocket`); regular files and directories return a clear error.
+- [x] AC-6: `private_key.go` applies `filepath.Clean` to all key paths and rejects any path that does not resolve inside `os.UserHomeDir()`.
+- [x] AC-7: Error messages for key-load failures do not include the resolved key file path in the string returned to the user.
 
 ## 7. Verification Plan
 
 ### Automated Tests
 
-- [ ] Agent socket validation tests: UID mismatch and non-socket type return errors.
-- [ ] Private key path tests: paths outside home directory are rejected.
-- [ ] All existing transport integration tests pass with the updated test infrastructure (no `InsecureIgnoreHostKey` in production API).
+- [x] Agent socket validation tests: UID mismatch and non-socket type return errors.
+- [x] Private key path tests: paths outside home directory are rejected.
+- [x] All existing transport integration tests pass with the updated test infrastructure (no `InsecureIgnoreHostKey` in production API).
 
 ### Manual Tests
 
@@ -130,3 +130,30 @@ As an operator, I want the htmlctl SSH transport to always verify the remote hos
 
 - Should the agent socket ownership check be a hard error or a warning with a `--insecure-agent` override? Leaning toward hard error for security, with clear documentation on how to work around it in unusual environments.
 - Should the home-directory restriction be relaxed to allow any user-owned file (not just files under `$HOME`)? Some operators store SSH keys in `/etc/htmlctl/` or similar. Consider making the restriction configurable via an allowlist of key prefixes.
+
+---
+
+## 11. Implementation Summary
+
+- Removed `HostKeyCB` from `internal/transport/ssh.go` `SSHConfig` and made `NewSSHTransport` always construct host verification from `known_hosts` via `knownHostsCallback`.
+- Updated tunnel tests to use temporary `known_hosts` fixtures instead of `ssh.InsecureIgnoreHostKey`:
+  - `internal/transport/ssh_test.go`
+  - `internal/transport/context_test.go`
+- Added SSH agent socket hardening:
+  - `internal/transport/ssh_agent.go` now validates `SSH_AUTH_SOCK` before dialing.
+  - Added Unix validator in `internal/transport/agent_socket_unix.go` (`os.Lstat`, socket-type check, effective-UID ownership check).
+  - Added Windows stub in `internal/transport/agent_socket_windows.go`.
+  - Added validator tests in `internal/transport/agent_socket_unix_test.go`.
+- Hardened private key path handling in `internal/transport/private_key.go`:
+  - `resolvePrivateKeyPath` now applies `filepath.Clean`, normalizes to absolute paths, and rejects paths outside `os.UserHomeDir()`.
+  - `authMethodFromPrivateKey` now returns sanitized read/parse errors without resolved key paths.
+- Expanded private key and integration coverage:
+  - `internal/transport/private_key_test.go`
+  - `internal/transport/integration_test.go` (private-key fallback uses a temp `$HOME/.ssh/id_rsa`)
+- Updated architecture docs:
+  - `docs/technical-spec.md`
+  - `docs/epics.md`
+
+## 12. Completion Status
+
+- Implemented and verified.

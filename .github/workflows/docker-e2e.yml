@@ -13,6 +13,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Entrypoint Security Validation
+        run: |
+          bash scripts/test-entrypoint-security.sh
+
       - name: Build Docker Images
         run: |
           docker build --target htmlservd-ssh -t htmlservd-ssh:ci .

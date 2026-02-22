@@ -35,6 +35,7 @@ ENTRYPOINT ["/usr/local/bin/htmlservd-entrypoint.sh"]
 FROM htmlservd AS htmlservd-ssh
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends openssh-server && rm -rf /var/lib/apt/lists/*
+# Disable TUN/TAP forwarding to avoid container network pivot paths.
 RUN mkdir -p /run/sshd /etc/ssh/sshd_config.d /root/.ssh && \
 	printf '%s\n' \
 		'Port 22' \
@@ -45,7 +46,7 @@ RUN mkdir -p /run/sshd /etc/ssh/sshd_config.d /root/.ssh && \
 		'AuthorizedKeysFile .ssh/authorized_keys' \
 		'AllowUsers htmlservd' \
 		'AllowTcpForwarding yes' \
-		'PermitTunnel yes' \
+		'PermitTunnel no' \
 		'GatewayPorts no' \
 		'X11Forwarding no' > /etc/ssh/sshd_config.d/htmlservd.conf
 COPY docker/htmlservd-ssh-entrypoint.sh /usr/local/bin/htmlservd-ssh-entrypoint.sh

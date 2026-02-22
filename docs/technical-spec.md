@@ -172,7 +172,7 @@ For any environment apply:
 - Exactly one root element.
 - Root tag allowlist: `section|header|footer|main|nav|article|div` (configurable).
 - If component is anchor-navigable: root must include `id="<componentName>"`.
-- In v1, disallow `<script>` tags in components (JS only from `scripts/site.js`).
+- In v1, disallow `<script>` tags and inline event handler attributes matching `(?i)^on\w+$` in components (JS only from `scripts/site.js`).
 
 ### 6.2 Page validation
 
@@ -195,6 +195,7 @@ For any environment apply:
 
 - `htmlservd` binds to **127.0.0.1 only** by default.
 - Remote access is via **SSH tunnel** (recommended) or reverse-proxy private network.
+- SSH host keys are verified against `known_hosts`; insecure host-key bypass is not supported in production transport APIs.
 - API authentication in v1:
   - all `/api/v1/*` routes require `Authorization: Bearer <token>` when `api.token` (or `HTMLSERVD_API_TOKEN`) is configured.
   - health routes (`/healthz`, `/readyz`) remain unauthenticated.

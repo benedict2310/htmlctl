@@ -113,6 +113,50 @@ func TestRenderOmitsScriptWhenNotPresent(t *testing.T) {
 	}
 }
 
+func TestRenderEscapesMaliciousPageMetadata(t *testing.T) {
+	site := &model.Site{
+		Website: model.Website{Metadata: model.Metadata{Name: "x"}},
+		Pages: map[string]model.Page{
+			"index": {
+				Metadata: model.Metadata{Name: "index"},
+				Spec: model.PageSpec{
+					Route:       "/",
+					Title:       `</title><script>alert(1)</script>`,
+					Description: `" onload="evil()"`,
+					Layout:      []model.PageLayoutItem{{Include: "hero"}},
+				},
+			},
+		},
+		Components: map[string]model.Component{
+			"hero": {Name: "hero", HTML: "<section id=\"hero\">ok</section>\n"},
+		},
+		Styles: model.StyleBundle{
+			Name:       "default",
+			TokensCSS:  ":root{}",
+			DefaultCSS: "body{}",
+		},
+	}
+
+	outDir := t.TempDir()
+	if err := Render(site, outDir); err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+
+	html := readFile(t, filepath.Join(outDir, "index.html"))
+	if strings.Contains(html, `<script>alert(1)</script>`) {
+		t.Fatalf("expected title script payload to be escaped, got: %s", html)
+	}
+	if !strings.Contains(html, `<title>&lt;/title&gt;&lt;script&gt;alert(1)&lt;/script&gt;</title>`) {
+		t.Fatalf("expected escaped title payload, got: %s", html)
+	}
+	if strings.Contains(html, `content="" onload="evil()"`) {
+		t.Fatalf("expected description payload to remain escaped in content attr, got: %s", html)
+	}
+	if !strings.Contains(html, `meta name="description" content="&#34; onload=&#34;evil()&#34;"`) {
+		t.Fatalf("expected escaped description payload, got: %s", html)
+	}
+}
+
 func TestRenderDeterministicAcrossRuns(t *testing.T) {
 	site, err := loader.LoadSite(filepath.Join("..", "..", "testdata", "valid-site"))
 	if err != nil {

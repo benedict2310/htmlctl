@@ -2,6 +2,7 @@ package validator
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -9,6 +10,8 @@ import (
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 )
+
+var inlineEventAttrPattern = regexp.MustCompile(`(?i)^on\w+$`)
 
 func validateParsedFragment(component model.Component, allowlist map[string]struct{}, requireAnchorID bool, expectedAnchorID string) []ValidationError {
 	rootNodes, parseErr := parseFragment(component.HTML)
@@ -46,9 +49,9 @@ func validateParsedFragment(component model.Component, allowlist map[string]stru
 		errs = append(errs, newError(component.Name, "root-tag-allowlist", fmt.Sprintf("root tag <%s> is not allowed; use one of: %s", root.Data, strings.Join(tags, ", "))))
 	}
 
-	if containsScript(root) {
-		errs = append(errs, newError(component.Name, "script-disallow", "<script> tags are not allowed in components; move JavaScript to scripts/site.js"))
-	}
+	// Component HTML is intentionally rendered as trusted ContentHTML in the base page template.
+	// Keep script execution vectors out here; page metadata fields are escaped by html/template.
+	errs = append(errs, collectUnsafeHTMLViolations(component.Name, root)...)
 
 	if requireAnchorID {
 		id, hasID := getAttribute(root, "id")
@@ -83,19 +86,31 @@ func rootElements(nodes []*html.Node) ([]*html.Node, bool) {
 	return roots, hasRootText
 }
 
-func containsScript(root *html.Node) bool {
-	if root == nil {
-		return false
-	}
-	if root.Type == html.ElementNode && root.DataAtom == atom.Script {
-		return true
-	}
-	for child := root.FirstChild; child != nil; child = child.NextSibling {
-		if containsScript(child) {
-			return true
+func collectUnsafeHTMLViolations(componentName string, root *html.Node) []ValidationError {
+	var errs []ValidationError
+
+	var walk func(*html.Node)
+	walk = func(node *html.Node) {
+		if node == nil {
+			return
+		}
+		if node.Type == html.ElementNode {
+			if node.DataAtom == atom.Script {
+				errs = append(errs, newError(componentName, "script-disallow", "<script> tags are not allowed in components; move JavaScript to scripts/site.js"))
+			}
+			for _, attr := range node.Attr {
+				if inlineEventAttrPattern.MatchString(attr.Key) {
+					errs = append(errs, newError(componentName, "event-handler-disallow", fmt.Sprintf("inline event handler attribute %q is not allowed in components; move JavaScript to scripts/site.js", attr.Key)))
+				}
+			}
+		}
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			walk(child)
 		}
 	}
-	return false
+
+	walk(root)
+	return errs
 }
 
 func getAttribute(node *html.Node, key string) (string, bool) {

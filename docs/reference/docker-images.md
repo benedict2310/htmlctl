@@ -31,6 +31,12 @@ docker build --target htmlservd-ssh -t htmlservd-ssh:local .
 
 When `HTMLSERVD_CADDY_AUTO_HTTPS=false`, generated domain config uses explicit `http://<domain>` site addresses to avoid local ACME/TLS failures.
 
+Entrypoint validation constraints:
+
+- `HTMLSERVD_CADDY_BOOTSTRAP_LISTEN` must be `:PORT`, `HOST:PORT`, or `[IPv6]:PORT`.
+- `HTMLSERVD_PREVIEW_WEBSITE` and `HTMLSERVD_PREVIEW_ENV` must be safe path components (`[A-Za-z0-9._-]+`, no `..`).
+- `HTMLSERVD_CADDY_BOOTSTRAP_LISTEN` and `HTMLSERVD_PREVIEW_ROOT` reject values containing newlines, `{`, or `}`.
+
 Mount these paths for persistence:
 
 - `/var/lib/htmlservd`
@@ -56,10 +62,17 @@ Auth behavior:
 1. `HTMLCTL_SSH_KNOWN_HOSTS_PATH`
 2. `~/.ssh/known_hosts`
 
+## Runtime Defaults (`htmlservd-ssh`)
+
+- `SSH_PUBLIC_KEY` is required.
+- `SSH_PUBLIC_KEY` must be a single bare public-key line (no `authorized_keys` options prefix).
+
 ## Security/Hardening Notes
 
 - `htmlservd` and `htmlctl` run as non-root UID `10001`.
 - `htmlservd-ssh` requires `SSH_PUBLIC_KEY`, disables password login, and allows SSH only for `htmlservd` user (root SSH disabled).
+- `htmlservd-ssh` writes authorized keys as `restrict,port-forwarding <key>` to enforce least privilege for tunnel usage.
+- SSH `PermitTunnel` is disabled (`PermitTunnel no`) to prevent TUN/TAP pivoting through the container.
 - Caddy receives `CAP_NET_BIND_SERVICE` so non-root runtime can bind `80/443`.
 - Caddy reload uses explicit `--adapter caddyfile` for validate/reload consistency.
 - Use `.dockerignore` to keep build context small and avoid shipping local artifacts.

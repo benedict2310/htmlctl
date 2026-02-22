@@ -13,4 +13,6 @@ var (
 	ErrSSHUnreachable = errors.New("ssh host unreachable")
 	// ErrSSHAgentUnavailable indicates SSH agent is unavailable/misconfigured.
 	ErrSSHAgentUnavailable = errors.New("ssh agent unavailable")
+	// ErrSSHKeyPath indicates private-key path sanitization/validation failure.
+	ErrSSHKeyPath = errors.New("ssh private key path invalid")
 )

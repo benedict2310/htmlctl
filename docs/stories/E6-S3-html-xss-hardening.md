@@ -1,7 +1,7 @@
 # E6-S3 - HTML XSS Hardening
 
 **Epic:** Epic 6 — Security Hardening
-**Status:** Pending
+**Status:** Done
 **Priority:** P0 (Critical — stored XSS served to end users)
 **Estimated Effort:** 1 day
 **Dependencies:** E1-S2 (deterministic renderer), E1-S3 (component validation)
@@ -86,22 +86,22 @@ See §5.2 — tests are co-located with their source files.
 
 ## 6. Acceptance Criteria
 
-- [ ] AC-1: `pkg/renderer/template.go` imports `html/template`; `text/template` is no longer imported in the renderer package.
-- [ ] AC-2: A page with `spec.title: '</title><script>alert(1)</script>'` produces a rendered HTML file where the script tag is HTML-escaped (e.g., `&lt;script&gt;`) and does not execute in a browser.
-- [ ] AC-3: A page with `spec.description: '" onload="evil()'` produces a rendered HTML file where the attribute injection is escaped and does not produce an `onload` attribute.
-- [ ] AC-4: `ContentHTML` (assembled from component HTML files) renders unescaped in the output so that valid HTML markup in components is preserved.
-- [ ] AC-5: The component validator rejects any component containing an element with an attribute matching `(?i)^on\w+$` (e.g., `onerror`, `onclick`, `onload`, `onmouseover`).
-- [ ] AC-6: The validator still accepts components with non-event attributes (e.g., `href`, `src`, `class`, `id`, `style`).
-- [ ] AC-7: All existing renderer and validator tests continue to pass.
+- [x] AC-1: `pkg/renderer/template.go` imports `html/template`; `text/template` is no longer imported in the renderer package.
+- [x] AC-2: A page with `spec.title: '</title><script>alert(1)</script>'` produces a rendered HTML file where the script tag is HTML-escaped (e.g., `&lt;script&gt;`) and does not execute in a browser.
+- [x] AC-3: A page with `spec.description: '" onload="evil()'` produces a rendered HTML file where the attribute injection is escaped and does not produce an `onload` attribute.
+- [x] AC-4: `ContentHTML` (assembled from component HTML files) renders unescaped in the output so that valid HTML markup in components is preserved.
+- [x] AC-5: The component validator rejects any component containing an element with an attribute matching `(?i)^on\w+$` (e.g., `onerror`, `onclick`, `onload`, `onmouseover`).
+- [x] AC-6: The validator still accepts components with non-event attributes (e.g., `href`, `src`, `class`, `id`, `style`).
+- [x] AC-7: All existing renderer and validator tests continue to pass.
 
 ## 7. Verification Plan
 
 ### Automated Tests
 
-- [ ] Renderer tests: `</title><script>` in Title is escaped in output.
-- [ ] Renderer tests: `ContentHTML` with raw HTML renders correctly.
-- [ ] Validator tests: `onerror` attribute rejected; `href` attribute accepted.
-- [ ] Full renderer + validator integration: a complete site bundle with a safe component renders without error.
+- [x] Renderer tests: `</title><script>` in Title is escaped in output.
+- [x] Renderer tests: `ContentHTML` with raw HTML renders correctly.
+- [x] Validator tests: `onerror` attribute rejected; `href` attribute accepted.
+- [x] Full renderer + validator integration: a complete site bundle with a safe component renders without error.
 
 ### Manual Tests
 
@@ -123,3 +123,25 @@ See §5.2 — tests are co-located with their source files.
 
 - Should `style` attributes be inspected for `expression()` or `url(javascript:...)` patterns? This is a lower-risk attack surface and is deferred to a follow-up hardening story.
 - Should the validator reject `<a href="javascript:...">` links? Worth discussing — add to a follow-up issue if confirmed.
+
+---
+
+## 11. Implementation Summary
+
+- Switched renderer templating to `html/template` and changed `pageTemplateData.ContentHTML` to `template.HTML` so component markup remains unescaped while metadata is auto-escaped.
+- Updated renderer page assembly to cast stitched component HTML at the trust boundary (`ContentHTML: template.HTML(contentHTML)`).
+- Replaced script-only validator traversal with unsafe HTML detection that rejects:
+  - `<script>` elements (`script-disallow`)
+  - inline event handler attributes matching `(?i)^on\w+$` (`event-handler-disallow`)
+- Added tests for metadata escaping and trusted content rendering:
+  - `pkg/renderer/template_test.go`
+  - `pkg/renderer/renderer_test.go`
+- Added validator tests for `onerror`/`onclick` rejection and safe attribute acceptance:
+  - `pkg/validator/rules_test.go`
+- Updated architecture docs to codify event-handler rejection in component validation:
+  - `docs/technical-spec.md`
+  - `docs/epics.md`
+
+## 12. Completion Status
+
+- Implemented and verified.

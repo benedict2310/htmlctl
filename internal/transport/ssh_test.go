@@ -49,10 +49,10 @@ func TestParseServerURLRejectsInvalidValues(t *testing.T) {
 
 func TestNewSSHTransportUnreachableHostClassifiesAsUnreachable(t *testing.T) {
 	_, err := NewSSHTransport(t.Context(), SSHConfig{
-		ServerURL:   "ssh://root@127.0.0.1:1",
-		HostKeyCB:   ssh.InsecureIgnoreHostKey(),
-		AuthMethods: []ssh.AuthMethod{ssh.Password("unused")},
-		Timeout:     300 * time.Millisecond,
+		ServerURL:      "ssh://root@127.0.0.1:1",
+		KnownHostsPath: writeEmptyKnownHostsFile(t),
+		AuthMethods:    []ssh.AuthMethod{ssh.Password("unused")},
+		Timeout:        300 * time.Millisecond,
 	})
 	if err == nil {
 		t.Fatalf("expected unreachable host error")
@@ -64,13 +64,35 @@ func TestNewSSHTransportUnreachableHostClassifiesAsUnreachable(t *testing.T) {
 
 func TestNewSSHTransportRejectsInvalidRemoteAddr(t *testing.T) {
 	_, err := NewSSHTransport(t.Context(), SSHConfig{
-		ServerURL:  "ssh://root@example.com",
-		RemoteAddr: "bad-addr",
+		ServerURL:      "ssh://root@example.com",
+		KnownHostsPath: writeEmptyKnownHostsFile(t),
+		RemoteAddr:     "bad-addr",
 	})
 	if err == nil {
 		t.Fatalf("expected invalid remote address error")
 	}
 	if !errors.Is(err, ErrSSHTunnel) {
 		t.Fatalf("expected ErrSSHTunnel, got %v", err)
+	}
+}
+
+func TestNewSSHTransportKeyPathErrorNotClassifiedAsAgentUnavailable(t *testing.T) {
+	t.Setenv("SSH_AUTH_SOCK", "")
+	t.Setenv(envSSHKeyPath, "/etc/passwd")
+
+	_, err := NewSSHTransport(t.Context(), SSHConfig{
+		ServerURL:      "ssh://root@127.0.0.1:1",
+		KnownHostsPath: writeEmptyKnownHostsFile(t),
+		AuthMethods:    nil,
+		Timeout:        300 * time.Millisecond,
+	})
+	if err == nil {
+		t.Fatalf("expected key-path validation error")
+	}
+	if !errors.Is(err, ErrSSHKeyPath) {
+		t.Fatalf("expected ErrSSHKeyPath, got %v", err)
+	}
+	if errors.Is(err, ErrSSHAgentUnavailable) {
+		t.Fatalf("expected key-path failure to not be classified as ErrSSHAgentUnavailable, got %v", err)
 	}
 }

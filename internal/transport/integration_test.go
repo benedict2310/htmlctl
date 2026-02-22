@@ -338,6 +338,7 @@ func newSigner(t *testing.T) ssh.Signer {
 
 func newRSASignerWithPrivateKeyFile(t *testing.T) (ssh.Signer, string) {
 	t.Helper()
+	t.Setenv("HOME", t.TempDir())
 
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -352,7 +353,14 @@ func newRSASignerWithPrivateKeyFile(t *testing.T) (ssh.Signer, string) {
 		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
 	}
-	path := filepath.Join(t.TempDir(), "id_rsa")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("resolve user home: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
+		t.Fatalf("create .ssh dir: %v", err)
+	}
+	path := filepath.Join(home, ".ssh", "id_rsa")
 	if err := os.WriteFile(path, pem.EncodeToMemory(block), 0o600); err != nil {
 		t.Fatalf("write private key: %v", err)
 	}

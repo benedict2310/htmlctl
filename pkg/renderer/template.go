@@ -3,14 +3,15 @@ package renderer
 import (
 	"bytes"
 	"fmt"
-	"text/template"
+	"html/template"
 )
 
 type pageTemplateData struct {
 	Title       string
 	Description string
 	StyleHrefs  []string
-	ContentHTML string
+	// ContentHTML is trusted component markup; all other fields remain auto-escaped.
+	ContentHTML template.HTML
 	ScriptSrc   string
 }
 
@@ -36,14 +37,11 @@ const defaultPageTemplate = `<!DOCTYPE html>
 </html>
 `
 
-func renderDefaultTemplate(data pageTemplateData) ([]byte, error) {
-	tmpl, err := template.New("default").Parse(defaultPageTemplate)
-	if err != nil {
-		return nil, fmt.Errorf("parse default template: %w", err)
-	}
+var defaultTmpl = template.Must(template.New("default").Parse(defaultPageTemplate))
 
+func renderDefaultTemplate(data pageTemplateData) ([]byte, error) {
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
+	if err := defaultTmpl.Execute(&buf, data); err != nil {
 		return nil, fmt.Errorf("execute default template: %w", err)
 	}
 

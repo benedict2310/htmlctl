@@ -118,5 +118,10 @@ func All() []Migration {
 			Name:    "domain_bindings",
 			UpSQL:   domainBindingsSchemaSQL,
 		},
+		{
+			Version: 3,
+			Name:    "pages_head_metadata",
+			UpSQL:   pagesHeadMetadataMigrationSQL,
+		},
 	}
 }

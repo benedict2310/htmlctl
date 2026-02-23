@@ -51,6 +51,12 @@ Logical instance of a website:
 - `spec.route`: string (`/`, `/product`)
 - `spec.title`, `spec.description`
 - `spec.layout`: ordered list of `include` references
+- `spec.head` (optional): server-rendered SEO/share metadata
+  - `canonicalURL`: canonical URL value for `<link rel="canonical">`
+  - `meta`: map of `<meta name="...">` values (for example `keywords`, `robots`, `author`, `application-name`)
+  - `openGraph`: typed `og:*` values (`type`, `url`, `siteName`, `locale`, `title`, `description`, `image`)
+  - `twitter`: typed `twitter:*` values (`card`, `url`, `title`, `description`, `image`)
+  - `jsonLD`: ordered list of JSON-LD blocks (`id`, `payload`)
 
 Example:
 
@@ -70,6 +76,28 @@ spec:
     - include: pricing
     - include: faq
     - include: footer
+  head:
+    canonicalURL: https://futurelab.studio/product
+    meta:
+      robots: index,follow
+      keywords: Futurelab product
+    openGraph:
+      type: website
+      url: https://futurelab.studio/product
+      title: Futurelab Product
+      description: Product details
+      image: https://futurelab.studio/assets/product/og-image.jpg
+    twitter:
+      card: summary_large_image
+      title: Futurelab Product
+      description: Product details
+      image: https://futurelab.studio/assets/product/og-image.jpg
+    jsonLD:
+      - id: product
+        payload:
+          "@context": https://schema.org
+          "@type": Product
+          name: Futurelab Product
 ```
 
 ### 2.4 Component
@@ -126,10 +154,18 @@ Pages are not full HTML docs; they are layouts that reference components. Render
 - Layout includes inserted in order into `<main>`
 - `scripts/site.js` injected at end of body if present
 - Stylesheets injected into `<head>`
+- `spec.head` metadata is rendered directly into `<head>` (no runtime JS injection path)
+- Head metadata render order is deterministic:
+  1. canonical link
+  2. `meta[name]` tags sorted by `name`
+  3. Open Graph tags in fixed field order
+  4. Twitter tags in fixed field order
+  5. JSON-LD blocks in manifest order
 
 ### 3.2 Determinism requirements
 
 - Stable ordering for injections (styles, scripts)
+- Stable ordering for head metadata tags and JSON-LD block emission
 - Normalized line endings (LF)
 - No time-dependent output
 - Asset names are content-addressed
@@ -179,6 +215,7 @@ For any environment apply:
 - routes normalized
 - all includes exist
 - prevent cycles (component cannot include other components in v1)
+- metadata URL fields in `spec.head` allow only relative URLs or `http(s)` schemes
 
 ### 6.3 Asset validation
 

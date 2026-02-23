@@ -51,6 +51,21 @@ func TestBuilderBuildSuccess(t *testing.T) {
 			t.Fatalf("expected release file %s to exist: %v", rel, err)
 		}
 	}
+	indexHTML, err := os.ReadFile(filepath.Join(releaseDir, "index.html"))
+	if err != nil {
+		t.Fatalf("read index.html: %v", err)
+	}
+	indexText := string(indexHTML)
+	for _, needle := range []string{
+		`<link rel="canonical" href="https://futurelab.studio/">`,
+		`<meta property="og:title" content="Futurelab Home">`,
+		`<meta property="twitter:card" content="summary_large_image">`,
+		`<script type="application/ld+json">`,
+	} {
+		if !strings.Contains(indexText, needle) {
+			t.Fatalf("expected index.html to contain %q", needle)
+		}
+	}
 
 	currentTarget, err := os.Readlink(filepath.Join(dataDir, "websites", "futurelab", "envs", "staging", "current"))
 	if err != nil {
@@ -217,7 +232,8 @@ func seedReleaseState(t *testing.T, ctx context.Context, q *dbpkg.Queries, blobs
 		t.Fatalf("UpsertComponent() error = %v", err)
 	}
 	layoutJSON, _ := json.Marshal([]map[string]string{{"include": "header"}})
-	if err := q.UpsertPage(ctx, dbpkg.PageRow{WebsiteID: websiteID, Name: "index", Route: "/", Title: "Home", Description: "Home", LayoutJSON: string(layoutJSON), ContentHash: pageHash}); err != nil {
+	headJSON := `{"canonicalURL":"https://futurelab.studio/","meta":{"robots":"index,follow"},"openGraph":{"title":"Futurelab Home","url":"https://futurelab.studio/"},"twitter":{"card":"summary_large_image","title":"Futurelab Home"},"jsonLD":[{"id":"website","payload":{"@context":"https://schema.org","@type":"WebSite","name":"Futurelab"}}]}`
+	if err := q.UpsertPage(ctx, dbpkg.PageRow{WebsiteID: websiteID, Name: "index", Route: "/", Title: "Home", Description: "Home", LayoutJSON: string(layoutJSON), HeadJSON: headJSON, ContentHash: pageHash}); err != nil {
 		t.Fatalf("UpsertPage() error = %v", err)
 	}
 	styleFilesJSON, _ := json.Marshal([]map[string]string{{"file": "styles/tokens.css", "hash": tokensHash}, {"file": "styles/default.css", "hash": defaultsHash}})

@@ -38,13 +38,18 @@ func Render(site *model.Site, outputDir string) error {
 		if err != nil {
 			return fmt.Errorf("stitch page %q: %w", page.Metadata.Name, err)
 		}
+		headMetaHTML, err := renderHeadMeta(page.Spec.Head)
+		if err != nil {
+			return fmt.Errorf("render head metadata for page %q: %w", page.Metadata.Name, err)
+		}
 
 		htmlBytes, err := renderDefaultTemplate(pageTemplateData{
-			Title:       page.Spec.Title,
-			Description: page.Spec.Description,
-			StyleHrefs:  []string{statics.TokensHref, statics.DefaultHref},
-			ContentHTML: template.HTML(contentHTML),
-			ScriptSrc:   statics.ScriptSrc,
+			Title:        page.Spec.Title,
+			Description:  page.Spec.Description,
+			HeadMetaHTML: headMetaHTML,
+			StyleHrefs:   []string{statics.TokensHref, statics.DefaultHref},
+			ContentHTML:  template.HTML(contentHTML),
+			ScriptSrc:    statics.ScriptSrc,
 		})
 		if err != nil {
 			return fmt.Errorf("render page %q: %w", page.Metadata.Name, err)

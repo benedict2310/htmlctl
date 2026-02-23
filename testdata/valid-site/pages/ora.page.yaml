@@ -1,0 +1,37 @@
+apiVersion: htmlctl.dev/v1
+kind: Page
+metadata:
+  name: ora
+spec:
+  route: /ora
+  title: "Ora for macOS | Local Voice Assistant"
+  description: "A privacy-first macOS assistant running fully on your device."
+  layout:
+    - include: header
+  head:
+    canonicalURL: https://futurelab.studio/ora
+    meta:
+      keywords: Ora, macOS voice assistant
+      robots: index,follow
+      author: Benedict
+      application-name: Ora
+    openGraph:
+      type: website
+      url: https://futurelab.studio/ora
+      siteName: Futurelab Studio
+      locale: en_US
+      title: Ora for macOS | Local Voice Assistant
+      description: Local-first voice assistant for macOS.
+      image: /assets/ora/og-image.jpg
+    twitter:
+      card: summary_large_image
+      url: https://futurelab.studio/ora
+      title: Ora for macOS | Local Voice Assistant
+      description: A privacy-first macOS assistant running fully on your device.
+      image: /assets/ora/og-image.jpg
+    jsonLD:
+      - id: ora-softwareapplication
+        payload:
+          "@context": https://schema.org
+          "@type": SoftwareApplication
+          name: Ora

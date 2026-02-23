@@ -80,7 +80,7 @@ func (q *Queries) GetEnvironmentByName(ctx context.Context, websiteID int64, nam
 }
 
 func (q *Queries) InsertPage(ctx context.Context, in PageRow) (int64, error) {
-	res, err := q.db.ExecContext(ctx, `INSERT INTO pages(website_id, name, route, title, description, layout_json, content_hash) VALUES(?, ?, ?, ?, ?, ?, ?)`, in.WebsiteID, in.Name, in.Route, in.Title, in.Description, in.LayoutJSON, in.ContentHash)
+	res, err := q.db.ExecContext(ctx, `INSERT INTO pages(website_id, name, route, title, description, layout_json, head_json, content_hash) VALUES(?, ?, ?, ?, ?, ?, ?, ?)`, in.WebsiteID, in.Name, in.Route, in.Title, in.Description, in.LayoutJSON, in.HeadJSONOrDefault(), in.ContentHash)
 	if err != nil {
 		return 0, fmt.Errorf("insert page: %w", err)
 	}
@@ -89,16 +89,17 @@ func (q *Queries) InsertPage(ctx context.Context, in PageRow) (int64, error) {
 
 func (q *Queries) UpsertPage(ctx context.Context, in PageRow) error {
 	_, err := q.db.ExecContext(ctx, `
-INSERT INTO pages(website_id, name, route, title, description, layout_json, content_hash)
-VALUES(?, ?, ?, ?, ?, ?, ?)
+INSERT INTO pages(website_id, name, route, title, description, layout_json, head_json, content_hash)
+VALUES(?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(website_id, name) DO UPDATE SET
   route=excluded.route,
   title=excluded.title,
   description=excluded.description,
   layout_json=excluded.layout_json,
+  head_json=excluded.head_json,
   content_hash=excluded.content_hash,
   updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
-`, in.WebsiteID, in.Name, in.Route, in.Title, in.Description, in.LayoutJSON, in.ContentHash)
+`, in.WebsiteID, in.Name, in.Route, in.Title, in.Description, in.LayoutJSON, in.HeadJSONOrDefault(), in.ContentHash)
 	if err != nil {
 		return fmt.Errorf("upsert page: %w", err)
 	}
@@ -106,7 +107,7 @@ ON CONFLICT(website_id, name) DO UPDATE SET
 }
 
 func (q *Queries) ListPagesByWebsite(ctx context.Context, websiteID int64) ([]PageRow, error) {
-	rows, err := q.db.QueryContext(ctx, `SELECT id, website_id, name, route, title, description, layout_json, content_hash, created_at, updated_at FROM pages WHERE website_id = ? ORDER BY name`, websiteID)
+	rows, err := q.db.QueryContext(ctx, `SELECT id, website_id, name, route, title, description, layout_json, head_json, content_hash, created_at, updated_at FROM pages WHERE website_id = ? ORDER BY name`, websiteID)
 	if err != nil {
 		return nil, fmt.Errorf("list pages by website: %w", err)
 	}
@@ -115,7 +116,7 @@ func (q *Queries) ListPagesByWebsite(ctx context.Context, websiteID int64) ([]Pa
 	out := []PageRow{}
 	for rows.Next() {
 		var row PageRow
-		if err := rows.Scan(&row.ID, &row.WebsiteID, &row.Name, &row.Route, &row.Title, &row.Description, &row.LayoutJSON, &row.ContentHash, &row.CreatedAt, &row.UpdatedAt); err != nil {
+		if err := rows.Scan(&row.ID, &row.WebsiteID, &row.Name, &row.Route, &row.Title, &row.Description, &row.LayoutJSON, &row.HeadJSON, &row.ContentHash, &row.CreatedAt, &row.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan page row: %w", err)
 		}
 		out = append(out, row)

@@ -4,6 +4,8 @@ import (
 	"html/template"
 	"strings"
 	"testing"
+
+	"github.com/benedict2310/htmlctl/pkg/model"
 )
 
 func TestRenderDefaultTemplateStructureAndOrder(t *testing.T) {
@@ -82,5 +84,37 @@ func TestRenderDefaultTemplatePreservesTrustedContentHTML(t *testing.T) {
 	}
 	if strings.Contains(html, "&lt;section") {
 		t.Fatalf("unexpected escaping of trusted component html, got: %s", html)
+	}
+}
+
+func TestRenderDefaultTemplateInjectsHeadMetaBeforeStyles(t *testing.T) {
+	headMeta, err := renderHeadMeta(&model.PageHead{
+		CanonicalURL: "https://futurelab.studio/ora",
+		OpenGraph: &model.OpenGraph{
+			Title: "Ora for macOS",
+		},
+	})
+	if err != nil {
+		t.Fatalf("renderHeadMeta() error = %v", err)
+	}
+
+	output, err := renderDefaultTemplate(pageTemplateData{
+		Title:        "Ora",
+		Description:  "Local-first voice assistant",
+		HeadMetaHTML: headMeta,
+		StyleHrefs:   []string{"/styles/tokens-abc.css", "/styles/default-def.css"},
+	})
+	if err != nil {
+		t.Fatalf("renderDefaultTemplate() error = %v", err)
+	}
+
+	html := string(output)
+	canonicalIdx := strings.Index(html, `<link rel="canonical" href="https://futurelab.studio/ora">`)
+	styleIdx := strings.Index(html, `/styles/tokens-abc.css`)
+	if canonicalIdx == -1 || styleIdx == -1 {
+		t.Fatalf("expected canonical and styles in output, got: %s", html)
+	}
+	if canonicalIdx > styleIdx {
+		t.Fatalf("expected metadata before stylesheet links")
 	}
 }

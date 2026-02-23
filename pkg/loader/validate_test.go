@@ -1,6 +1,7 @@
 package loader
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -97,5 +98,198 @@ func TestValidateSiteNormalizesRoute(t *testing.T) {
 
 	if got := site.Pages["index"].Spec.Route; got != "/about" {
 		t.Fatalf("route was not normalized, got %q", got)
+	}
+}
+
+func TestValidateSiteRejectsUnsupportedHeadURLSchemes(t *testing.T) {
+	site := &model.Site{
+		Website: model.Website{Metadata: model.Metadata{Name: "futurelab"}},
+		Components: map[string]model.Component{
+			"header": {Name: "header", Scope: model.ComponentScopeGlobal, HTML: "<section></section>"},
+		},
+		Pages: map[string]model.Page{
+			"index": {
+				Metadata: model.Metadata{Name: "index"},
+				Spec: model.PageSpec{
+					Route:  "/",
+					Layout: []model.PageLayoutItem{{Include: "header"}},
+					Head: &model.PageHead{
+						CanonicalURL: "javascript:alert(1)",
+					},
+				},
+			},
+		},
+	}
+
+	err := ValidateSite(site)
+	if err == nil {
+		t.Fatalf("expected head URL validation error")
+	}
+	if !strings.Contains(err.Error(), "unsupported") {
+		t.Fatalf("expected unsupported scheme error, got %v", err)
+	}
+}
+
+func TestValidateSiteAllowsRelativeHeadURLs(t *testing.T) {
+	site := &model.Site{
+		Website: model.Website{Metadata: model.Metadata{Name: "futurelab"}},
+		Components: map[string]model.Component{
+			"header": {Name: "header", Scope: model.ComponentScopeGlobal, HTML: "<section></section>"},
+		},
+		Pages: map[string]model.Page{
+			"index": {
+				Metadata: model.Metadata{Name: "index"},
+				Spec: model.PageSpec{
+					Route:  "/",
+					Layout: []model.PageLayoutItem{{Include: "header"}},
+					Head: &model.PageHead{
+						CanonicalURL: "/ora",
+						OpenGraph: &model.OpenGraph{
+							Image: "/assets/ora/og-image.jpg",
+						},
+						Twitter: &model.TwitterCard{
+							Image: "/assets/ora/og-image.jpg",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if err := ValidateSite(site); err != nil {
+		t.Fatalf("ValidateSite() error = %v", err)
+	}
+}
+
+func TestValidateSiteEnforcesHeadMetadataLimits(t *testing.T) {
+	tooManyMeta := map[string]string{}
+	for i := 0; i < maxHeadMetaEntries+1; i++ {
+		tooManyMeta[fmt.Sprintf("key-%d", i)] = "v"
+	}
+	tooManyJSONLD := make([]model.JSONLDBlock, maxHeadJSONLDBlocks+1)
+	for i := range tooManyJSONLD {
+		tooManyJSONLD[i] = model.JSONLDBlock{
+			ID:      "id",
+			Payload: map[string]any{"@context": "https://schema.org"},
+		}
+	}
+
+	tests := []struct {
+		name      string
+		head      *model.PageHead
+		wantError string
+	}{
+		{
+			name: "canonical too long",
+			head: &model.PageHead{
+				CanonicalURL: "https://example.com/" + strings.Repeat("a", maxHeadURLLength),
+			},
+			wantError: "canonicalURL longer",
+		},
+		{
+			name: "too many meta entries",
+			head: &model.PageHead{
+				Meta: tooManyMeta,
+			},
+			wantError: "too many head.meta entries",
+		},
+		{
+			name: "meta key too long",
+			head: &model.PageHead{
+				Meta: map[string]string{
+					strings.Repeat("k", maxHeadMetaKeyLength+1): "value",
+				},
+			},
+			wantError: "head.meta key longer",
+		},
+		{
+			name: "meta value too long",
+			head: &model.PageHead{
+				Meta: map[string]string{
+					"keywords": strings.Repeat("v", maxHeadMetaValueLength+1),
+				},
+			},
+			wantError: "head.meta value longer",
+		},
+		{
+			name: "open graph description too long",
+			head: &model.PageHead{
+				OpenGraph: &model.OpenGraph{
+					Description: strings.Repeat("d", maxHeadTextFieldLength+1),
+				},
+			},
+			wantError: "openGraph.description longer",
+		},
+		{
+			name: "twitter image too long",
+			head: &model.PageHead{
+				Twitter: &model.TwitterCard{
+					Image: "https://cdn.example.com/" + strings.Repeat("i", maxHeadURLLength),
+				},
+			},
+			wantError: "twitter.image longer",
+		},
+		{
+			name: "too many jsonld blocks",
+			head: &model.PageHead{
+				JSONLD: tooManyJSONLD,
+			},
+			wantError: "too many jsonLD blocks",
+		},
+		{
+			name: "jsonld id too long",
+			head: &model.PageHead{
+				JSONLD: []model.JSONLDBlock{
+					{
+						ID:      strings.Repeat("x", maxHeadJSONLDIDLength+1),
+						Payload: map[string]any{"@context": "https://schema.org"},
+					},
+				},
+			},
+			wantError: "jsonLD[0].id longer",
+		},
+		{
+			name: "jsonld payload too large",
+			head: &model.PageHead{
+				JSONLD: []model.JSONLDBlock{
+					{
+						ID: "large",
+						Payload: map[string]any{
+							"data": strings.Repeat("x", maxHeadJSONLDPayloadBytes),
+						},
+					},
+				},
+			},
+			wantError: "payload larger than",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			site := &model.Site{
+				Website: model.Website{Metadata: model.Metadata{Name: "futurelab"}},
+				Components: map[string]model.Component{
+					"header": {Name: "header", Scope: model.ComponentScopeGlobal, HTML: "<section></section>"},
+				},
+				Pages: map[string]model.Page{
+					"index": {
+						Metadata: model.Metadata{Name: "index"},
+						Spec: model.PageSpec{
+							Route:  "/",
+							Layout: []model.PageLayoutItem{{Include: "header"}},
+							Head:   tc.head,
+						},
+					},
+				},
+			}
+
+			err := ValidateSite(site)
+			if err == nil {
+				t.Fatalf("expected validation error")
+			}
+			if !strings.Contains(err.Error(), tc.wantError) {
+				t.Fatalf("expected error containing %q, got %v", tc.wantError, err)
+			}
+		})
 	}
 }

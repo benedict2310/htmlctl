@@ -21,11 +21,14 @@ func TestRenderCommandSuccess(t *testing.T) {
 		t.Fatalf("Execute() error = %v", err)
 	}
 
-	if !strings.Contains(out.String(), "Rendered 1 page(s)") {
+	if !strings.Contains(out.String(), "Rendered 2 page(s)") {
 		t.Fatalf("expected render summary, got: %s", out.String())
 	}
 	if _, err := os.Stat(filepath.Join(outDir, "index.html")); err != nil {
 		t.Fatalf("expected rendered index.html: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(outDir, "ora", "index.html")); err != nil {
+		t.Fatalf("expected rendered ora/index.html: %v", err)
 	}
 }
 

@@ -211,13 +211,18 @@ func (a *Applier) Apply(ctx context.Context, websiteName, envName string, b bund
 			if err != nil {
 				return out, fmt.Errorf("marshal page layout for %q: %w", res.Name, err)
 			}
+			headJSON, err := marshalPageHead(pageDoc.Spec.Head)
+			if err != nil {
+				return out, fmt.Errorf("marshal page head metadata for %q: %w", res.Name, err)
+			}
 			route := normalizeRoute(pageDoc.Spec.Route)
 			if route == "" {
 				return out, badRequestf("page %q has empty route", res.Name)
 			}
+			// deterministic: json.Marshal sorts map keys for stable head_json comparisons.
 			if existing, ok := pageByName[res.Name]; !ok {
 				out.Changes.Created++
-			} else if existing.ContentHash != ref.Hash || existing.Route != route || existing.Title != pageDoc.Spec.Title || existing.Description != pageDoc.Spec.Description || existing.LayoutJSON != string(layoutJSON) {
+			} else if existing.ContentHash != ref.Hash || existing.Route != route || existing.Title != pageDoc.Spec.Title || existing.Description != pageDoc.Spec.Description || existing.LayoutJSON != string(layoutJSON) || existing.HeadJSON != headJSON {
 				out.Changes.Updated++
 			}
 			if !dryRun {
@@ -228,6 +233,7 @@ func (a *Applier) Apply(ctx context.Context, websiteName, envName string, b bund
 					Title:       pageDoc.Spec.Title,
 					Description: pageDoc.Spec.Description,
 					LayoutJSON:  string(layoutJSON),
+					HeadJSON:    headJSON,
 					ContentHash: ref.Hash,
 				}); err != nil {
 					return out, fmt.Errorf("upsert page %q: %w", res.Name, err)
@@ -416,6 +422,17 @@ func parsePageDocument(content []byte) (model.Page, error) {
 		return page, err
 	}
 	return page, nil
+}
+
+func marshalPageHead(head *model.PageHead) (string, error) {
+	if head == nil {
+		return "{}", nil
+	}
+	payload, err := json.Marshal(head)
+	if err != nil {
+		return "", err
+	}
+	return string(payload), nil
 }
 
 func normalizeRoute(route string) string {

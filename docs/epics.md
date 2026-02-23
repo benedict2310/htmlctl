@@ -96,3 +96,17 @@
 **Post-epic fix (2026-02-23):** Data race on `(*Server).listener` between `Start()`
 and `Addr()` found during race-detector run and fixed in `internal/server/server.go`
 by guarding the field with `sync.RWMutex`. All 428 tests pass clean under `-race`.
+
+---
+
+## Epic 7 — Metadata and Telemetry
+
+**Goal:** add first-class SEO/share metadata rendering and optional site telemetry collection without external infrastructure.
+**Status:** In progress (E7-S1 complete, E7-S2 planned)
+
+| # | Story | File |
+|---|-------|------|
+| 7.1 | Server-rendered SEO and share-card metadata (Implemented) | [E7-S1](stories/E7-S1-server-rendered-seo-metadata.md) |
+| 7.2 | Telemetry ingest endpoint for static sites | [E7-S2](stories/E7-S2-telemetry-ingest-endpoint.md) |
+
+**Done when:** pages can emit crawler-visible metadata directly in HTML and operators can collect/query basic page telemetry via htmlservd.

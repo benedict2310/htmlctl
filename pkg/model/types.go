@@ -21,11 +21,47 @@ type PageLayoutItem struct {
 	Include string `yaml:"include" json:"include"`
 }
 
+// PageHead contains optional SEO and share metadata rendered into the page head.
+type PageHead struct {
+	CanonicalURL string            `yaml:"canonicalURL" json:"canonicalURL,omitempty"`
+	Meta         map[string]string `yaml:"meta" json:"meta,omitempty"`
+	OpenGraph    *OpenGraph        `yaml:"openGraph" json:"openGraph,omitempty"`
+	Twitter      *TwitterCard      `yaml:"twitter" json:"twitter,omitempty"`
+	JSONLD       []JSONLDBlock     `yaml:"jsonLD" json:"jsonLD,omitempty"`
+}
+
+// OpenGraph contains supported og:* properties in fixed declaration order.
+type OpenGraph struct {
+	Type        string `yaml:"type" json:"type,omitempty"`
+	URL         string `yaml:"url" json:"url,omitempty"`
+	SiteName    string `yaml:"siteName" json:"siteName,omitempty"`
+	Locale      string `yaml:"locale" json:"locale,omitempty"`
+	Title       string `yaml:"title" json:"title,omitempty"`
+	Description string `yaml:"description" json:"description,omitempty"`
+	Image       string `yaml:"image" json:"image,omitempty"`
+}
+
+// TwitterCard contains supported twitter:* properties in fixed declaration order.
+type TwitterCard struct {
+	Card        string `yaml:"card" json:"card,omitempty"`
+	URL         string `yaml:"url" json:"url,omitempty"`
+	Title       string `yaml:"title" json:"title,omitempty"`
+	Description string `yaml:"description" json:"description,omitempty"`
+	Image       string `yaml:"image" json:"image,omitempty"`
+}
+
+// JSONLDBlock is a single JSON-LD block emitted in input order.
+type JSONLDBlock struct {
+	ID      string         `yaml:"id" json:"id,omitempty"`
+	Payload map[string]any `yaml:"payload" json:"payload,omitempty"`
+}
+
 type PageSpec struct {
 	Route       string           `yaml:"route"`
 	Title       string           `yaml:"title"`
 	Description string           `yaml:"description"`
 	Layout      []PageLayoutItem `yaml:"layout"`
+	Head        *PageHead        `yaml:"head" json:"head,omitempty"`
 }
 
 type Page struct {

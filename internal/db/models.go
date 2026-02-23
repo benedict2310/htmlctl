@@ -1,5 +1,7 @@
 package db
 
+import "strings"
+
 type WebsiteRow struct {
 	ID                 int64
 	Name               string
@@ -26,9 +28,17 @@ type PageRow struct {
 	Title       string
 	Description string
 	LayoutJSON  string
+	HeadJSON    string
 	ContentHash string
 	CreatedAt   string
 	UpdatedAt   string
+}
+
+func (r PageRow) HeadJSONOrDefault() string {
+	if strings.TrimSpace(r.HeadJSON) == "" {
+		return "{}"
+	}
+	return r.HeadJSON
 }
 
 type ComponentRow struct {

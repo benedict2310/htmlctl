@@ -157,6 +157,79 @@ func TestRenderEscapesMaliciousPageMetadata(t *testing.T) {
 	}
 }
 
+func TestRenderOutputsServerRenderedHeadMetadata(t *testing.T) {
+	site := &model.Site{
+		Website: model.Website{Metadata: model.Metadata{Name: "futurelab"}},
+		Pages: map[string]model.Page{
+			"ora": {
+				Metadata: model.Metadata{Name: "ora"},
+				Spec: model.PageSpec{
+					Route:       "/ora",
+					Title:       "Ora for macOS",
+					Description: "Local-first voice assistant",
+					Layout:      []model.PageLayoutItem{{Include: "hero"}},
+					Head: &model.PageHead{
+						CanonicalURL: "https://futurelab.studio/ora",
+						Meta: map[string]string{
+							"keywords":         "Ora, macOS voice assistant",
+							"application-name": "Ora",
+						},
+						OpenGraph: &model.OpenGraph{
+							Type:        "website",
+							URL:         "https://futurelab.studio/ora",
+							Title:       "Ora for macOS",
+							Description: "Local-first voice assistant",
+						},
+						Twitter: &model.TwitterCard{
+							Card:        "summary_large_image",
+							Title:       "Ora for macOS",
+							Description: "Local-first voice assistant",
+						},
+						JSONLD: []model.JSONLDBlock{
+							{
+								ID: "ora-softwareapplication",
+								Payload: map[string]any{
+									"@context": "https://schema.org",
+									"@type":    "SoftwareApplication",
+									"name":     "Ora",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Components: map[string]model.Component{
+			"hero": {Name: "hero", HTML: "<section id=\"hero\">Ora</section>\n"},
+		},
+		Styles: model.StyleBundle{
+			Name:       "default",
+			TokensCSS:  ":root{}",
+			DefaultCSS: "body{}",
+		},
+	}
+
+	outDir := t.TempDir()
+	if err := Render(site, outDir); err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+
+	html := readFile(t, filepath.Join(outDir, "ora", "index.html"))
+	needles := []string{
+		`<link rel="canonical" href="https://futurelab.studio/ora">`,
+		`<meta name="application-name" content="Ora">`,
+		`<meta name="keywords" content="Ora, macOS voice assistant">`,
+		`<meta property="og:type" content="website">`,
+		`<meta property="twitter:card" content="summary_large_image">`,
+		`<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Ora"}</script>`,
+	}
+	for _, needle := range needles {
+		if !strings.Contains(html, needle) {
+			t.Fatalf("expected rendered html to contain %q", needle)
+		}
+	}
+}
+
 func TestRenderDeterministicAcrossRuns(t *testing.T) {
 	site, err := loader.LoadSite(filepath.Join("..", "..", "testdata", "valid-site"))
 	if err != nil {

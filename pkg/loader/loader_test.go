@@ -27,6 +27,13 @@ func TestLoadSiteValidSite(t *testing.T) {
 	if len(page.Spec.Layout) != 1 || page.Spec.Layout[0].Include != "header" {
 		t.Fatalf("unexpected page layout: %#v", page.Spec.Layout)
 	}
+	ora, ok := site.Pages["ora"]
+	if !ok {
+		t.Fatalf("expected page 'ora' to be present")
+	}
+	if ora.Spec.Head == nil || ora.Spec.Head.CanonicalURL != "https://futurelab.studio/ora" {
+		t.Fatalf("expected ora head metadata to be parsed, got %#v", ora.Spec.Head)
+	}
 
 	component, ok := site.Components["header"]
 	if !ok {

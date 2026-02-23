@@ -324,6 +324,7 @@ func (s desiredState) Manifest() manifestSnapshot {
 			"route":       row.Route,
 			"title":       row.Title,
 			"description": row.Description,
+			"head":        json.RawMessage(row.HeadJSONOrDefault()),
 			"contentHash": row.ContentHash,
 		})
 	}
@@ -442,6 +443,10 @@ func (b *Builder) materializeSource(ctx context.Context, sourceDir string, state
 				return fmt.Errorf("parse layout json for page %q: %w", row.Name, err)
 			}
 		}
+		head, err := parsePageHeadJSON(row.Name, row.HeadJSON)
+		if err != nil {
+			return err
+		}
 		pageDoc := model.Page{
 			APIVersion: model.APIVersionV1,
 			Kind:       model.KindPage,
@@ -451,6 +456,7 @@ func (b *Builder) materializeSource(ctx context.Context, sourceDir string, state
 				Title:       row.Title,
 				Description: row.Description,
 				Layout:      layout,
+				Head:        head,
 			},
 		}
 		pageBytes, err := yaml.Marshal(pageDoc)
@@ -641,4 +647,16 @@ func sanitizeResourceName(name string) (string, error) {
 		return "", err
 	}
 	return name, nil
+}
+
+func parsePageHeadJSON(pageName, raw string) (*model.PageHead, error) {
+	normalized := dbpkg.PageRow{HeadJSON: raw}.HeadJSONOrDefault()
+	if normalized == "{}" {
+		return nil, nil
+	}
+	var head model.PageHead
+	if err := json.Unmarshal([]byte(normalized), &head); err != nil {
+		return nil, fmt.Errorf("parse head json for page %q: %w", pageName, err)
+	}
+	return &head, nil
 }

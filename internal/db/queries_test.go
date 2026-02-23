@@ -74,6 +74,74 @@ func TestQueriesForeignKeyConstraint(t *testing.T) {
 	}
 }
 
+func TestUpsertPagePersistsHeadJSON(t *testing.T) {
+	q, cleanup := setupDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	headJSON := `{"canonicalURL":"https://futurelab.studio/","meta":{"robots":"index,follow"}}`
+	if err := q.UpsertPage(ctx, PageRow{
+		WebsiteID:   websiteID,
+		Name:        "index",
+		Route:       "/",
+		Title:       "Home",
+		Description: "Home page",
+		LayoutJSON:  "[]",
+		HeadJSON:    headJSON,
+		ContentHash: "sha256:page",
+	}); err != nil {
+		t.Fatalf("UpsertPage() error = %v", err)
+	}
+
+	rows, err := q.ListPagesByWebsite(ctx, websiteID)
+	if err != nil {
+		t.Fatalf("ListPagesByWebsite() error = %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected one page row, got %d", len(rows))
+	}
+	if rows[0].HeadJSON != headJSON {
+		t.Fatalf("unexpected head_json: got %q want %q", rows[0].HeadJSON, headJSON)
+	}
+}
+
+func TestInsertPageDefaultsHeadJSONToObject(t *testing.T) {
+	q, cleanup := setupDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	if _, err := q.InsertPage(ctx, PageRow{
+		WebsiteID:   websiteID,
+		Name:        "index",
+		Route:       "/",
+		Title:       "Home",
+		Description: "Home page",
+		LayoutJSON:  "[]",
+		ContentHash: "sha256:page",
+	}); err != nil {
+		t.Fatalf("InsertPage() error = %v", err)
+	}
+
+	rows, err := q.ListPagesByWebsite(ctx, websiteID)
+	if err != nil {
+		t.Fatalf("ListPagesByWebsite() error = %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected one page row, got %d", len(rows))
+	}
+	if rows[0].HeadJSON != "{}" {
+		t.Fatalf("expected default head_json {}, got %q", rows[0].HeadJSON)
+	}
+}
+
 func TestQueriesUniqueConstraints(t *testing.T) {
 	q, cleanup := setupDB(t)
 	defer cleanup()

@@ -5,8 +5,10 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/benedict2310/htmlctl/internal/blob"
@@ -93,6 +95,189 @@ func TestApplyRejectsInvalidComponentAndPageNames(t *testing.T) {
 				t.Fatalf("expected no committed website row after failed apply, got err=%v", err)
 			}
 		})
+	}
+}
+
+func TestApplyPersistsPageHeadMetadata(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openStateTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+	applier, err := NewApplier(db, blobStore)
+	if err != nil {
+		t.Fatalf("NewApplier() error = %v", err)
+	}
+
+	pageYAML := []byte(`apiVersion: htmlctl.dev/v1
+kind: Page
+metadata:
+  name: index
+spec:
+  route: /
+  title: Home
+  description: Home page
+  layout: []
+  head:
+    canonicalURL: https://futurelab.studio/
+    meta:
+      robots: index,follow
+    openGraph:
+      title: Futurelab
+    twitter:
+      card: summary
+    jsonLD:
+      - id: website
+        payload:
+          "@context": https://schema.org
+          "@type": WebSite
+          name: Futurelab
+`)
+
+	manifest := bundle.Manifest{
+		Mode:    bundle.ApplyModePartial,
+		Website: "futurelab",
+		Resources: []bundle.Resource{
+			{
+				Kind: "Page",
+				Name: "index",
+				File: "pages/index.page.yaml",
+				Hash: "sha256:" + sha256Hex(pageYAML),
+			},
+		},
+	}
+	b := bundle.Bundle{
+		Manifest: manifest,
+		Files: map[string][]byte{
+			"pages/index.page.yaml": pageYAML,
+		},
+	}
+
+	if _, err := applier.Apply(ctx, "futurelab", "staging", b, false); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+
+	q := dbpkg.NewQueries(db)
+	website, err := q.GetWebsiteByName(ctx, "futurelab")
+	if err != nil {
+		t.Fatalf("GetWebsiteByName() error = %v", err)
+	}
+	pages, err := q.ListPagesByWebsite(ctx, website.ID)
+	if err != nil {
+		t.Fatalf("ListPagesByWebsite() error = %v", err)
+	}
+	if len(pages) != 1 {
+		t.Fatalf("expected one page row, got %d", len(pages))
+	}
+	if strings.TrimSpace(pages[0].HeadJSON) == "" || pages[0].HeadJSON == "{}" {
+		t.Fatalf("expected persisted head_json, got %q", pages[0].HeadJSON)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal([]byte(pages[0].HeadJSON), &got); err != nil {
+		t.Fatalf("unmarshal head_json: %v", err)
+	}
+	if got["canonicalURL"] != "https://futurelab.studio/" {
+		t.Fatalf("unexpected canonicalURL in head_json: %#v", got["canonicalURL"])
+	}
+}
+
+func TestApplyDetectsHeadOnlyChanges(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openStateTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+	applier, err := NewApplier(db, blobStore)
+	if err != nil {
+		t.Fatalf("NewApplier() error = %v", err)
+	}
+
+	fixedHash := "sha256:" + strings.Repeat("a", 64)
+	initial := []byte(`apiVersion: htmlctl.dev/v1
+kind: Page
+metadata:
+  name: index
+spec:
+  route: /
+  title: Home
+  description: Home page
+  layout: []
+  head:
+    canonicalURL: https://foo.example/
+`)
+	updated := []byte(`apiVersion: htmlctl.dev/v1
+kind: Page
+metadata:
+  name: index
+spec:
+  route: /
+  title: Home
+  description: Home page
+  layout: []
+  head:
+    canonicalURL: https://bar.example/
+`)
+
+	apply := func(content []byte) (ApplyResult, error) {
+		return applier.Apply(ctx, "futurelab", "staging", bundle.Bundle{
+			Manifest: bundle.Manifest{
+				Mode:    bundle.ApplyModePartial,
+				Website: "futurelab",
+				Resources: []bundle.Resource{
+					{
+						Kind: "Page",
+						Name: "index",
+						File: "pages/index.page.yaml",
+						Hash: fixedHash,
+					},
+				},
+			},
+			Files: map[string][]byte{
+				"pages/index.page.yaml": content,
+			},
+		}, false)
+	}
+
+	first, err := apply(initial)
+	if err != nil {
+		t.Fatalf("first Apply() error = %v", err)
+	}
+	if first.Changes.Created != 1 || first.Changes.Updated != 0 {
+		t.Fatalf("unexpected first apply changes: %#v", first.Changes)
+	}
+
+	second, err := apply(updated)
+	if err != nil {
+		t.Fatalf("second Apply() error = %v", err)
+	}
+	if second.Changes.Updated != 1 {
+		t.Fatalf("expected head-only change to count as updated=1, got %#v", second.Changes)
+	}
+
+	q := dbpkg.NewQueries(db)
+	website, err := q.GetWebsiteByName(ctx, "futurelab")
+	if err != nil {
+		t.Fatalf("GetWebsiteByName() error = %v", err)
+	}
+	pages, err := q.ListPagesByWebsite(ctx, website.ID)
+	if err != nil {
+		t.Fatalf("ListPagesByWebsite() error = %v", err)
+	}
+	if len(pages) != 1 {
+		t.Fatalf("expected one page row, got %d", len(pages))
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal([]byte(pages[0].HeadJSON), &got); err != nil {
+		t.Fatalf("unmarshal updated head_json: %v", err)
+	}
+	if got["canonicalURL"] != "https://bar.example/" {
+		t.Fatalf("expected updated canonicalURL, got %#v", got["canonicalURL"])
 	}
 }
 

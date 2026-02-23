@@ -27,6 +27,7 @@ type Server struct {
 	dataPaths  DataPaths
 	db         *sql.DB
 	blobStore  *blob.Store
+	listenerMu sync.RWMutex
 	listener   net.Listener
 	httpServer *http.Server
 	errCh      chan error
@@ -129,7 +130,9 @@ func (s *Server) Start() error {
 		s.db = nil
 		return fmt.Errorf("listen on %s: %w", s.cfg.ListenAddr(), err)
 	}
+	s.listenerMu.Lock()
 	s.listener = ln
+	s.listenerMu.Unlock()
 
 	if !isLoopbackHost(s.cfg.BindAddr) {
 		s.logger.Warn("binding to non-loopback address", "bind", s.cfg.BindAddr)
@@ -176,12 +179,16 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
-	if s.listener == nil && s.db == nil {
+	s.listenerMu.RLock()
+	hasListener := s.listener != nil
+	s.listenerMu.RUnlock()
+
+	if !hasListener && s.db == nil {
 		return nil
 	}
 
 	s.logger.Info("htmlservd shutting down")
-	if s.listener != nil {
+	if hasListener {
 		if err := s.httpServer.Shutdown(ctx); err != nil {
 			return fmt.Errorf("shutdown http server: %w", err)
 		}
@@ -189,7 +196,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		if err, ok := <-s.errCh; ok && err != nil {
 			return fmt.Errorf("http server failed: %w", err)
 		}
+		s.listenerMu.Lock()
 		s.listener = nil
+		s.listenerMu.Unlock()
 	}
 	if closer, ok := s.auditLogger.(interface{ Close(context.Context) error }); ok {
 		if err := closer.Close(ctx); err != nil {
@@ -209,6 +218,8 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 func (s *Server) Addr() string {
+	s.listenerMu.RLock()
+	defer s.listenerMu.RUnlock()
 	if s.listener == nil {
 		return ""
 	}

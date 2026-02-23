@@ -1,7 +1,7 @@
 # E6-S6 - SQL Query Helper Hardening
 
 **Epic:** Epic 6 — Security Hardening
-**Status:** Pending
+**Status:** Implemented
 **Priority:** P1 (High — latent SQL injection in internal helpers)
 **Estimated Effort:** 0.5 days
 **Dependencies:** E2-S2 (SQLite schema)
@@ -54,7 +54,7 @@ As a maintainer, I want any attempt to call the internal SQL helper functions wi
   - Add a package-level `var allowedTableColumns = map[string]map[string]bool{ ... }` covering all valid `(table → set of allowed columns)` pairs for the three helpers. Based on current callers:
     - `pages`: `name`
     - `components`: `name`
-    - `scripts`: `name` (if applicable — audit all call sites)
+    - `style_bundles`: `name`
     - `assets`: `filename` (if applicable — audit all call sites)
   - In `deleteByWebsiteNotIn(ctx, table, column, ...)`: check `allowedTableColumns[table][column]` before constructing the query; return error if not found.
   - In `deleteByWebsiteSetDifference(ctx, table, column, ...)`: same check.
@@ -76,23 +76,23 @@ As a maintainer, I want any attempt to call the internal SQL helper functions wi
 
 ## 6. Acceptance Criteria
 
-- [ ] AC-1: Each of the three SQL helper functions checks `table` and `column` against an explicit allowlist at the start of the function body, before any `fmt.Sprintf` call.
-- [ ] AC-2: Any call with a table or column not in the allowlist returns a descriptive error without executing any SQL.
-- [ ] AC-3: All existing callers continue to work (they all use allowlisted literal strings).
-- [ ] AC-4: Unit tests confirm that invalid table and column names return errors; valid pairs execute normally.
-- [ ] AC-5: The allowlist is defined once (not duplicated per helper) and is clearly readable in a code review.
+- [x] AC-1: Each of the three SQL helper functions checks `table` and `column` against an explicit allowlist at the start of the function body, before any `fmt.Sprintf` call.
+- [x] AC-2: Any call with a table or column not in the allowlist returns a descriptive error without executing any SQL.
+- [x] AC-3: All existing callers continue to work (they all use allowlisted literal strings).
+- [x] AC-4: Unit tests confirm that invalid table and column names return errors; valid pairs execute normally.
+- [x] AC-5: The allowlist is defined once (not duplicated per helper) and is clearly readable in a code review.
 
 ## 7. Verification Plan
 
 ### Automated Tests
 
-- [ ] Existing query tests pass unchanged.
-- [ ] New tests: invalid `table` and `column` values return errors without touching the database.
+- [x] Existing query tests pass unchanged.
+- [x] New tests: invalid `table` and `column` values return errors without touching the database.
 
 ### Manual Tests
 
-- [ ] Code review: confirm `fmt.Sprintf` calls for SQL construction only occur after the allowlist check passes.
-- [ ] `make test` passes without regression.
+- [x] Code review: confirm `fmt.Sprintf` calls for SQL construction only occur after the allowlist check passes.
+- [x] `make test` passes without regression.
 
 ## 8. Performance / Reliability Considerations
 
@@ -106,3 +106,30 @@ As a maintainer, I want any attempt to call the internal SQL helper functions wi
 ## 10. Open Questions
 
 - Should the helpers be deprecated in favour of typed per-entity methods in a follow-up refactor story? Yes — log as a future tech-debt item. The allowlist fix is the immediate security gate; typed methods are the clean long-term solution.
+
+---
+
+## Implementation Summary
+
+- Added a single package-level allowlist in `internal/db/queries.go` (`allowedDeleteTargets`) for permitted delete helper targets:
+  - `pages.name`
+  - `components.name`
+  - `style_bundles.name`
+  - `assets.filename`
+- Added `validateDeleteTarget(table, column)` and invoked it at the start of:
+  - `deleteByWebsiteNotIn`
+  - `deleteByWebsiteSetDifference`
+  - `deleteByWebsiteAndKey`
+- Added helper doc comments that document the allowlist requirement and extension point.
+- Added unit tests in `internal/db/queries_test.go`:
+  - `TestDeleteHelpersRejectInvalidTableOrColumn` verifies invalid inputs fail fast with `invalid table/column: %q/%q` and perform zero SQL calls.
+  - `TestDeleteByWebsiteAndKeyAllowlistedTarget` verifies an allowlisted pair executes normally.
+
+## Verification Evidence
+
+- Passed: `go test ./...`
+- Passed: `make test`
+
+## Completion Status
+
+Implemented and verified locally.

@@ -18,7 +18,7 @@ When Go implementation files are added, follow story-defined targets:
 - `make lint` to run static checks.
 
 Preferred automated test environment is Docker (`golang:1.24`) to keep toolchains consistent:
-- `docker run --rm -it -v "$PWD":/work -w /work golang:1.24 bash -lc 'go test ./...'`
+- `docker run --rm -it -v "$PWD":/work -w /work golang:1.24 bash -lc 'export PATH=/usr/local/go/bin:$PATH; go test ./...'`
 
 Notes:
 - Use the container command above for standard verification and CI-like reproducibility.

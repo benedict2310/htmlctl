@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -146,9 +147,28 @@ func TestPromoteEndpointHashMismatchDoesNotSwitchTargetCurrent(t *testing.T) {
 		t.Fatalf("POST /promote error = %v", err)
 	}
 	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read hash mismatch response body: %v", err)
+	}
 	if resp.StatusCode != http.StatusInternalServerError {
-		b, _ := io.ReadAll(resp.Body)
-		t.Fatalf("expected 500, got %d body=%s", resp.StatusCode, string(b))
+		t.Fatalf("expected 500, got %d body=%s", resp.StatusCode, string(body))
+	}
+	if strings.Contains(string(body), "hash mismatch") || strings.Contains(string(body), "aaaaaaaa") {
+		t.Fatalf("response body leaked internal hash mismatch details: %s", string(body))
+	}
+	var out struct {
+		Error   string   `json:"error"`
+		Details []string `json:"details,omitempty"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("decode hash mismatch response: %v body=%s", err, string(body))
+	}
+	if out.Error != "promotion hash verification failed" {
+		t.Fatalf("expected sanitized error message, got %q", out.Error)
+	}
+	if len(out.Details) != 0 {
+		t.Fatalf("expected no details in hash mismatch response, got %#v", out.Details)
 	}
 	if _, err := os.Readlink(filepath.Join(srv.dataPaths.WebsitesRoot, "futurelab", "envs", "prod", "current")); !os.IsNotExist(err) {
 		t.Fatalf("expected prod current symlink to remain absent, got err=%v", err)
@@ -174,9 +194,22 @@ func TestPromoteEndpointMethodNotAllowedAndInvalidBody(t *testing.T) {
 		t.Fatalf("POST /promote invalid body error = %v", err)
 	}
 	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read invalid-body response: %v", err)
+	}
 	if resp.StatusCode != http.StatusBadRequest {
-		b, _ := io.ReadAll(resp.Body)
-		t.Fatalf("expected 400, got %d body=%s", resp.StatusCode, string(b))
+		t.Fatalf("expected 400, got %d body=%s", resp.StatusCode, string(body))
+	}
+	var out struct {
+		Error   string   `json:"error"`
+		Details []string `json:"details,omitempty"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("decode invalid-body response: %v body=%s", err, string(body))
+	}
+	if len(out.Details) == 0 {
+		t.Fatalf("expected verbose 4xx details for invalid JSON body, got %#v", out)
 	}
 }
 

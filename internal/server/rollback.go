@@ -57,9 +57,10 @@ func (s *Server) handleRollback(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, release.ErrNoPreviousRelease):
 			writeAPIError(w, http.StatusConflict, "rollback is not possible because no previous release exists", nil)
 		case errors.As(err, &missingDirErr):
-			writeAPIError(w, http.StatusConflict, missingDirErr.Error(), nil)
+			s.logger.ErrorContext(r.Context(), "rollback target release directory is missing", "error", missingDirErr, "website", website, "environment", env)
+			writeAPIError(w, http.StatusConflict, "rollback target release directory is missing", nil)
 		default:
-			writeAPIError(w, http.StatusInternalServerError, "rollback failed", []string{err.Error()})
+			s.writeInternalAPIError(w, r, "rollback failed", err, "website", website, "environment", env)
 		}
 		return
 	}

@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -160,6 +161,57 @@ func TestApplyEndpointHashMismatch(t *testing.T) {
 	if resp.StatusCode != http.StatusBadRequest {
 		b, _ := io.ReadAll(resp.Body)
 		t.Fatalf("expected 400, got %d body=%s", resp.StatusCode, string(b))
+	}
+}
+
+func TestApplyEndpointInternalErrorIsSanitized(t *testing.T) {
+	srv := startTestServer(t)
+	baseURL := "http://" + srv.Addr()
+
+	component := []byte("<section id=\"header\">Header</section>")
+	body := tarBody(t, map[string][]byte{
+		"components/header.html": component,
+	}, map[string]any{
+		"apiVersion": "htmlctl.dev/v1",
+		"kind":       "Bundle",
+		"mode":       "partial",
+		"website":    "futurelab",
+		"resources": []map[string]any{
+			{"kind": "Component", "name": "header", "file": "components/header.html", "hash": "sha256:" + sha256Hex(component)},
+		},
+	})
+
+	if err := srv.db.Close(); err != nil {
+		t.Fatalf("Close() db error = %v", err)
+	}
+
+	resp := postBundle(t, baseURL+"/api/v1/websites/futurelab/environments/staging/apply", body)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusInternalServerError {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 500, got %d body=%s", resp.StatusCode, string(b))
+	}
+
+	rawBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read response body: %v", err)
+	}
+	if strings.Contains(string(rawBody), "sql: database is closed") {
+		t.Fatalf("response body leaked internal error: %s", string(rawBody))
+	}
+
+	var out struct {
+		Error   string   `json:"error"`
+		Details []string `json:"details,omitempty"`
+	}
+	if err := json.Unmarshal(rawBody, &out); err != nil {
+		t.Fatalf("decode response body: %v body=%s", err, string(rawBody))
+	}
+	if out.Error != "apply failed" {
+		t.Fatalf("expected sanitized error message, got %q", out.Error)
+	}
+	if len(out.Details) > 0 {
+		t.Fatalf("expected no details for internal error, got %#v", out.Details)
 	}
 }
 

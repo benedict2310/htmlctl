@@ -75,9 +75,11 @@
 
 ---
 
-## Epic 6 — Security Hardening
+## Epic 6 — Security Hardening ✓
 
 **Goal:** close all HIGH and MEDIUM findings from the 2026-02-20 security audit.
+**Status:** Complete (2026-02-23) — all 16 findings remediated and verified.
+**Post-epic audit:** [E6-post-epic-audit-2026-02-23](review-logs/E6-post-epic-audit-2026-02-23.log)
 
 | # | Story | File |
 |---|-------|------|
@@ -86,7 +88,11 @@
 | 6.3 | HTML XSS hardening (renderer + component validator) (Implemented) | [E6-S3](stories/E6-S3-html-xss-hardening.md) |
 | 6.4 | SSH transport hardening (Implemented) | [E6-S4](stories/E6-S4-ssh-transport-hardening.md) |
 | 6.5 | Container & entrypoint security hardening (Implemented) | [E6-S5](stories/E6-S5-container-security-hardening.md) |
-| 6.6 | SQL query helper hardening | [E6-S6](stories/E6-S6-sql-query-hardening.md) |
-| 6.7 | API error response sanitization | [E6-S7](stories/E6-S7-api-error-sanitization.md) |
+| 6.6 | SQL query helper hardening (Implemented) | [E6-S6](stories/E6-S6-sql-query-hardening.md) |
+| 6.7 | API error response sanitization (Implemented) | [E6-S7](stories/E6-S7-api-error-sanitization.md) |
 
 **Done when:** all 16 audit findings (Vulns 1–16) are remediated and verified.
+
+**Post-epic fix (2026-02-23):** Data race on `(*Server).listener` between `Start()`
+and `Addr()` found during race-detector run and fixed in `internal/server/server.go`
+by guarding the field with `sync.RWMutex`. All 428 tests pass clean under `-race`.

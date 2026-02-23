@@ -79,7 +79,7 @@ func (s *Server) handleRelease(w http.ResponseWriter, r *http.Request) {
 
 	builder, err := release.NewBuilder(s.db, s.blobStore, s.dataPaths.WebsitesRoot, s.logger)
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "failed to initialize release builder", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "failed to initialize release builder", err, "website", website, "environment", env)
 		return
 	}
 	result, err := builder.Build(r.Context(), website, env)
@@ -89,7 +89,7 @@ func (s *Server) handleRelease(w http.ResponseWriter, r *http.Request) {
 			writeAPIError(w, http.StatusNotFound, notFoundErr.Error(), nil)
 			return
 		}
-		writeAPIError(w, http.StatusInternalServerError, "release build failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "release build failed", err, "website", website, "environment", env)
 		return
 	}
 
@@ -158,7 +158,7 @@ func (s *Server) handleListReleases(w http.ResponseWriter, r *http.Request, webs
 			writeAPIError(w, http.StatusNotFound, fmt.Sprintf("website %q not found", website), nil)
 			return
 		}
-		writeAPIError(w, http.StatusInternalServerError, "lookup website failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "lookup website failed", err, "website", website, "environment", env)
 		return
 	}
 	envRow, err := q.GetEnvironmentByName(r.Context(), websiteRow.ID, env)
@@ -167,12 +167,12 @@ func (s *Server) handleListReleases(w http.ResponseWriter, r *http.Request, webs
 			writeAPIError(w, http.StatusNotFound, fmt.Sprintf("environment %q not found", env), nil)
 			return
 		}
-		writeAPIError(w, http.StatusInternalServerError, "lookup environment failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "lookup environment failed", err, "website", website, "environment", env)
 		return
 	}
 	releases, err := q.ListReleasesByEnvironmentPage(r.Context(), envRow.ID, limit, offset)
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "list releases failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "list releases failed", err, "website", website, "environment", env, "limit", limit, "offset", offset)
 		return
 	}
 

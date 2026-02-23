@@ -83,7 +83,7 @@ func (s *Server) handleWebsites(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := s.db.QueryContext(r.Context(), `SELECT name, default_style_bundle, base_template, created_at, updated_at FROM websites ORDER BY name`)
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "query websites failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "query websites failed", err)
 		return
 	}
 	defer rows.Close()
@@ -92,13 +92,13 @@ func (s *Server) handleWebsites(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var item websiteItem
 		if err := rows.Scan(&item.Name, &item.DefaultStyleBundle, &item.BaseTemplate, &item.CreatedAt, &item.UpdatedAt); err != nil {
-			writeAPIError(w, http.StatusInternalServerError, "scan website row failed", []string{err.Error()})
+			s.writeInternalAPIError(w, r, "scan website row failed", err)
 			return
 		}
 		out = append(out, item)
 	}
 	if err := rows.Err(); err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "iterate website rows failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "iterate website rows failed", err)
 		return
 	}
 
@@ -136,13 +136,13 @@ func (s *Server) handleEnvironments(w http.ResponseWriter, r *http.Request) {
 			writeAPIError(w, http.StatusNotFound, fmt.Sprintf("website %q not found", website), nil)
 			return
 		}
-		writeAPIError(w, http.StatusInternalServerError, "lookup website failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "lookup website failed", err, "website", website)
 		return
 	}
 
 	rows, err := s.db.QueryContext(r.Context(), `SELECT name, active_release_id, created_at, updated_at FROM environments WHERE website_id = ? ORDER BY name`, websiteRow.ID)
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "query environments failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "query environments failed", err, "website", website)
 		return
 	}
 	defer rows.Close()
@@ -151,13 +151,13 @@ func (s *Server) handleEnvironments(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var item environmentItem
 		if err := rows.Scan(&item.Name, &item.ActiveReleaseID, &item.CreatedAt, &item.UpdatedAt); err != nil {
-			writeAPIError(w, http.StatusInternalServerError, "scan environment row failed", []string{err.Error()})
+			s.writeInternalAPIError(w, r, "scan environment row failed", err, "website", website)
 			return
 		}
 		out = append(out, item)
 	}
 	if err := rows.Err(); err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "iterate environment rows failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "iterate environment rows failed", err, "website", website)
 		return
 	}
 
@@ -198,7 +198,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 			writeAPIError(w, http.StatusNotFound, fmt.Sprintf("website %q not found", website), nil)
 			return
 		}
-		writeAPIError(w, http.StatusInternalServerError, "lookup website failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "lookup website failed", err, "website", website, "environment", env)
 		return
 	}
 	envRow, err := q.GetEnvironmentByName(r.Context(), websiteRow.ID, env)
@@ -207,33 +207,33 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 			writeAPIError(w, http.StatusNotFound, fmt.Sprintf("environment %q not found", env), nil)
 			return
 		}
-		writeAPIError(w, http.StatusInternalServerError, "lookup environment failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "lookup environment failed", err, "website", website, "environment", env)
 		return
 	}
 
 	pageCount, err := countByWebsiteID(r.Context(), s.db, "pages", websiteRow.ID)
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "count pages failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "count pages failed", err, "website", website, "environment", env)
 		return
 	}
 	componentCount, err := countByWebsiteID(r.Context(), s.db, "components", websiteRow.ID)
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "count components failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "count components failed", err, "website", website, "environment", env)
 		return
 	}
 	styleCount, err := countByWebsiteID(r.Context(), s.db, "style_bundles", websiteRow.ID)
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "count style bundles failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "count style bundles failed", err, "website", website, "environment", env)
 		return
 	}
 	scriptCount, err := countScripts(r.Context(), s.db, websiteRow.ID)
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "count scripts failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "count scripts failed", err, "website", website, "environment", env)
 		return
 	}
 	assetCount, err := countNonScriptAssets(r.Context(), s.db, websiteRow.ID)
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "count assets failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "count assets failed", err, "website", website, "environment", env)
 		return
 	}
 
@@ -291,7 +291,7 @@ func (s *Server) handleManifest(w http.ResponseWriter, r *http.Request) {
 			writeAPIError(w, http.StatusNotFound, fmt.Sprintf("website %q not found", website), nil)
 			return
 		}
-		writeAPIError(w, http.StatusInternalServerError, "lookup website failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "lookup website failed", err, "website", website, "environment", env)
 		return
 	}
 	envRow, err := q.GetEnvironmentByName(r.Context(), websiteRow.ID, env)
@@ -300,28 +300,28 @@ func (s *Server) handleManifest(w http.ResponseWriter, r *http.Request) {
 			writeAPIError(w, http.StatusNotFound, fmt.Sprintf("environment %q not found", env), nil)
 			return
 		}
-		writeAPIError(w, http.StatusInternalServerError, "lookup environment failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "lookup environment failed", err, "website", website, "environment", env)
 		return
 	}
 
 	pages, err := q.ListPagesByWebsite(r.Context(), websiteRow.ID)
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "list pages failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "list pages failed", err, "website", website, "environment", env)
 		return
 	}
 	components, err := q.ListComponentsByWebsite(r.Context(), websiteRow.ID)
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "list components failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "list components failed", err, "website", website, "environment", env)
 		return
 	}
 	styleBundles, err := q.ListStyleBundlesByWebsite(r.Context(), websiteRow.ID)
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "list style bundles failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "list style bundles failed", err, "website", website, "environment", env)
 		return
 	}
 	assets, err := q.ListAssetsByWebsite(r.Context(), websiteRow.ID)
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "list assets failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "list assets failed", err, "website", website, "environment", env)
 		return
 	}
 
@@ -329,33 +329,33 @@ func (s *Server) handleManifest(w http.ResponseWriter, r *http.Request) {
 	for _, row := range pages {
 		entryPath := path.Join("pages", row.Name+".page.yaml")
 		if err := addManifestEntry(byPath, entryPath, row.ContentHash); err != nil {
-			writeAPIError(w, http.StatusInternalServerError, "build desired-state manifest failed", []string{err.Error()})
+			s.writeInternalAPIError(w, r, "build desired-state manifest failed", err, "website", website, "environment", env)
 			return
 		}
 	}
 	for _, row := range components {
 		entryPath := path.Join("components", row.Name+".html")
 		if err := addManifestEntry(byPath, entryPath, row.ContentHash); err != nil {
-			writeAPIError(w, http.StatusInternalServerError, "build desired-state manifest failed", []string{err.Error()})
+			s.writeInternalAPIError(w, r, "build desired-state manifest failed", err, "website", website, "environment", env)
 			return
 		}
 	}
 	for _, row := range styleBundles {
 		refs := []bundle.FileRef{}
 		if err := json.Unmarshal([]byte(row.FilesJSON), &refs); err != nil {
-			writeAPIError(w, http.StatusInternalServerError, "parse style bundle files failed", []string{err.Error()})
+			s.writeInternalAPIError(w, r, "parse style bundle files failed", err, "website", website, "environment", env, "bundle", row.Name)
 			return
 		}
 		for _, ref := range refs {
 			if err := addManifestEntry(byPath, ref.File, ref.Hash); err != nil {
-				writeAPIError(w, http.StatusInternalServerError, "build desired-state manifest failed", []string{err.Error()})
+				s.writeInternalAPIError(w, r, "build desired-state manifest failed", err, "website", website, "environment", env)
 				return
 			}
 		}
 	}
 	for _, row := range assets {
 		if err := addManifestEntry(byPath, row.Filename, row.ContentHash); err != nil {
-			writeAPIError(w, http.StatusInternalServerError, "build desired-state manifest failed", []string{err.Error()})
+			s.writeInternalAPIError(w, r, "build desired-state manifest failed", err, "website", website, "environment", env)
 			return
 		}
 	}

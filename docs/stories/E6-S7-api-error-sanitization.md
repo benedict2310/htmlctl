@@ -1,7 +1,7 @@
 # E6-S7 - API Error Response Sanitization
 
 **Epic:** Epic 6 — Security Hardening
-**Status:** Pending
+**Status:** Implemented
 **Priority:** P1 (Medium-High — internal path and schema leakage)
 **Estimated Effort:** 0.5 days
 **Dependencies:** E2-S1 (server bootstrap), E2-S3 (bundle ingestion)
@@ -85,23 +85,23 @@ writeAPIError(w, http.StatusInternalServerError, "apply failed", nil)
 
 ## 6. Acceptance Criteria
 
-- [ ] AC-1: No 5xx API response body contains a Go `error.Error()` string, filesystem path, SQLite error text, or release ID.
-- [ ] AC-2: Every 5xx error site logs the full internal error at Error level with structured context (operation name, website, environment where applicable) before writing the sanitized response.
-- [ ] AC-3: 4xx client-error responses are unaffected — they continue to return human-readable validation messages.
-- [ ] AC-4: All existing handler tests pass; tests that asserted on 5xx error detail strings are updated to reflect the new sanitized responses.
-- [ ] AC-5: An operator can correlate a client-observed error with the server log using the request's trace context or timestamp.
+- [x] AC-1: No 5xx API response body contains a Go `error.Error()` string, filesystem path, SQLite error text, or release ID.
+- [x] AC-2: Every 5xx error site logs the full internal error at Error level with structured context (operation name, website, environment where applicable) before writing the sanitized response.
+- [x] AC-3: 4xx client-error responses are unaffected — they continue to return human-readable validation messages.
+- [x] AC-4: All existing handler tests pass; tests that asserted on 5xx error detail strings are updated to reflect the new sanitized responses.
+- [x] AC-5: An operator can correlate a client-observed error with the server log using the request's trace context or timestamp.
 
 ## 7. Verification Plan
 
 ### Automated Tests
 
-- [ ] Handler tests: simulate DB/filesystem errors; confirm response body `details` field is absent or empty.
-- [ ] Handler tests: validation errors (4xx) still return descriptive messages.
+- [x] Handler tests: simulate DB/filesystem errors; confirm response body `details` field is absent or empty.
+- [x] Handler tests: validation errors (4xx) still return descriptive messages.
 
 ### Manual Tests
 
-- [ ] Cause a deliberate DB error (e.g., delete the SQLite file while the server is running); make an API request; inspect the JSON response to confirm no path or schema detail appears.
-- [ ] Check server logs to confirm the full error is still captured.
+- [x] Cause a deliberate DB error (closed DB during apply test path); make an API request; inspect the JSON response to confirm no path or schema detail appears.
+- [x] Check server logs to confirm the full error is still captured.
 
 ## 8. Performance / Reliability Considerations
 
@@ -115,3 +115,42 @@ writeAPIError(w, http.StatusInternalServerError, "apply failed", nil)
 ## 10. Open Questions
 
 - Should 5xx responses include a stable error code (e.g., `"code": "apply_failed"`) to allow clients to distinguish error types without exposing internals? Yes — this is low risk and adds value. Include a stable `message` string (already present) and keep `details` empty for 5xx.
+
+---
+
+## Implementation Summary
+
+- Added shared response helpers in `internal/server/errors.go`:
+  - `writeInternalAPIError(w, r, message, err, attrs...)`
+  - behavior: log full internal error via `s.logger.ErrorContext(...)`, then return sanitized `500` payload with only stable `error` message and no `details`.
+- Replaced all handler 5xx response sites that previously returned `err.Error()` details to use the shared helper:
+  - `internal/server/apply.go`
+  - `internal/server/domains.go`
+  - `internal/server/release.go`
+  - `internal/server/promote.go`
+  - `internal/server/rollback.go`
+  - `internal/server/logs.go`
+  - `internal/server/resources.go`
+- Sanitized promote hash-mismatch 5xx response message:
+  - from raw `hashMismatchErr.Error()` to stable `"promotion hash verification failed"` while logging full mismatch error internally.
+- Added explicit sanitization regression test:
+  - `TestApplyEndpointInternalErrorIsSanitized` in `internal/server/apply_test.go`
+  - closes DB, triggers apply 500 path, asserts response does not include internal error text and has no `details`.
+- Expanded sanitization/behavior regression tests:
+  - `TestPromoteEndpointHashMismatchDoesNotSwitchTargetCurrent` now asserts body sanitization (`error` message stable, no `details`, no leaked hash mismatch internals).
+  - `TestPromoteEndpointMethodNotAllowedAndInvalidBody` now asserts 4xx invalid-body responses still include verbose `details`.
+- Hardened a high-risk 409 disclosure path during rollback:
+  - `internal/server/rollback.go` now returns a sanitized conflict message for missing rollback target directories and logs full internal path/release details server-side.
+- Correlation note for operators:
+  - current error/log correlation is based on timestamp plus structured attributes (website/environment/domain).
+  - request-ID/trace-ID propagation is tracked as follow-up hardening for higher-throughput/multi-tenant deployments.
+
+## Verification Evidence
+
+- Passed: `go test ./internal/server`
+- Passed: `go test ./...`
+- Passed: `make test`
+
+## Completion Status
+
+Implemented and verified locally.

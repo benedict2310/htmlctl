@@ -94,7 +94,7 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 
 	applier, err := state.NewApplier(s.db, s.blobStore)
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "failed to initialize apply handler", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "failed to initialize apply handler", err, "website", website, "environment", env)
 		return
 	}
 	result, err := applier.Apply(r.Context(), website, env, b, dryRun)
@@ -104,7 +104,7 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 			writeAPIError(w, http.StatusBadRequest, badReqErr.Error(), nil)
 			return
 		}
-		writeAPIError(w, http.StatusInternalServerError, "apply failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "apply failed", err, "website", website, "environment", env, "dry_run", dryRun)
 		return
 	}
 
@@ -174,14 +174,6 @@ func parseApplyPath(pathValue string) (website string, env string, ok bool, err 
 		return website, env, false, fmt.Errorf("invalid environment name %q: %w", env, err)
 	}
 	return website, env, true, nil
-}
-
-func writeAPIError(w http.ResponseWriter, status int, message string, details []string) {
-	resp := map[string]any{"error": message}
-	if len(details) > 0 {
-		resp["details"] = details
-	}
-	writeJSON(w, status, resp)
 }
 
 func (s *Server) environmentLock(website, env string) *sync.Mutex {

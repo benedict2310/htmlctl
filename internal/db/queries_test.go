@@ -184,6 +184,367 @@ func TestDeleteAssetsNotInHandlesLargeKeepSet(t *testing.T) {
 	}
 }
 
+type noSQLQueryer struct {
+	execCalls  int
+	queryCalls int
+}
+
+func (q *noSQLQueryer) ExecContext(context.Context, string, ...any) (sql.Result, error) {
+	q.execCalls++
+	return nil, errors.New("unexpected ExecContext call")
+}
+
+func (q *noSQLQueryer) QueryContext(context.Context, string, ...any) (*sql.Rows, error) {
+	q.queryCalls++
+	return nil, errors.New("unexpected QueryContext call")
+}
+
+func (q *noSQLQueryer) QueryRowContext(context.Context, string, ...any) *sql.Row {
+	panic("unexpected QueryRowContext call")
+}
+
+func seedDeleteTargetRows(t *testing.T, q *Queries, ctx context.Context, table string, websiteID int64, keep, drop string) {
+	t.Helper()
+	switch table {
+	case "pages":
+		if _, err := q.InsertPage(ctx, PageRow{WebsiteID: websiteID, Name: keep, Route: "/" + keep, LayoutJSON: "[]", ContentHash: "hash-" + keep}); err != nil {
+			t.Fatalf("InsertPage(keep) error = %v", err)
+		}
+		if _, err := q.InsertPage(ctx, PageRow{WebsiteID: websiteID, Name: drop, Route: "/" + drop, LayoutJSON: "[]", ContentHash: "hash-" + drop}); err != nil {
+			t.Fatalf("InsertPage(drop) error = %v", err)
+		}
+	case "components":
+		if _, err := q.InsertComponent(ctx, ComponentRow{WebsiteID: websiteID, Name: keep, Scope: "global", ContentHash: "hash-" + keep}); err != nil {
+			t.Fatalf("InsertComponent(keep) error = %v", err)
+		}
+		if _, err := q.InsertComponent(ctx, ComponentRow{WebsiteID: websiteID, Name: drop, Scope: "global", ContentHash: "hash-" + drop}); err != nil {
+			t.Fatalf("InsertComponent(drop) error = %v", err)
+		}
+	case "style_bundles":
+		if _, err := q.InsertStyleBundle(ctx, StyleBundleRow{WebsiteID: websiteID, Name: keep, FilesJSON: "[]"}); err != nil {
+			t.Fatalf("InsertStyleBundle(keep) error = %v", err)
+		}
+		if _, err := q.InsertStyleBundle(ctx, StyleBundleRow{WebsiteID: websiteID, Name: drop, FilesJSON: "[]"}); err != nil {
+			t.Fatalf("InsertStyleBundle(drop) error = %v", err)
+		}
+	case "assets":
+		if _, err := q.InsertAsset(ctx, AssetRow{WebsiteID: websiteID, Filename: keep, ContentType: "text/plain", SizeBytes: 1, ContentHash: "hash-" + keep}); err != nil {
+			t.Fatalf("InsertAsset(keep) error = %v", err)
+		}
+		if _, err := q.InsertAsset(ctx, AssetRow{WebsiteID: websiteID, Filename: drop, ContentType: "text/plain", SizeBytes: 1, ContentHash: "hash-" + drop}); err != nil {
+			t.Fatalf("InsertAsset(drop) error = %v", err)
+		}
+	default:
+		t.Fatalf("unsupported table %q", table)
+	}
+}
+
+func listDeleteTargetValues(t *testing.T, q *Queries, ctx context.Context, table string, websiteID int64) []string {
+	t.Helper()
+	switch table {
+	case "pages":
+		rows, err := q.ListPagesByWebsite(ctx, websiteID)
+		if err != nil {
+			t.Fatalf("ListPagesByWebsite() error = %v", err)
+		}
+		out := make([]string, 0, len(rows))
+		for _, row := range rows {
+			out = append(out, row.Name)
+		}
+		return out
+	case "components":
+		rows, err := q.ListComponentsByWebsite(ctx, websiteID)
+		if err != nil {
+			t.Fatalf("ListComponentsByWebsite() error = %v", err)
+		}
+		out := make([]string, 0, len(rows))
+		for _, row := range rows {
+			out = append(out, row.Name)
+		}
+		return out
+	case "style_bundles":
+		rows, err := q.ListStyleBundlesByWebsite(ctx, websiteID)
+		if err != nil {
+			t.Fatalf("ListStyleBundlesByWebsite() error = %v", err)
+		}
+		out := make([]string, 0, len(rows))
+		for _, row := range rows {
+			out = append(out, row.Name)
+		}
+		return out
+	case "assets":
+		rows, err := q.ListAssetsByWebsite(ctx, websiteID)
+		if err != nil {
+			t.Fatalf("ListAssetsByWebsite() error = %v", err)
+		}
+		out := make([]string, 0, len(rows))
+		for _, row := range rows {
+			out = append(out, row.Filename)
+		}
+		return out
+	default:
+		t.Fatalf("unsupported table %q", table)
+		return nil
+	}
+}
+
+func TestValidateDeleteTargetAllowlistedPairs(t *testing.T) {
+	cases := []struct {
+		table  string
+		column string
+	}{
+		{table: "pages", column: "name"},
+		{table: "components", column: "name"},
+		{table: "style_bundles", column: "name"},
+		{table: "assets", column: "filename"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.table+"."+tc.column, func(t *testing.T) {
+			if err := validateDeleteTarget(tc.table, tc.column); err != nil {
+				t.Fatalf("validateDeleteTarget(%q, %q) error = %v", tc.table, tc.column, err)
+			}
+		})
+	}
+}
+
+func TestDeleteHelpersRejectInvalidTableOrColumn(t *testing.T) {
+	ctx := context.Background()
+
+	cases := []struct {
+		name          string
+		table         string
+		column        string
+		call          func(*Queries) (int64, error)
+		expectedError string
+	}{
+		{
+			name:   "deleteByWebsiteNotIn invalid table",
+			table:  "sqlite_master",
+			column: "name",
+			call: func(q *Queries) (int64, error) {
+				return q.deleteByWebsiteNotIn(ctx, "sqlite_master", "name", 1, []string{"index"})
+			},
+			expectedError: `invalid table/column: "sqlite_master"/"name"`,
+		},
+		{
+			name:   "deleteByWebsiteNotIn invalid column",
+			table:  "pages",
+			column: "1=1; DROP TABLE pages; --",
+			call: func(q *Queries) (int64, error) {
+				return q.deleteByWebsiteNotIn(ctx, "pages", "1=1; DROP TABLE pages; --", 1, []string{"index"})
+			},
+			expectedError: `invalid table/column: "pages"/"1=1; DROP TABLE pages; --"`,
+		},
+		{
+			name:   "deleteByWebsiteSetDifference invalid table",
+			table:  "sqlite_master",
+			column: "name",
+			call: func(q *Queries) (int64, error) {
+				return q.deleteByWebsiteSetDifference(ctx, "sqlite_master", "name", 1, []string{"index"})
+			},
+			expectedError: `invalid table/column: "sqlite_master"/"name"`,
+		},
+		{
+			name:   "deleteByWebsiteSetDifference invalid column",
+			table:  "pages",
+			column: "1=1; DROP TABLE pages; --",
+			call: func(q *Queries) (int64, error) {
+				return q.deleteByWebsiteSetDifference(ctx, "pages", "1=1; DROP TABLE pages; --", 1, []string{"index"})
+			},
+			expectedError: `invalid table/column: "pages"/"1=1; DROP TABLE pages; --"`,
+		},
+		{
+			name:   "deleteByWebsiteAndKey invalid table",
+			table:  "sqlite_master",
+			column: "name",
+			call: func(q *Queries) (int64, error) {
+				return q.deleteByWebsiteAndKey(ctx, "sqlite_master", "name", 1, "index")
+			},
+			expectedError: `invalid table/column: "sqlite_master"/"name"`,
+		},
+		{
+			name:   "deleteByWebsiteAndKey invalid column",
+			table:  "pages",
+			column: "1=1; DROP TABLE pages; --",
+			call: func(q *Queries) (int64, error) {
+				return q.deleteByWebsiteAndKey(ctx, "pages", "1=1; DROP TABLE pages; --", 1, "index")
+			},
+			expectedError: `invalid table/column: "pages"/"1=1; DROP TABLE pages; --"`,
+		},
+		{
+			name:   "deleteByWebsiteNotIn empty table and column",
+			table:  "",
+			column: "",
+			call: func(q *Queries) (int64, error) {
+				return q.deleteByWebsiteNotIn(ctx, "", "", 1, []string{"index"})
+			},
+			expectedError: `invalid table/column: ""/""`,
+		},
+		{
+			name:   "deleteByWebsiteSetDifference empty column",
+			table:  "pages",
+			column: "",
+			call: func(q *Queries) (int64, error) {
+				return q.deleteByWebsiteSetDifference(ctx, "pages", "", 1, []string{"index"})
+			},
+			expectedError: `invalid table/column: "pages"/""`,
+		},
+		{
+			name:   "deleteByWebsiteAndKey empty table",
+			table:  "",
+			column: "name",
+			call: func(q *Queries) (int64, error) {
+				return q.deleteByWebsiteAndKey(ctx, "", "name", 1, "index")
+			},
+			expectedError: `invalid table/column: ""/"name"`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			spy := &noSQLQueryer{}
+			q := NewQueries(spy)
+			n, err := tc.call(q)
+			if err == nil {
+				t.Fatalf("expected error for %q/%q", tc.table, tc.column)
+			}
+			if err.Error() != tc.expectedError {
+				t.Fatalf("error = %q, want %q", err.Error(), tc.expectedError)
+			}
+			if n != 0 {
+				t.Fatalf("deleted rows = %d, want 0", n)
+			}
+			if spy.execCalls != 0 || spy.queryCalls != 0 {
+				t.Fatalf("expected no SQL execution, got execCalls=%d queryCalls=%d", spy.execCalls, spy.queryCalls)
+			}
+		})
+	}
+}
+
+func TestDeleteByWebsiteNotInAllowlistedTargets(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		table  string
+		column string
+		keep   string
+		drop   string
+	}{
+		{table: "pages", column: "name", keep: "index", drop: "about"},
+		{table: "components", column: "name", keep: "header", drop: "footer"},
+		{table: "style_bundles", column: "name", keep: "default", drop: "landing"},
+		{table: "assets", column: "filename", keep: "assets/keep.txt", drop: "assets/drop.txt"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.table+"."+tc.column, func(t *testing.T) {
+			q, cleanup := setupDB(t)
+			defer cleanup()
+
+			websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+			if err != nil {
+				t.Fatalf("InsertWebsite() error = %v", err)
+			}
+			seedDeleteTargetRows(t, q, ctx, tc.table, websiteID, tc.keep, tc.drop)
+
+			deleted, err := q.deleteByWebsiteNotIn(ctx, tc.table, tc.column, websiteID, []string{tc.keep})
+			if err != nil {
+				t.Fatalf("deleteByWebsiteNotIn() error = %v", err)
+			}
+			if deleted != 1 {
+				t.Fatalf("deleted rows = %d, want 1", deleted)
+			}
+
+			got := listDeleteTargetValues(t, q, ctx, tc.table, websiteID)
+			if len(got) != 1 || got[0] != tc.keep {
+				t.Fatalf("remaining values = %#v, want [%q]", got, tc.keep)
+			}
+		})
+	}
+}
+
+func TestDeleteByWebsiteSetDifferenceAllowlistedTargets(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		table  string
+		column string
+		keep   string
+		drop   string
+	}{
+		{table: "pages", column: "name", keep: "index", drop: "about"},
+		{table: "components", column: "name", keep: "header", drop: "footer"},
+		{table: "style_bundles", column: "name", keep: "default", drop: "landing"},
+		{table: "assets", column: "filename", keep: "assets/keep.txt", drop: "assets/drop.txt"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.table+"."+tc.column, func(t *testing.T) {
+			q, cleanup := setupDB(t)
+			defer cleanup()
+
+			websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+			if err != nil {
+				t.Fatalf("InsertWebsite() error = %v", err)
+			}
+			seedDeleteTargetRows(t, q, ctx, tc.table, websiteID, tc.keep, tc.drop)
+
+			deleted, err := q.deleteByWebsiteSetDifference(ctx, tc.table, tc.column, websiteID, []string{tc.keep})
+			if err != nil {
+				t.Fatalf("deleteByWebsiteSetDifference() error = %v", err)
+			}
+			if deleted != 1 {
+				t.Fatalf("deleted rows = %d, want 1", deleted)
+			}
+
+			got := listDeleteTargetValues(t, q, ctx, tc.table, websiteID)
+			if len(got) != 1 || got[0] != tc.keep {
+				t.Fatalf("remaining values = %#v, want [%q]", got, tc.keep)
+			}
+		})
+	}
+}
+
+func TestDeleteByWebsiteAndKeyAllowlistedTargets(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		table  string
+		column string
+		keep   string
+		drop   string
+	}{
+		{table: "pages", column: "name", keep: "index", drop: "about"},
+		{table: "components", column: "name", keep: "header", drop: "footer"},
+		{table: "style_bundles", column: "name", keep: "default", drop: "landing"},
+		{table: "assets", column: "filename", keep: "assets/keep.txt", drop: "assets/drop.txt"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.table+"."+tc.column, func(t *testing.T) {
+			q, cleanup := setupDB(t)
+			defer cleanup()
+
+			websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+			if err != nil {
+				t.Fatalf("InsertWebsite() error = %v", err)
+			}
+			seedDeleteTargetRows(t, q, ctx, tc.table, websiteID, tc.keep, tc.drop)
+
+			deleted, err := q.deleteByWebsiteAndKey(ctx, tc.table, tc.column, websiteID, tc.drop)
+			if err != nil {
+				t.Fatalf("deleteByWebsiteAndKey() error = %v", err)
+			}
+			if deleted != 1 {
+				t.Fatalf("deleted rows = %d, want 1", deleted)
+			}
+
+			got := listDeleteTargetValues(t, q, ctx, tc.table, websiteID)
+			if len(got) != 1 || got[0] != tc.keep {
+				t.Fatalf("remaining values = %#v, want [%q]", got, tc.keep)
+			}
+		})
+	}
+}
+
 func TestListReleasesByEnvironmentPage(t *testing.T) {
 	q, cleanup := setupDB(t)
 	defer cleanup()

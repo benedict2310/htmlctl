@@ -81,7 +81,7 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 
 	res, err := s.auditLogger.Query(r.Context(), filter)
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "query audit logs failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "query audit logs failed", err, "website", website, "environment", env)
 		return
 	}
 

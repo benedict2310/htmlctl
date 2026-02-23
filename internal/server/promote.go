@@ -93,9 +93,9 @@ func (s *Server) handlePromote(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, release.ErrPromotionSourceTargetMatch):
 			writeAPIError(w, http.StatusBadRequest, err.Error(), nil)
 		case errors.As(err, &hashMismatchErr):
-			writeAPIError(w, http.StatusInternalServerError, hashMismatchErr.Error(), nil)
+			s.writeInternalAPIError(w, r, "promotion hash verification failed", hashMismatchErr, "website", website, "from", sourceEnv, "to", targetEnv)
 		default:
-			writeAPIError(w, http.StatusInternalServerError, "promotion failed", []string{err.Error()})
+			s.writeInternalAPIError(w, r, "promotion failed", err, "website", website, "from", sourceEnv, "to", targetEnv)
 		}
 		return
 	}

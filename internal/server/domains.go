@@ -78,7 +78,7 @@ func (s *Server) handleListDomains(w http.ResponseWriter, r *http.Request) {
 	q := dbpkg.NewQueries(s.db)
 	rows, err := q.ListDomainBindings(r.Context(), websiteFilter, environmentFilter)
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "list domain bindings failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "list domain bindings failed", err, "website_filter", websiteFilter, "environment_filter", environmentFilter)
 		return
 	}
 
@@ -103,7 +103,7 @@ func (s *Server) handleGetDomain(w http.ResponseWriter, r *http.Request, domainV
 			writeAPIError(w, http.StatusNotFound, fmt.Sprintf("domain %q not found", normalized), nil)
 			return
 		}
-		writeAPIError(w, http.StatusInternalServerError, "get domain binding failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "get domain binding failed", err, "domain", normalized)
 		return
 	}
 
@@ -144,7 +144,7 @@ func (s *Server) handleCreateDomain(w http.ResponseWriter, r *http.Request) {
 			writeAPIError(w, http.StatusNotFound, fmt.Sprintf("website %q not found", website), nil)
 			return
 		}
-		writeAPIError(w, http.StatusInternalServerError, "lookup website failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "lookup website failed", err, "website", website, "domain", normalized)
 		return
 	}
 	envRow, err := q.GetEnvironmentByName(r.Context(), websiteRow.ID, environment)
@@ -153,7 +153,7 @@ func (s *Server) handleCreateDomain(w http.ResponseWriter, r *http.Request) {
 			writeAPIError(w, http.StatusNotFound, fmt.Sprintf("environment %q not found", environment), nil)
 			return
 		}
-		writeAPIError(w, http.StatusInternalServerError, "lookup environment failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "lookup environment failed", err, "website", website, "environment", environment, "domain", normalized)
 		return
 	}
 
@@ -170,13 +170,13 @@ func (s *Server) handleCreateDomain(w http.ResponseWriter, r *http.Request) {
 			writeAPIError(w, http.StatusConflict, fmt.Sprintf("domain %q is already bound", normalized), nil)
 			return
 		}
-		writeAPIError(w, http.StatusInternalServerError, "create domain binding failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "create domain binding failed", err, "domain", normalized, "website", website, "environment", environment)
 		return
 	}
 
 	row, err := q.GetDomainBindingByDomain(r.Context(), normalized)
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "load domain binding failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "load domain binding failed", err, "domain", normalized)
 		return
 	}
 
@@ -188,7 +188,15 @@ func (s *Server) handleCreateDomain(w http.ResponseWriter, r *http.Request) {
 			rollbackInconclusive := !rolledBack
 			if rollbackErr != nil {
 				if reconcileErr := s.reconcileDomainConfig(r.Context(), "add rollback failure "+normalized); reconcileErr != nil {
-					writeAPIError(w, http.StatusInternalServerError, "domain binding created but caddy reload failed and rollback failed", []string{err.Error(), rollbackErr.Error(), reconcileErr.Error()})
+					s.writeInternalAPIError(
+						w,
+						r,
+						"domain binding created but caddy reload failed and rollback failed",
+						err,
+						"domain", normalized,
+						"rollback_error", rollbackErr,
+						"reconcile_error", reconcileErr,
+					)
 					return
 				}
 				// Reconcile succeeded while DB rollback failed; keep the response based on the
@@ -199,13 +207,13 @@ func (s *Server) handleCreateDomain(w http.ResponseWriter, r *http.Request) {
 			if rollbackInconclusive {
 				reconciledRow, rowErr := q.GetDomainBindingByDomain(r.Context(), normalized)
 				if rowErr != nil {
-					writeAPIError(w, http.StatusInternalServerError, "domain binding created but caddy reload failed and rollback was inconclusive", []string{err.Error()})
+					s.writeInternalAPIError(w, r, "domain binding created but caddy reload failed and rollback was inconclusive", err, "domain", normalized, "lookup_error", rowErr)
 					return
 				}
 				row = reconciledRow
 			}
 			if rolledBack {
-				writeAPIError(w, http.StatusInternalServerError, "domain binding was rolled back because caddy reload failed", []string{err.Error()})
+				s.writeInternalAPIError(w, r, "domain binding was rolled back because caddy reload failed", err, "domain", normalized)
 				return
 			}
 		}
@@ -234,13 +242,13 @@ func (s *Server) handleDeleteDomain(w http.ResponseWriter, r *http.Request, doma
 			writeAPIError(w, http.StatusNotFound, fmt.Sprintf("domain %q not found", normalized), nil)
 			return
 		}
-		writeAPIError(w, http.StatusInternalServerError, "get domain binding failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "get domain binding failed", err, "domain", normalized)
 		return
 	}
 
 	deleted, err := q.DeleteDomainBindingByDomain(r.Context(), normalized)
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "delete domain binding failed", []string{err.Error()})
+		s.writeInternalAPIError(w, r, "delete domain binding failed", err, "domain", normalized)
 		return
 	}
 	if !deleted {
@@ -261,12 +269,20 @@ func (s *Server) handleDeleteDomain(w http.ResponseWriter, r *http.Request, doma
 			})
 			if rollbackErr != nil {
 				if reconcileErr := s.reconcileDomainConfig(r.Context(), "remove rollback failure "+normalized); reconcileErr != nil {
-					writeAPIError(w, http.StatusInternalServerError, "domain binding removed but caddy reload failed and rollback failed", []string{err.Error(), rollbackErr.Error(), reconcileErr.Error()})
+					s.writeInternalAPIError(
+						w,
+						r,
+						"domain binding removed but caddy reload failed and rollback failed",
+						err,
+						"domain", normalized,
+						"rollback_error", rollbackErr,
+						"reconcile_error", reconcileErr,
+					)
 					return
 				}
 				s.logger.Warn("caddy reconcile succeeded after failed domain remove rollback", "domain", normalized)
 			} else {
-				writeAPIError(w, http.StatusInternalServerError, "domain binding removal was rolled back because caddy reload failed", []string{err.Error()})
+				s.writeInternalAPIError(w, r, "domain binding removal was rolled back because caddy reload failed", err, "domain", normalized)
 				return
 			}
 		}

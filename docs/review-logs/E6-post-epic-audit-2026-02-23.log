@@ -1,0 +1,111 @@
+==========================================
+E6 Post-Epic Security & Health Audit
+==========================================
+Mon Feb 23 2026
+
+Scope: Full post-implementation review of Epic 6 Security Hardening (E6-S1 through
+E6-S7), plus a full build/vet/test pass with the Go race detector.
+
+Two independent subagents ran in parallel:
+  - Security agent:  reviewed all 7 story acceptance criteria against production code
+  - QA agent:        go build / go vet / go test (428 tests) / go test -race
+
+---
+
+SECURITY REVIEW — PASS (all 7 stories)
+=======================================
+
+E6-S1  API Authentication Layer                             PASS
+  - crypto/subtle.ConstantTimeCompare used for token comparison
+  - All /api/v1/* routes wrapped; /healthz, /readyz, /version remain unauthenticated
+  - actorTrusted context flag gates X-Actor header trust
+  - Client sends Bearer tokens on every request
+  - Startup warning emitted (not fatal) when token unconfigured
+  - Empty-token mode preserved for rollout safety
+
+E6-S2  Input Name Validation                                PASS
+  - Regex ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ (max 128 chars) enforced in all path parsers
+  - Defense-in-depth: validated at API layer, state layer, DB layer, and Caddy layer
+  - Caddyfile entrypoints reject newlines and { } chars before heredoc write
+
+E6-S3  HTML XSS Hardening                                   PASS
+  - html/template replaces text/template in pkg/renderer/template.go
+  - ContentHTML typed as template.HTML (trusted raw HTML from validated components)
+  - Event-handler attributes (on*) rejected by component validator
+  - TestRenderEscapesMaliciousPageMetadata confirms metadata escaping
+
+E6-S4  SSH Transport Hardening                              PASS
+  - Public HostKeyCB field removed; always derives callback from known_hosts
+  - Agent socket ownership validated with os.Lstat (no symlink follow)
+  - Private key paths restricted to os.UserHomeDir(); errors redacted via redactPathError
+
+E6-S5  Container & Entrypoint Security Hardening            PASS
+  - SSH entrypoint uses runuser/su argument passing (no shell interpolation)
+  - validate_ssh_public_key parses and verifies key format before authorized_keys write
+  - authorized_keys entries prefixed with restrict,port-forwarding
+  - PermitTunnel no set in Dockerfile sshd config
+
+E6-S6  SQL Query Helper Hardening                           PASS
+  - allowedDeleteTargets allowlist defined in internal/db/queries.go
+  - validateDeleteTarget called at start of all three dynamic-identifier helpers
+  - Invalid pairs return errors before any SQL is constructed
+
+E6-S7  API Error Response Sanitization                      PASS
+  - writeInternalAPIError helper in internal/server/errors.go
+  - All 5xx paths across apply/release/promote/rollback/domains/logs/resources use it
+  - Full errors logged at Error level server-side; clients receive generic message only
+  - 4xx client errors remain descriptive
+
+Vulnerability remediation summary: 16/16 findings from the 2026-02-20 security audit
+addressed and verified.
+
+Overall security posture: STRONG — approved for production.
+
+---
+
+QA / HEALTH CHECK — MOSTLY PASS (race defect found and fixed)
+==============================================================
+
+go build ./...   EXIT 0 — all packages compile cleanly
+go vet ./...     EXIT 0 — no static analysis warnings
+
+go test ./... (428 tests)
+  All 22 testable packages PASS. 1 package has no test files (internal/names).
+
+go test -race ./...
+  21/22 packages PASS.
+  FAIL: internal/server — DATA RACE on (*Server).listener
+
+Race details
+------------
+  Root cause: (*Server).listener is written by the Run() goroutine inside Start()
+  at server.go:132 (s.listener = ln) and read concurrently by any caller of Addr()
+  at server.go:212-215 with no synchronization.
+
+  Affected tests (both exhibit the same race):
+    TestServerRunGracefulShutdownOnContextCancel     (server_test.go:118)
+    TestRunReturnsServeErrorWhenListenerClosedUnexpectedly (server_test.go:258)
+
+  This is a production bug, not a test artifact — the intended usage pattern (polling
+  Addr() while Run() initializes the listener) triggers the race in any caller.
+
+Fix applied — internal/server/server.go
+  - Added  listenerMu sync.RWMutex  field to Server struct.
+  - Start():    write-lock around  s.listener = ln  (line ~132)
+  - Shutdown(): read-lock for nil check; write-lock for  s.listener = nil
+  - Addr():     read-lock wrapping both the nil check and .Addr().String()
+
+Post-fix result:
+  go test -race ./internal/server/...  →  ok  (3.558s, no races)
+  go test -race ./...                  →  ok  all 22 packages (no races)
+
+No test changes required — the poll-until-ready pattern in the tests is valid once
+the underlying field access is synchronized.
+
+---
+
+Conclusion
+----------
+Epic 6 is complete. All 16 security findings are remediated, all 428 tests pass, and
+the codebase is now clean under the race detector. The one concurrency defect found
+(listener field race) was fixed in the same session and is included in this commit.

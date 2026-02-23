@@ -19,6 +19,26 @@ type Queries struct {
 
 const sqliteMaxVariables = 999
 
+// allowedDeleteTargets defines the only table/column identifier pairs that may
+// be interpolated into SQL delete helpers.
+//
+// Identifiers here use canonical lowercase names and are matched
+// case-sensitively. Do not mutate this map after init.
+var allowedDeleteTargets = map[string]map[string]bool{
+	"pages": {
+		"name": true,
+	},
+	"components": {
+		"name": true,
+	},
+	"style_bundles": {
+		"name": true,
+	},
+	"assets": {
+		"filename": true,
+	},
+}
+
 func NewQueries(db queryer) *Queries {
 	return &Queries{db: db}
 }
@@ -523,7 +543,15 @@ func (q *Queries) DeleteDomainBindingByDomain(ctx context.Context, domain string
 	return affected > 0, nil
 }
 
+// deleteByWebsiteNotIn deletes rows from an allowlisted table/column pair for a
+// website where the key column is not present in values.
+//
+// To support additional table/column pairs, update allowedDeleteTargets.
 func (q *Queries) deleteByWebsiteNotIn(ctx context.Context, table, column string, websiteID int64, values []string) (int64, error) {
+	if err := validateDeleteTarget(table, column); err != nil {
+		return 0, err
+	}
+
 	// SQLite limits query variables. Fall back to set-difference deletes when
 	// the keep-list would exceed the variable limit.
 	if len(values) >= sqliteMaxVariables {
@@ -533,7 +561,7 @@ func (q *Queries) deleteByWebsiteNotIn(ctx context.Context, table, column string
 	query := fmt.Sprintf("DELETE FROM %s WHERE website_id = ?", table)
 	args := []any{websiteID}
 	if len(values) > 0 {
-		query += " AND " + column + " NOT IN (" + placeholders(len(values)) + ")"
+		query += fmt.Sprintf(" AND %s NOT IN (%s)", column, placeholders(len(values)))
 		for _, v := range values {
 			args = append(args, v)
 		}
@@ -549,7 +577,15 @@ func (q *Queries) deleteByWebsiteNotIn(ctx context.Context, table, column string
 	return n, nil
 }
 
+// deleteByWebsiteSetDifference deletes non-keep values by reading keys from an
+// allowlisted table/column pair and deleting row-by-row.
+//
+// To support additional table/column pairs, update allowedDeleteTargets.
 func (q *Queries) deleteByWebsiteSetDifference(ctx context.Context, table, column string, websiteID int64, keepValues []string) (int64, error) {
+	if err := validateDeleteTarget(table, column); err != nil {
+		return 0, err
+	}
+
 	keep := make(map[string]struct{}, len(keepValues))
 	for _, v := range keepValues {
 		keep[v] = struct{}{}
@@ -582,7 +618,15 @@ func (q *Queries) deleteByWebsiteSetDifference(ctx context.Context, table, colum
 	return deleted, nil
 }
 
+// deleteByWebsiteAndKey deletes a single row for an allowlisted table/column
+// pair scoped to websiteID.
+//
+// To support additional table/column pairs, update allowedDeleteTargets.
 func (q *Queries) deleteByWebsiteAndKey(ctx context.Context, table, column string, websiteID int64, value string) (int64, error) {
+	if err := validateDeleteTarget(table, column); err != nil {
+		return 0, err
+	}
+
 	query := fmt.Sprintf("DELETE FROM %s WHERE website_id = ? AND %s = ?", table, column)
 	res, err := q.db.ExecContext(ctx, query, websiteID, value)
 	if err != nil {
@@ -593,6 +637,14 @@ func (q *Queries) deleteByWebsiteAndKey(ctx context.Context, table, column strin
 		return 0, fmt.Errorf("rows affected for delete %s row by %s: %w", table, column, err)
 	}
 	return n, nil
+}
+
+func validateDeleteTarget(table, column string) error {
+	columns, ok := allowedDeleteTargets[table]
+	if !ok || !columns[column] {
+		return fmt.Errorf("invalid table/column: %q/%q", table, column)
+	}
+	return nil
 }
 
 func placeholders(n int) string {

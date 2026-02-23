@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -79,9 +80,12 @@ func TestRollbackEndpointNoPreviousRelease(t *testing.T) {
 		t.Fatalf("POST /rollback error = %v", err)
 	}
 	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read rollback response body: %v", err)
+	}
 	if resp.StatusCode != http.StatusConflict {
-		b, _ := io.ReadAll(resp.Body)
-		t.Fatalf("expected 409, got %d body=%s", resp.StatusCode, string(b))
+		t.Fatalf("expected 409, got %d body=%s", resp.StatusCode, string(body))
 	}
 }
 
@@ -103,9 +107,30 @@ func TestRollbackEndpointMissingTargetReleaseDirectory(t *testing.T) {
 		t.Fatalf("POST /rollback error = %v", err)
 	}
 	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read rollback response body: %v", err)
+	}
 	if resp.StatusCode != http.StatusConflict {
-		b, _ := io.ReadAll(resp.Body)
-		t.Fatalf("expected 409, got %d body=%s", resp.StatusCode, string(b))
+		t.Fatalf("expected 409, got %d body=%s", resp.StatusCode, string(body))
+	}
+
+	if strings.Contains(string(body), missingDir) || strings.Contains(string(body), first) {
+		t.Fatalf("rollback conflict response leaked internal path or release id: %s", string(body))
+	}
+
+	var out struct {
+		Error   string   `json:"error"`
+		Details []string `json:"details,omitempty"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("decode rollback conflict response: %v body=%s", err, string(body))
+	}
+	if out.Error != "rollback target release directory is missing" {
+		t.Fatalf("expected sanitized rollback message, got %q", out.Error)
+	}
+	if len(out.Details) != 0 {
+		t.Fatalf("expected no details for rollback missing-dir conflict, got %#v", out.Details)
 	}
 
 	currentTarget, err := os.Readlink(filepath.Join(srv.dataPaths.WebsitesRoot, "futurelab", "envs", "staging", "current"))

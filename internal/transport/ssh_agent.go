@@ -12,6 +12,17 @@ import (
 )
 
 func authMethodFromSSHAgent() (ssh.AuthMethod, io.Closer, error) {
+	signersFn, closer, err := agentSignersFn()
+	if err != nil {
+		return nil, nil, err
+	}
+	return ssh.PublicKeysCallback(signersFn), closer, nil
+}
+
+// agentSignersFn returns the agent's Signers callback and a closer for the
+// underlying connection. Callers may wrap the callback to combine it with
+// additional signers (e.g., a private key file) in a single PublicKeysCallback.
+func agentSignersFn() (func() ([]ssh.Signer, error), io.Closer, error) {
 	sockPath := strings.TrimSpace(os.Getenv("SSH_AUTH_SOCK"))
 	if sockPath == "" {
 		return nil, nil, fmt.Errorf("%w: SSH_AUTH_SOCK is not set", ErrSSHAgentUnavailable)
@@ -31,5 +42,5 @@ func authMethodFromSSHAgent() (ssh.AuthMethod, io.Closer, error) {
 		return nil, nil, fmt.Errorf("%w: list agent signers: %v", ErrSSHAgentUnavailable, err)
 	}
 
-	return ssh.PublicKeysCallback(agentClient.Signers), conn, nil
+	return agentClient.Signers, conn, nil
 }

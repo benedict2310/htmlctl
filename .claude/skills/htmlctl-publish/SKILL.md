@@ -94,6 +94,12 @@ Use for new pages, layout changes, style overhauls, or any change touching many 
    ```
    Open `http://127.0.0.1.nip.io:18080` (prefer hostname over raw `127.0.0.1` when validating telemetry attribution).
 
+   > **Note:** Caddy uses virtual hosting — `curl http://127.0.0.1:18080/` returns an empty body because `Host: 127.0.0.1` matches no vhost. Always use the bound hostname for verification:
+   > ```bash
+   > curl -sf -H "Host: 127.0.0.1.nip.io" http://127.0.0.1:18080/ | grep "<title>"
+   > # or open the nip.io URL directly in a browser
+   > ```
+
 4. Iterate locally until satisfied, then apply to the real staging environment:
    ```bash
    htmlctl apply -f site/ --context staging

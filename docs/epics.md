@@ -110,3 +110,13 @@ by guarding the field with `sync.RWMutex`. All 428 tests pass clean under `-race
 | 7.2 | Telemetry ingest endpoint for static sites (Implemented) | [E7-S2](stories/E7-S2-telemetry-ingest-endpoint.md) |
 
 **Done when:** pages can emit crawler-visible metadata directly in HTML and operators can collect/query basic page telemetry via htmlservd.
+
+---
+
+## Epic 8 — DX & Reliability
+
+**Goal:** Fix developer-experience rough edges and reliability gaps surfaced during real-world use.
+
+| # | Story | File |
+|---|-------|------|
+| 8.1 | SSH auth: fall back to key file when agent key is rejected | [E8-S1](stories/E8-S1-ssh-auth-agent-key-fallback.md) |

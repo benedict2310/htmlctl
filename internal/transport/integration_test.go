@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/knownhosts"
 )
 
@@ -387,4 +388,151 @@ func publicKeysEqual(a, b ssh.PublicKey) bool {
 		return false
 	}
 	return string(a.Marshal()) == string(b.Marshal())
+}
+
+// TestSSHTransportFallsBackToKeyFileWhenAgentHoldsWrongKey verifies that when
+// an SSH agent is reachable but contains only a key that the server rejects,
+// NewSSHTransport falls back to the configured private key file and succeeds.
+func TestSSHTransportFallsBackToKeyFileWhenAgentHoldsWrongKey(t *testing.T) {
+	backendAddr, shutdownBackend := startHTTPBackend(t)
+	defer shutdownBackend()
+
+	// Server only accepts the "correct" signer.
+	correctSigner, privateKeyPath := newRSASignerWithPrivateKeyFile(t)
+	srv := startSSHServer(t, correctSigner.PublicKey())
+	defer srv.Close()
+
+	knownHostsPath := writeKnownHostsFile(t, srv.addr, srv.hostSigner.PublicKey())
+
+	// Start an in-memory SSH agent that holds only a wrong key.
+	_, wrongKey := newEd25519SignerWithKey(t)
+	keyring := agent.NewKeyring()
+	if err := keyring.Add(agent.AddedKey{PrivateKey: wrongKey}); err != nil {
+		t.Fatalf("add wrong key to agent: %v", err)
+	}
+	agentSockPath := serveAgentOnSocket(t, keyring)
+	t.Setenv("SSH_AUTH_SOCK", agentSockPath)
+
+	tr, err := NewSSHTransport(t.Context(), SSHConfig{
+		ServerURL:      fmt.Sprintf("ssh://tester@%s", srv.addr),
+		RemoteAddr:     backendAddr,
+		KnownHostsPath: knownHostsPath,
+		PrivateKeyPath: privateKeyPath,
+		Timeout:        5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewSSHTransport() should fall back to key file when agent holds wrong key, got: %v", err)
+	}
+	defer tr.Close()
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://placeholder/healthz", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	resp, err := tr.Do(t.Context(), req)
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || strings.TrimSpace(string(body)) != "ok:/healthz" {
+		t.Fatalf("unexpected response status=%d body=%q", resp.StatusCode, string(body))
+	}
+}
+
+// TestSSHTransportAgentOnlyWhenNoKeyFileConfigured verifies that when the SSH
+// agent is available and no key file is configured, only the agent is used and
+// auth succeeds when the agent holds the correct key (AC-3).
+func TestSSHTransportAgentOnlyWhenNoKeyFileConfigured(t *testing.T) {
+	t.Setenv(envSSHKeyPath, "")
+	t.Setenv("HOME", t.TempDir()) // ensure no default key files exist
+
+	backendAddr, shutdownBackend := startHTTPBackend(t)
+	defer shutdownBackend()
+
+	// Server accepts the agent signer's key.
+	agentSigner, agentKey := newEd25519SignerWithKey(t)
+	srv := startSSHServer(t, agentSigner.PublicKey())
+	defer srv.Close()
+
+	knownHostsPath := writeKnownHostsFile(t, srv.addr, srv.hostSigner.PublicKey())
+
+	keyring := agent.NewKeyring()
+	if err := keyring.Add(agent.AddedKey{PrivateKey: agentKey}); err != nil {
+		t.Fatalf("add key to agent: %v", err)
+	}
+	agentSockPath := serveAgentOnSocket(t, keyring)
+	t.Setenv("SSH_AUTH_SOCK", agentSockPath)
+
+	tr, err := NewSSHTransport(t.Context(), SSHConfig{
+		ServerURL:      fmt.Sprintf("ssh://tester@%s", srv.addr),
+		RemoteAddr:     backendAddr,
+		KnownHostsPath: knownHostsPath,
+		// PrivateKeyPath intentionally omitted — agent-only path
+		Timeout: 5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewSSHTransport() should use agent when no key file is configured: %v", err)
+	}
+	defer tr.Close()
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://placeholder/healthz", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	resp, err := tr.Do(t.Context(), req)
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || strings.TrimSpace(string(body)) != "ok:/healthz" {
+		t.Fatalf("unexpected response status=%d body=%q", resp.StatusCode, string(body))
+	}
+}
+
+// newEd25519SignerWithKey returns an ssh.Signer and the underlying private key.
+func newEd25519SignerWithKey(t *testing.T) (ssh.Signer, ed25519.PrivateKey) {
+	t.Helper()
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate ed25519 key: %v", err)
+	}
+	signer, err := ssh.NewSignerFromKey(private)
+	if err != nil {
+		t.Fatalf("new signer from ed25519 key: %v", err)
+	}
+	return signer, private
+}
+
+// serveAgentOnSocket starts an in-memory SSH agent listening on a temp unix
+// socket and returns the socket path. Uses os.TempDir() directly to keep the
+// path short enough to satisfy the macOS 104-character unix socket path limit.
+// The listener and temp dir are cleaned up via t.Cleanup.
+func serveAgentOnSocket(t *testing.T, ag agent.Agent) string {
+	t.Helper()
+	dir, err := os.MkdirTemp(os.TempDir(), "htmlctl-agent-")
+	if err != nil {
+		t.Fatalf("mkdir temp agent dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	sockPath := filepath.Join(dir, "s.sock")
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("listen agent socket: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer conn.Close()
+				_ = agent.ServeAgent(ag, conn)
+			}()
+		}
+	}()
+	return sockPath
 }

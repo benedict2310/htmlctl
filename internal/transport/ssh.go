@@ -141,25 +141,42 @@ func NewSSHTransport(ctx context.Context, cfg SSHConfig) (*SSHTransport, error) 
 	authMethods := cfg.AuthMethods
 	var closers []io.Closer
 	if len(authMethods) == 0 {
-		authMethod, closer, err := authMethodFromSSHAgent()
-		if err != nil {
+		agentFn, closer, agentErr := agentSignersFn()
+		if agentErr != nil {
+			// Agent unavailable — fall back to key file.
 			keyPath, keyPathErr := resolvePrivateKeyPath(cfg.PrivateKeyPath)
 			if keyPathErr != nil {
-				return nil, fmt.Errorf("ssh agent unavailable (%v); private key fallback failed: %w", err, keyPathErr)
+				return nil, fmt.Errorf("ssh agent unavailable (%v); private key fallback failed: %w", agentErr, keyPathErr)
 			}
-			authMethod, keyErr := authMethodFromPrivateKey(keyPath)
+			keyMethod, keyErr := authMethodFromPrivateKey(keyPath)
 			if keyErr != nil {
 				if errors.Is(keyErr, ErrSSHKeyPath) {
-					return nil, fmt.Errorf("ssh agent unavailable (%v); private key fallback failed: %w", err, keyErr)
+					return nil, fmt.Errorf("ssh agent unavailable (%v); private key fallback failed: %w", agentErr, keyErr)
 				}
-				return nil, fmt.Errorf("%w: %v; private key fallback failed: %v", ErrSSHAgentUnavailable, err, keyErr)
+				return nil, fmt.Errorf("%w: %v; private key fallback failed: %v", ErrSSHAgentUnavailable, agentErr, keyErr)
 			}
-			authMethods = []ssh.AuthMethod{authMethod}
+			authMethods = []ssh.AuthMethod{keyMethod}
 		} else {
-			authMethods = []ssh.AuthMethod{authMethod}
 			if closer != nil {
 				closers = append(closers, closer)
 			}
+			// If a key file is also configured, build a combined PublicKeysCallback
+			// that presents agent keys first then the key file signer. The Go SSH
+			// library tries all keys within a single publickey auth exchange, so this
+			// lets auth succeed when the agent holds a different key than the server
+			// accepts. If no usable key file is found, fall back to agent-only.
+			combinedFn := agentFn
+			if keyPath, pathErr := resolvePrivateKeyPath(cfg.PrivateKeyPath); pathErr == nil && keyPath != "" {
+				if fileSigner, fileErr := signerFromPrivateKey(keyPath); fileErr == nil {
+					combinedFn = func() ([]ssh.Signer, error) {
+						// Ignore transient agent errors: the file signer alone
+						// still gives the server a key to evaluate.
+						signers, _ := agentFn()
+						return append(signers, fileSigner), nil
+					}
+				}
+			}
+			authMethods = []ssh.AuthMethod{ssh.PublicKeysCallback(combinedFn)}
 		}
 	}
 

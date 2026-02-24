@@ -50,6 +50,14 @@ func resolveKnownHostsPath(explicit string) string {
 }
 
 func authMethodFromPrivateKey(path string) (ssh.AuthMethod, error) {
+	signer, err := signerFromPrivateKey(path)
+	if err != nil {
+		return nil, err
+	}
+	return ssh.PublicKeys(signer), nil
+}
+
+func signerFromPrivateKey(path string) (ssh.Signer, error) {
 	keyPath, err := sanitizePrivateKeyPath(path)
 	if err != nil {
 		return nil, err
@@ -71,8 +79,7 @@ func authMethodFromPrivateKey(path string) (ssh.AuthMethod, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse private key: %w", err)
 	}
-
-	return ssh.PublicKeys(signer), nil
+	return signer, nil
 }
 
 func sanitizePrivateKeyPath(input string) (string, error) {

@@ -65,6 +65,41 @@ func TestGenerateConfigWithAutoHTTPSDisabled(t *testing.T) {
 	}
 }
 
+func TestGenerateConfigWithTelemetryProxy(t *testing.T) {
+	cfg, err := GenerateConfigWithOptions([]Site{
+		{Domain: "futurelab.studio", Root: "/srv/futurelab/prod/current"},
+	}, ConfigOptions{TelemetryPort: 9400})
+	if err != nil {
+		t.Fatalf("GenerateConfigWithOptions() error = %v", err)
+	}
+	if !strings.Contains(cfg, "handle /collect/v1/events*") {
+		t.Fatalf("expected telemetry handle stanza in config, got:\n%s", cfg)
+	}
+	if !strings.Contains(cfg, "reverse_proxy 127.0.0.1:9400") {
+		t.Fatalf("expected telemetry reverse proxy in config, got:\n%s", cfg)
+	}
+}
+
+func TestGenerateConfigWithoutTelemetryProxyWhenDisabled(t *testing.T) {
+	cfg, err := GenerateConfigWithOptions([]Site{
+		{Domain: "futurelab.studio", Root: "/srv/futurelab/prod/current"},
+	}, ConfigOptions{TelemetryPort: 0})
+	if err != nil {
+		t.Fatalf("GenerateConfigWithOptions() error = %v", err)
+	}
+	if strings.Contains(cfg, "handle /collect/v1/events*") {
+		t.Fatalf("did not expect telemetry handle stanza, got:\n%s", cfg)
+	}
+}
+
+func TestGenerateConfigRejectsInvalidTelemetryPort(t *testing.T) {
+	if _, err := GenerateConfigWithOptions([]Site{
+		{Domain: "futurelab.studio", Root: "/srv/futurelab/prod/current"},
+	}, ConfigOptions{TelemetryPort: 70000}); err == nil {
+		t.Fatalf("expected invalid telemetry port error")
+	}
+}
+
 func TestWriteConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "Caddyfile")
 	if err := WriteConfig(path, "futurelab.studio {\n\tfile_server\n}\n"); err != nil {

@@ -144,6 +144,32 @@ In v1, a single bundle `default`:
   - build log
   - hashes of outputs
 
+### 2.8 Telemetry event (optional platform capability)
+
+- Public ingest endpoint: `POST /collect/v1/events`
+- Authenticated read endpoint:
+  - `GET /api/v1/websites/{website}/environments/{env}/telemetry/events`
+- Stored fields:
+  - `environment_id` (resolved from request host via domain binding)
+  - `event_name`
+  - `path` (normalized absolute path)
+  - `occurred_at` (optional client timestamp, validated RFC3339)
+  - `received_at` (server timestamp)
+  - `session_id` (optional, validated identifier)
+  - `attrs_json` (validated key/value metadata map)
+- Ingest validation defaults:
+  - request body <= 64 KiB (`telemetry.maxBodyBytes`)
+  - max 50 events/request (`telemetry.maxEvents`)
+  - event names match `[a-zA-Z0-9][a-zA-Z0-9_-]*`, max 64 chars
+  - max 16 attrs/event; attr key <= 64 bytes; attr value <= 256 bytes
+  - accepted request body content types: `application/json` and `text/plain` (sendBeacon-compatible)
+  - `telemetry.maxBodyBytes: 0` and `telemetry.maxEvents: 0` mean "use server defaults" (not unlimited)
+- Query filters:
+  - `event`, `since`, `until`, `limit`, `offset`
+- Retention:
+  - background cleanup deletes rows older than `telemetry.retentionDays` (default 90)
+  - set `retentionDays: 0` to disable automatic deletion
+
 ## 3. Rendering & composition
 
 ### 3.1 Publish-time stitching
@@ -236,9 +262,16 @@ For any environment apply:
 - API authentication in v1:
   - all `/api/v1/*` routes require `Authorization: Bearer <token>` when `api.token` (or `HTMLSERVD_API_TOKEN`) is configured.
   - health routes (`/healthz`, `/readyz`) remain unauthenticated.
+  - telemetry ingest `POST /collect/v1/events` is intentionally unauthenticated and outside `/api/v1/*`.
   - if no API token is configured, the server starts with a prominent warning for rollout safety.
   - operators can enforce token configuration at startup via `htmlservd --require-auth`.
 - token comparison uses constant-time checks (`crypto/subtle`).
+- telemetry host attribution trust model:
+  - ingest host is accepted only when it matches an existing domain binding.
+  - unbound hosts return `400`.
+  - ingest is same-origin only in v1; cross-origin CORS preflight is intentionally not supported.
+  - recommended browser usage: `navigator.sendBeacon('/collect/v1/events', JSON.stringify(payload))`.
+  - when telemetry is enabled, run htmlservd behind Caddy and keep htmlservd bound to loopback for trustworthy host attribution.
 
 Audit log records:
 
@@ -255,6 +288,10 @@ Audit log records:
 - Domain binding per environment:
   - `futurelab.studio` -> prod current directory
   - `staging.futurelab.studio` -> staging current directory
+- When telemetry is enabled, generated site blocks include:
+  - `handle /collect/v1/events* { reverse_proxy 127.0.0.1:<htmlservd-port> }`
+  - static file serving behavior is unchanged for all non-telemetry paths.
+  - if the server listen port is dynamic (`port: 0`), Caddy telemetry proxy generation cannot resolve a stable backend port; use an explicit port in telemetry-enabled environments.
 
 ## 9. CLI design (htmlctl)
 

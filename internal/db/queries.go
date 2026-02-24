@@ -544,6 +544,107 @@ func (q *Queries) DeleteDomainBindingByDomain(ctx context.Context, domain string
 	return affected > 0, nil
 }
 
+func (q *Queries) InsertTelemetryEvent(ctx context.Context, in TelemetryEventRow) (int64, error) {
+	res, err := q.db.ExecContext(
+		ctx,
+		`INSERT INTO telemetry_events(environment_id, event_name, path, occurred_at, session_id, attrs_json) VALUES(?, ?, ?, ?, ?, ?)`,
+		in.EnvironmentID,
+		in.EventName,
+		in.Path,
+		in.OccurredAt,
+		in.SessionID,
+		in.AttrsJSON,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("insert telemetry event: %w", err)
+	}
+	return lastInsertID("insert telemetry event", res)
+}
+
+func (q *Queries) ListTelemetryEvents(ctx context.Context, in ListTelemetryEventsParams) ([]TelemetryEventRow, error) {
+	if in.Limit < 0 {
+		in.Limit = 0
+	}
+	if in.Offset < 0 {
+		in.Offset = 0
+	}
+	query := `
+SELECT
+  id,
+  environment_id,
+  event_name,
+  path,
+  occurred_at,
+  received_at,
+  session_id,
+  attrs_json
+FROM telemetry_events
+WHERE environment_id = ?`
+	args := []any{in.EnvironmentID}
+	if strings.TrimSpace(in.EventName) != "" {
+		query += " AND event_name = ?"
+		args = append(args, strings.TrimSpace(in.EventName))
+	}
+	if in.Since != nil {
+		query += " AND received_at >= ?"
+		args = append(args, *in.Since)
+	}
+	if in.Until != nil {
+		query += " AND received_at <= ?"
+		args = append(args, *in.Until)
+	}
+	query += " ORDER BY received_at DESC, id DESC LIMIT ? OFFSET ?"
+	args = append(args, in.Limit, in.Offset)
+
+	rows, err := q.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list telemetry events: %w", err)
+	}
+	defer rows.Close()
+
+	out := []TelemetryEventRow{}
+	for rows.Next() {
+		var row TelemetryEventRow
+		if err := rows.Scan(
+			&row.ID,
+			&row.EnvironmentID,
+			&row.EventName,
+			&row.Path,
+			&row.OccurredAt,
+			&row.ReceivedAt,
+			&row.SessionID,
+			&row.AttrsJSON,
+		); err != nil {
+			return nil, fmt.Errorf("scan telemetry event row: %w", err)
+		}
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate telemetry event rows: %w", err)
+	}
+	return out, nil
+}
+
+func (q *Queries) DeleteTelemetryEventsOlderThanDays(ctx context.Context, retentionDays int) (int64, error) {
+	if retentionDays <= 0 {
+		return 0, nil
+	}
+	res, err := q.db.ExecContext(
+		ctx,
+		`DELETE FROM telemetry_events
+WHERE received_at < strftime('%Y-%m-%dT%H:%M:%fZ','now', '-' || ? || ' days')`,
+		retentionDays,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("delete telemetry events older than %d days: %w", retentionDays, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("telemetry retention delete rows affected: %w", err)
+	}
+	return n, nil
+}
+
 // deleteByWebsiteNotIn deletes rows from an allowlisted table/column pair for a
 // website where the key column is not present in values.
 //

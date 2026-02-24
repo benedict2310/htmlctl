@@ -36,7 +36,6 @@ Create implementable story specs that align with Ora's architecture and the impl
 
 ### 5) Quality Checks
 
-- Run `.claude/skills/write-story/scripts/story_lint.py <story-path>` for structural checks.
 - Run `.claude/skills/implement-story/scripts/preflight.sh <story-path>` to ensure implement-story readiness.
 - Use `references/quality-checks.md` to verify completeness and implementability.
 
@@ -72,7 +71,6 @@ Story files must be committed — uncommitted stories are invisible to other age
 ## Resources
 
 - `scripts/new_story.py` - Create a new story from the template and update indexes
-- `scripts/story_lint.py` - Lint a story file for completeness and formatting
 - `references/story-template.md` - Canonical story template (aligned with implement-story preflight and review loop)
 - `references/quality-checks.md` - Story readiness checklist (metadata, scope, tests, acceptance criteria)
 - `references/architectural-review.md` - Architecture alignment checklist by component type

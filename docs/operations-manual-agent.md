@@ -51,6 +51,7 @@ Primary references:
 - `HTMLSERVD_CADDY_BINARY`, `HTMLSERVD_CADDYFILE_PATH`, `HTMLSERVD_CADDY_CONFIG_BACKUP`
 - `HTMLSERVD_CADDY_AUTO_HTTPS` (`true` default)
 - `HTMLSERVD_API_TOKEN` (recommended for all non-localhost deployments)
+- `HTMLSERVD_TELEMETRY_ENABLED`, `HTMLSERVD_TELEMETRY_MAX_BODY_BYTES`, `HTMLSERVD_TELEMETRY_MAX_EVENTS`, `HTMLSERVD_TELEMETRY_RETENTION_DAYS`
 
 Docker entrypoint controls:
 - `HTMLSERVD_CADDY_BOOTSTRAP_MODE` (`preview|bootstrap`, default `preview`)
@@ -166,6 +167,7 @@ docker run -d \
   -e HTMLSERVD_PREVIEW_ENV=staging \
   -e HTMLSERVD_API_TOKEN="$API_TOKEN" \
   -e HTMLSERVD_CADDY_AUTO_HTTPS=false \
+  -e HTMLSERVD_TELEMETRY_ENABLED=true \
   -v "$PWD/.tmp/first-deploy/data:/var/lib/htmlservd" \
   -v "$PWD/.tmp/first-deploy/caddy:/etc/caddy" \
   htmlservd-ssh:local
@@ -212,7 +214,15 @@ HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
 HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
 htmlctl status website/futurelab --context local-staging
 
-open http://127.0.0.1:18080/
+HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
+HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
+htmlctl domain add 127.0.0.1.nip.io --context local-staging
+
+open http://127.0.0.1.nip.io:18080/
+
+curl -sS \
+  -H "Authorization: Bearer ${API_TOKEN}" \
+  "http://127.0.0.1:19420/api/v1/websites/futurelab/environments/staging/telemetry/events?limit=20"
 ```
 
 ## 7. Runbook RB-REMOTE-01: Standard Remote Workflow (SSH Tunnel)

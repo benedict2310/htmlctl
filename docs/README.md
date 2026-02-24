@@ -12,7 +12,7 @@
 
 ## Deployment Guides
 
-- `docs/guides/first-deploy-docker.md` - first deployment path using Docker images and SSH transport.
+- `docs/guides/first-deploy-docker.md` - first deployment path using Docker images and SSH transport, including telemetry-ready local host binding (`127.0.0.1.nip.io`).
 - `docs/reference/docker-images.md` - Docker build targets, runtime defaults, and hardening notes.
 - `docs/operations-manual-agent.md` - end-to-end operations runbook for agents (local, Docker, remote SSH, release lifecycle, domains, VPS).
 

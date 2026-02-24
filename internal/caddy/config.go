@@ -15,6 +15,7 @@ type Site struct {
 
 type ConfigOptions struct {
 	DisableAutoHTTPS bool
+	TelemetryPort    int
 }
 
 func GenerateConfig(sites []Site) (string, error) {
@@ -22,6 +23,10 @@ func GenerateConfig(sites []Site) (string, error) {
 }
 
 func GenerateConfigWithOptions(sites []Site, opts ConfigOptions) (string, error) {
+	if opts.TelemetryPort < 0 || opts.TelemetryPort > 65535 {
+		return "", fmt.Errorf("telemetry port must be in range 0..65535")
+	}
+
 	ordered := append([]Site(nil), sites...)
 	sort.Slice(ordered, func(i, j int) bool {
 		return ordered[i].Domain < ordered[j].Domain
@@ -56,6 +61,11 @@ func GenerateConfigWithOptions(sites []Site, opts ConfigOptions) (string, error)
 		}
 		fmt.Fprintf(&b, "%s {\n", siteAddress)
 		fmt.Fprintf(&b, "\troot * %s\n", root)
+		if opts.TelemetryPort > 0 {
+			b.WriteString("\thandle /collect/v1/events* {\n")
+			fmt.Fprintf(&b, "\t\treverse_proxy 127.0.0.1:%d\n", opts.TelemetryPort)
+			b.WriteString("\t}\n")
+		}
 		b.WriteString("\tfile_server\n")
 		b.WriteString("}\n\n")
 	}

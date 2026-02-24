@@ -33,6 +33,7 @@ docker run -d \
   -e HTMLSERVD_PREVIEW_ENV=staging \
   -e HTMLSERVD_API_TOKEN="$API_TOKEN" \
   -e HTMLSERVD_CADDY_AUTO_HTTPS=false \
+  -e HTMLSERVD_TELEMETRY_ENABLED=true \
   -v "$PWD/.tmp/first-deploy/data:/var/lib/htmlservd" \
   -v "$PWD/.tmp/first-deploy/caddy:/etc/caddy" \
   htmlservd-ssh:local
@@ -121,6 +122,43 @@ h1 { margin-bottom: 0.5rem; }
 CSS
 ```
 
+```bash
+cat > .tmp/first-deploy/site/scripts/site.js <<'JS'
+(function () {
+  var key = 'htmlctl.telemetry.sessionId';
+  var sessionId = window.sessionStorage.getItem(key);
+  if (!sessionId) {
+    sessionId = 'sess_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+    window.sessionStorage.setItem(key, sessionId);
+  }
+
+  var payload = JSON.stringify({
+    events: [
+      {
+        name: 'page_view',
+        path: window.location.pathname || '/',
+        occurredAt: new Date().toISOString(),
+        sessionId: sessionId,
+        attrs: { source: 'first-deploy-guide' }
+      }
+    ]
+  });
+
+  if (navigator.sendBeacon) {
+    navigator.sendBeacon('/collect/v1/events', new Blob([payload], { type: 'text/plain;charset=UTF-8' }));
+    return;
+  }
+  fetch('/collect/v1/events', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    keepalive: true,
+    body: payload
+  }).catch(function () {});
+})();
+JS
+```
+
 ## 5. Apply + Verify
 
 If your SSH key is not already loaded:
@@ -145,11 +183,33 @@ HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
 htmlctl status website/futurelab --context local-staging
 ```
 
-Open the site:
+Bind a loopback-safe domain (required for telemetry host attribution, because IP hosts are rejected):
 
 ```bash
-open http://127.0.0.1:18080/
+HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
+HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
+htmlctl domain add 127.0.0.1.nip.io --context local-staging
 ```
+
+Open the site on the bound domain (not `127.0.0.1`):
+
+```bash
+open http://127.0.0.1.nip.io:18080/
+```
+
+Verify telemetry events:
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer ${API_TOKEN}" \
+  "http://127.0.0.1:19420/api/v1/websites/futurelab/environments/staging/telemetry/events?limit=20"
+```
+
+Telemetry note:
+
+- v1 telemetry ingest is same-origin only.
+- Browser pages should send events with `navigator.sendBeacon('/collect/v1/events', JSON.stringify(payload))`.
+- Cross-origin CORS preflight flows are intentionally unsupported in v1.
 
 ## 6. Optional: Run `htmlctl` in Docker
 
@@ -195,4 +255,5 @@ docker network rm htmlctl-net
 - `ssh host key verification failed`: regenerate `.tmp/first-deploy/known_hosts` with `ssh-keyscan`.
 - `ssh agent unavailable`: `htmlctl` now supports key-file fallback; mount/provide `~/.ssh/id_ed25519` or set `HTMLCTL_SSH_KEY_PATH`.
 - `unauthorized`: ensure `HTMLSERVD_API_TOKEN` matches the context `token` field.
+- No telemetry rows: make sure you opened `http://127.0.0.1.nip.io:18080/` (domain-bound) rather than `http://127.0.0.1:18080/` (IP hosts are rejected for telemetry attribution).
 - Permission errors under `.tmp/first-deploy`: avoid overriding `HOME` into a bind-mounted path; use `HTMLCTL_SSH_KNOWN_HOSTS_PATH` instead (as shown above).

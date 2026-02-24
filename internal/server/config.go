@@ -16,25 +16,37 @@ const (
 	DefaultLogLevel      = "info"
 	DefaultCaddyfilePath = "/etc/caddy/Caddyfile"
 	DefaultCaddyBinary   = "caddy"
+
+	DefaultTelemetryMaxBodyBytes  = 64 * 1024
+	DefaultTelemetryMaxEvents     = 50
+	DefaultTelemetryRetentionDays = 90
 )
 
 type Config struct {
-	BindAddr              string    `yaml:"bind"`
-	Port                  int       `yaml:"port"`
-	DataDir               string    `yaml:"dataDir"`
-	LogLevel              string    `yaml:"logLevel"`
-	DBPath                string    `yaml:"dbPath"`
-	DBWAL                 bool      `yaml:"dbWAL"`
-	CaddyfilePath         string    `yaml:"caddyfilePath"`
-	CaddyBinaryPath       string    `yaml:"caddyBinaryPath"`
-	CaddyConfigBackupPath string    `yaml:"caddyConfigBackupPath"`
-	CaddyAutoHTTPS        bool      `yaml:"caddyAutoHTTPS"`
-	APIToken              string    `yaml:"apiToken,omitempty"`
-	API                   APIConfig `yaml:"api,omitempty"`
+	BindAddr              string          `yaml:"bind"`
+	Port                  int             `yaml:"port"`
+	DataDir               string          `yaml:"dataDir"`
+	LogLevel              string          `yaml:"logLevel"`
+	DBPath                string          `yaml:"dbPath"`
+	DBWAL                 bool            `yaml:"dbWAL"`
+	CaddyfilePath         string          `yaml:"caddyfilePath"`
+	CaddyBinaryPath       string          `yaml:"caddyBinaryPath"`
+	CaddyConfigBackupPath string          `yaml:"caddyConfigBackupPath"`
+	CaddyAutoHTTPS        bool            `yaml:"caddyAutoHTTPS"`
+	APIToken              string          `yaml:"apiToken,omitempty"`
+	API                   APIConfig       `yaml:"api,omitempty"`
+	Telemetry             TelemetryConfig `yaml:"telemetry,omitempty"`
 }
 
 type APIConfig struct {
 	Token string `yaml:"token,omitempty"`
+}
+
+type TelemetryConfig struct {
+	Enabled       bool `yaml:"enabled"`
+	MaxBodyBytes  int  `yaml:"maxBodyBytes"`
+	MaxEvents     int  `yaml:"maxEvents"`
+	RetentionDays int  `yaml:"retentionDays"`
 }
 
 func DefaultConfig() Config {
@@ -51,6 +63,12 @@ func DefaultConfig() Config {
 		CaddyAutoHTTPS:        true,
 		APIToken:              "",
 		API:                   APIConfig{},
+		Telemetry: TelemetryConfig{
+			Enabled:       false,
+			MaxBodyBytes:  DefaultTelemetryMaxBodyBytes,
+			MaxEvents:     DefaultTelemetryMaxEvents,
+			RetentionDays: DefaultTelemetryRetentionDays,
+		},
 	}
 }
 
@@ -121,6 +139,34 @@ func LoadConfig(configPath string) (Config, error) {
 		cfg.APIToken = v
 		cfg.API.Token = v
 	}
+	if v := strings.TrimSpace(os.Getenv("HTMLSERVD_TELEMETRY_ENABLED")); v != "" {
+		parsed, err := strconv.ParseBool(v)
+		if err != nil {
+			return cfg, fmt.Errorf("parse HTMLSERVD_TELEMETRY_ENABLED=%q: %w", v, err)
+		}
+		cfg.Telemetry.Enabled = parsed
+	}
+	if v := strings.TrimSpace(os.Getenv("HTMLSERVD_TELEMETRY_MAX_BODY_BYTES")); v != "" {
+		parsed, err := strconv.Atoi(v)
+		if err != nil {
+			return cfg, fmt.Errorf("parse HTMLSERVD_TELEMETRY_MAX_BODY_BYTES=%q: %w", v, err)
+		}
+		cfg.Telemetry.MaxBodyBytes = parsed
+	}
+	if v := strings.TrimSpace(os.Getenv("HTMLSERVD_TELEMETRY_MAX_EVENTS")); v != "" {
+		parsed, err := strconv.Atoi(v)
+		if err != nil {
+			return cfg, fmt.Errorf("parse HTMLSERVD_TELEMETRY_MAX_EVENTS=%q: %w", v, err)
+		}
+		cfg.Telemetry.MaxEvents = parsed
+	}
+	if v := strings.TrimSpace(os.Getenv("HTMLSERVD_TELEMETRY_RETENTION_DAYS")); v != "" {
+		parsed, err := strconv.Atoi(v)
+		if err != nil {
+			return cfg, fmt.Errorf("parse HTMLSERVD_TELEMETRY_RETENTION_DAYS=%q: %w", v, err)
+		}
+		cfg.Telemetry.RetentionDays = parsed
+	}
 
 	if err := cfg.Validate(); err != nil {
 		return cfg, err
@@ -145,6 +191,15 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.APIToken) != "" && strings.TrimSpace(c.API.Token) != "" &&
 		strings.TrimSpace(c.APIToken) != strings.TrimSpace(c.API.Token) {
 		return fmt.Errorf("apiToken and api.token must match when both are set")
+	}
+	if c.Telemetry.MaxBodyBytes < 0 {
+		return fmt.Errorf("telemetry maxBodyBytes must be >= 0")
+	}
+	if c.Telemetry.MaxEvents < 0 {
+		return fmt.Errorf("telemetry maxEvents must be >= 0")
+	}
+	if c.Telemetry.RetentionDays < 0 {
+		return fmt.Errorf("telemetry retentionDays must be >= 0")
 	}
 	return nil
 }

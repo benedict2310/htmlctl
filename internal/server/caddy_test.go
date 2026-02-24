@@ -59,6 +59,80 @@ func TestGenerateCaddyConfigFromDomainBindings(t *testing.T) {
 	}
 }
 
+func TestGenerateCaddyConfigIncludesTelemetryProxyWhenEnabled(t *testing.T) {
+	srv := startTestServer(t)
+	srv.cfg.Telemetry.Enabled = true
+	srv.cfg.Port = 9400
+
+	q := dbpkg.NewQueries(srv.db)
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{
+		Name:               "futurelab",
+		DefaultStyleBundle: "default",
+		BaseTemplate:       "default",
+	})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	envID, err := q.InsertEnvironment(ctx, dbpkg.EnvironmentRow{WebsiteID: websiteID, Name: "staging"})
+	if err != nil {
+		t.Fatalf("InsertEnvironment(staging) error = %v", err)
+	}
+	if _, err := q.InsertDomainBinding(ctx, dbpkg.DomainBindingRow{
+		Domain:        "futurelab.studio",
+		EnvironmentID: envID,
+	}); err != nil {
+		t.Fatalf("InsertDomainBinding() error = %v", err)
+	}
+
+	cfg, err := srv.generateCaddyConfig(ctx)
+	if err != nil {
+		t.Fatalf("generateCaddyConfig() error = %v", err)
+	}
+	if !strings.Contains(cfg, "handle /collect/v1/events*") {
+		t.Fatalf("expected telemetry handle stanza in config, got:\n%s", cfg)
+	}
+	if !strings.Contains(cfg, "reverse_proxy 127.0.0.1:9400") {
+		t.Fatalf("expected telemetry reverse proxy in config, got:\n%s", cfg)
+	}
+}
+
+func TestGenerateCaddyConfigOmitsTelemetryProxyWhenDisabled(t *testing.T) {
+	srv := startTestServer(t)
+	srv.cfg.Telemetry.Enabled = false
+
+	q := dbpkg.NewQueries(srv.db)
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{
+		Name:               "futurelab",
+		DefaultStyleBundle: "default",
+		BaseTemplate:       "default",
+	})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	envID, err := q.InsertEnvironment(ctx, dbpkg.EnvironmentRow{WebsiteID: websiteID, Name: "staging"})
+	if err != nil {
+		t.Fatalf("InsertEnvironment(staging) error = %v", err)
+	}
+	if _, err := q.InsertDomainBinding(ctx, dbpkg.DomainBindingRow{
+		Domain:        "futurelab.studio",
+		EnvironmentID: envID,
+	}); err != nil {
+		t.Fatalf("InsertDomainBinding() error = %v", err)
+	}
+
+	cfg, err := srv.generateCaddyConfig(ctx)
+	if err != nil {
+		t.Fatalf("generateCaddyConfig() error = %v", err)
+	}
+	if strings.Contains(cfg, "handle /collect/v1/events*") {
+		t.Fatalf("did not expect telemetry stanza when disabled, got:\n%s", cfg)
+	}
+}
+
 func TestGenerateCaddyConfigRequiresDB(t *testing.T) {
 	s := &Server{}
 	if _, err := s.generateCaddyConfig(context.Background()); err == nil {

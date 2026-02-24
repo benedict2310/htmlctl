@@ -71,10 +71,27 @@ validate_preview_path_component() {
 	fi
 }
 
+validate_tcp_port_value() {
+	local name="$1"
+	local value="$2"
+
+	if [[ ! "${value}" =~ ^[0-9]{1,5}$ ]]; then
+		echo "invalid ${name}: ${value} (expected numeric TCP port)" >&2
+		return 1
+	fi
+	if ((10#${value} < 1 || 10#${value} > 65535)); then
+		echo "invalid ${name}: port out of range (${value})" >&2
+		return 1
+	fi
+}
+
 main() {
 	local caddyfile_path="${HTMLSERVD_CADDYFILE_PATH:-/etc/caddy/Caddyfile}"
 	local caddy_bootstrap_mode="${HTMLSERVD_CADDY_BOOTSTRAP_MODE:-preview}"
 	local caddy_bootstrap_listen="${HTMLSERVD_CADDY_BOOTSTRAP_LISTEN:-:80}"
+	local htmlservd_port="${HTMLSERVD_PORT:-9400}"
+	local telemetry_enabled_raw="${HTMLSERVD_TELEMETRY_ENABLED:-false}"
+	local telemetry_enabled=0
 	local preview_website="${HTMLSERVD_PREVIEW_WEBSITE:-futurelab}"
 	local preview_env="${HTMLSERVD_PREVIEW_ENV:-staging}"
 	local preview_root_default="${HTMLSERVD_DATA_DIR:-/var/lib/htmlservd}/websites/${preview_website}/envs/${preview_env}/current"
@@ -84,21 +101,45 @@ main() {
 	local status=0
 
 	validate_caddy_bootstrap_listen "${caddy_bootstrap_listen}"
+	validate_tcp_port_value "HTMLSERVD_PORT" "${htmlservd_port}"
 	validate_preview_path_component "HTMLSERVD_PREVIEW_WEBSITE" "${preview_website}"
 	validate_preview_path_component "HTMLSERVD_PREVIEW_ENV" "${preview_env}"
 	validate_preview_root "${preview_root}"
+	case "${telemetry_enabled_raw,,}" in
+	1|true|yes|on)
+		telemetry_enabled=1
+		;;
+	0|false|no|off|"")
+		telemetry_enabled=0
+		;;
+	*)
+		echo "invalid HTMLSERVD_TELEMETRY_ENABLED: ${telemetry_enabled_raw} (expected true|false)" >&2
+		exit 1
+		;;
+	esac
 
 	mkdir -p "$(dirname "${caddyfile_path}")"
 	if [[ ! -f "${caddyfile_path}" ]]; then
 		case "${caddy_bootstrap_mode,,}" in
 		preview)
-			cat > "${caddyfile_path}" <<EOF
+			{
+				cat <<EOF
 # bootstrap caddy config for first startup (preview mode)
 ${caddy_bootstrap_listen} {
+EOF
+				if [[ "${telemetry_enabled}" -eq 1 ]]; then
+					cat <<EOF
+	handle /collect/v1/events* {
+		reverse_proxy 127.0.0.1:${htmlservd_port}
+	}
+EOF
+				fi
+				cat <<EOF
 	root * ${preview_root}
 	file_server
 }
 EOF
+			} > "${caddyfile_path}"
 			;;
 		bootstrap)
 			cat > "${caddyfile_path}" <<EOF

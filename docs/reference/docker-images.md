@@ -28,6 +28,11 @@ docker build --target htmlservd-ssh -t htmlservd-ssh:local .
 - `HTMLSERVD_PREVIEW_ROOT` (optional explicit override)
 - `HTMLSERVD_CADDY_AUTO_HTTPS=true` (set `false` for local plain-HTTP workflows)
 - `HTMLSERVD_API_TOKEN` (recommended; protects `/api/v1/*` with bearer auth)
+- `HTMLSERVD_TELEMETRY_ENABLED=false`
+- `HTMLSERVD_TELEMETRY_MAX_BODY_BYTES=65536`
+- `HTMLSERVD_TELEMETRY_MAX_EVENTS=50`
+- `HTMLSERVD_TELEMETRY_RETENTION_DAYS=90`
+  - `HTMLSERVD_TELEMETRY_MAX_BODY_BYTES=0` or `HTMLSERVD_TELEMETRY_MAX_EVENTS=0` means "use defaults", not unlimited.
 
 When `HTMLSERVD_CADDY_AUTO_HTTPS=false`, generated domain config uses explicit `http://<domain>` site addresses to avoid local ACME/TLS failures.
 
@@ -36,6 +41,8 @@ Entrypoint validation constraints:
 - `HTMLSERVD_CADDY_BOOTSTRAP_LISTEN` must be `:PORT`, `HOST:PORT`, or `[IPv6]:PORT`.
 - `HTMLSERVD_PREVIEW_WEBSITE` and `HTMLSERVD_PREVIEW_ENV` must be safe path components (`[A-Za-z0-9._-]+`, no `..`).
 - `HTMLSERVD_CADDY_BOOTSTRAP_LISTEN` and `HTMLSERVD_PREVIEW_ROOT` reject values containing newlines, `{`, or `}`.
+- `HTMLSERVD_PORT` must be a numeric TCP port in range `1..65535`.
+- `HTMLSERVD_TELEMETRY_ENABLED` must be a boolean (`true|false` style values).
 
 Mount these paths for persistence:
 
@@ -51,7 +58,17 @@ Auth behavior:
 
 - `/api/v1/*` requires `Authorization: Bearer <token>` when `HTMLSERVD_API_TOKEN` (or config `api.token`) is set.
 - `/healthz`, `/readyz`, `/version` remain unauthenticated.
+- `POST /collect/v1/events` is unauthenticated by design and is routed through Caddy only when telemetry is enabled.
+- Telemetry ingest is same-origin only in v1; cross-origin CORS preflight is intentionally unsupported.
 - `htmlservd --require-auth` forces startup failure if no API token is configured.
+
+Telemetry behavior:
+
+- In preview bootstrap mode with telemetry enabled, the entrypoint Caddyfile includes:
+  - `handle /collect/v1/events* { reverse_proxy 127.0.0.1:${HTMLSERVD_PORT} }`
+- Browser recommendation: use `navigator.sendBeacon('/collect/v1/events', JSON.stringify(payload))` (default `text/plain` content type).
+- Keep htmlservd bound to loopback in production-style deployments when telemetry is enabled so host attribution remains trustworthy.
+- Use an explicit non-zero `HTMLSERVD_PORT` when telemetry is enabled and Caddy config generation is expected.
 
 ## Runtime Defaults (`htmlctl`)
 

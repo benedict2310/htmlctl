@@ -123,5 +123,10 @@ func All() []Migration {
 			Name:    "pages_head_metadata",
 			UpSQL:   pagesHeadMetadataMigrationSQL,
 		},
+		{
+			Version: 4,
+			Name:    "telemetry_events",
+			UpSQL:   telemetryEventsSchemaSQL,
+		},
 	}
 }

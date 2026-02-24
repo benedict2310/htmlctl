@@ -1,5 +1,9 @@
 # htmlctl
 
+<p align="center">
+  <img src="assets/logo.png" alt="htmlctl logo" width="180">
+</p>
+
 [![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![Cobra CLI](https://img.shields.io/badge/Cobra-CLI-3EAAAF?logo=go&logoColor=white)](https://github.com/spf13/cobra)
 [![SQLite](https://img.shields.io/badge/SQLite-embedded-003B57?logo=sqlite&logoColor=white)](https://sqlite.org/)
@@ -30,6 +34,7 @@ Static websites are simple to build but often painful to operate at scale:
 - SSH-tunneled remote control plane with context-aware CLI commands.
 - Bearer-token API authentication for all `/api/v1/*` operations.
 - Built-in domain lifecycle commands with Caddy config/reload integration.
+- Optional first-party telemetry ingest (`POST /collect/v1/events`) with authenticated query APIs.
 
 ## Key Features
 
@@ -38,6 +43,7 @@ Static websites are simple to build but often painful to operate at scale:
 - Release lifecycle: `rollout history`, `rollout undo`, `promote`.
 - Domain ops: `domain add`, `domain list`, `domain verify`, `domain remove`.
 - Docker-first path for reproducible deployment and end-to-end testing.
+- Same-origin browser telemetry path using `navigator.sendBeacon` (no external analytics service required).
 
 ## Quick Start
 
@@ -129,7 +135,7 @@ docker build --target htmlservd-ssh -t htmlservd-ssh:local .
 ## Documentation
 
 - `docs/README.md` for the full docs index
-- `docs/guides/first-deploy-docker.md` for first website deployment
+- `docs/guides/first-deploy-docker.md` for first website deployment, including a telemetry-ready local flow (`127.0.0.1.nip.io` binding + verification)
 - `docs/operations-manual-agent.md` for end-to-end agent runbook
 - `docs/reference/docker-images.md` for image/runtime details
 - `docs/stories/` for epic/story implementation specs
@@ -138,7 +144,6 @@ docker build --target htmlservd-ssh -t htmlservd-ssh:local .
 
 Use story-driven workflows in `docs/stories/` and validate with repository scripts:
 
-- `python3 .claude/skills/write-story/scripts/story_lint.py <story-file> --strict`
 - `.claude/skills/implement-story/scripts/preflight.sh <story-file> --quiet --no-color`
 
 ## License

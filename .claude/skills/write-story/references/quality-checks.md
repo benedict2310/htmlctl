@@ -13,7 +13,6 @@ Use this checklist before handing off a story for implementation.
 - [ ] `**Status:**` is not "Complete" or "Implemented".
 - [ ] Dependencies list uses parseable IDs (e.g., `F.01`, `A.02`) or `None`.
 - [ ] Acceptance Criteria section includes checkbox lines (`- [ ]`).
-- [ ] Run: `.claude/skills/write-story/scripts/story_lint.py <story-path>` (use `--strict` before handoff).
 - [ ] Run: `.claude/skills/implement-story/scripts/preflight.sh <story-path>`.
 
 ## Clarity & Scope

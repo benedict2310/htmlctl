@@ -77,17 +77,7 @@ See "Parallel Mode (Worktrees)" section below for details.
 
 ## Phase 0: Pre-Flight
 
-### Step 1: Validate Story
-
-Lint the story file:
-
-```bash
-python3 .claude/skills/write-story/scripts/story_lint.py "$STORY" --strict
-```
-
-If lint fails, fix errors or ask the user for clarification on placeholders. Do not proceed until lint passes.
-
-### Step 2: Check Dependencies and Metadata
+### Step 1: Check Dependencies and Metadata
 
 ```bash
 .claude/skills/implement-story/scripts/preflight.sh "$STORY" --quiet --no-color
@@ -100,7 +90,7 @@ If lint fails, fix errors or ask the user for clarification on placeholders. Do 
 
 Omit `--quiet` if you need the full pre-flight report.
 
-### Step 3: Read the Story
+### Step 2: Read the Story
 
 Read `$STORY` and extract:
 - Title and ID
@@ -109,7 +99,7 @@ Read `$STORY` and extract:
 - Out of scope
 - Implementation plan (if present)
 
-### Step 4: Verify Tool Availability
+### Step 3: Verify Tool Availability
 
 ```bash
 which pi >/dev/null 2>&1 || echo "WARNING: pi not installed"

@@ -108,3 +108,23 @@ type DomainBindingResolvedRow struct {
 	CreatedAt       string
 	UpdatedAt       string
 }
+
+type TelemetryEventRow struct {
+	ID            int64
+	EnvironmentID int64
+	EventName     string
+	Path          string
+	OccurredAt    *string
+	ReceivedAt    string
+	SessionID     *string
+	AttrsJSON     string
+}
+
+type ListTelemetryEventsParams struct {
+	EnvironmentID int64
+	EventName     string
+	Since         *string
+	Until         *string
+	Limit         int
+	Offset        int
+}

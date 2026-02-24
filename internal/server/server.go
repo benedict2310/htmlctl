@@ -32,6 +32,9 @@ type Server struct {
 	httpServer *http.Server
 	errCh      chan error
 
+	telemetryCleanupStop chan struct{}
+	telemetryCleanupDone chan struct{}
+
 	auditLogger       audit.Logger
 	applyLockStripes  [256]sync.Mutex
 	domainLockStripes [256]sync.Mutex
@@ -58,6 +61,9 @@ func New(cfg Config, logger *slog.Logger, version string) (*Server, error) {
 
 	mux := http.NewServeMux()
 	registerHealthRoutes(mux, version)
+	if cfg.Telemetry.Enabled {
+		mux.HandleFunc("/collect/v1/events", srv.handleTelemetryIngest)
+	}
 	apiMux := http.NewServeMux()
 	registerAPIRoutes(apiMux, srv)
 	mux.Handle("/api/v1/", authMiddleware(cfg.APIToken, logger)(apiMux))
@@ -141,6 +147,10 @@ func (s *Server) Start() error {
 		s.logger.Warn("API authentication is disabled because no token is configured",
 			"hint", "set api.token in config or HTMLSERVD_API_TOKEN")
 	}
+	if s.cfg.Telemetry.Enabled && !isLoopbackHost(s.cfg.BindAddr) {
+		s.logger.Warn("telemetry ingest attribution is only trustworthy when bound to loopback", "bind", s.cfg.BindAddr)
+	}
+	s.startTelemetryRetentionCleanupLoop()
 
 	s.logger.Info("htmlservd starting",
 		"listen_addr", ln.Addr().String(),
@@ -204,6 +214,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		if err := closer.Close(ctx); err != nil {
 			return fmt.Errorf("close audit logger: %w", err)
 		}
+	}
+	if err := s.stopTelemetryRetentionCleanupLoop(ctx); err != nil {
+		return fmt.Errorf("stop telemetry retention loop: %w", err)
 	}
 	if s.db != nil {
 		if err := s.db.Close(); err != nil {

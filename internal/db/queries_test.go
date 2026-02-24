@@ -885,3 +885,157 @@ func TestDomainBindingUniqueConstraint(t *testing.T) {
 		t.Fatalf("expected unique constraint error on duplicate domain")
 	}
 }
+
+func TestTelemetryEventsInsertListAndFilters(t *testing.T) {
+	q, cleanup := setupDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	envID, err := q.InsertEnvironment(ctx, EnvironmentRow{WebsiteID: websiteID, Name: "staging"})
+	if err != nil {
+		t.Fatalf("InsertEnvironment() error = %v", err)
+	}
+
+	idA, err := q.InsertTelemetryEvent(ctx, TelemetryEventRow{
+		EnvironmentID: envID,
+		EventName:     "page_view",
+		Path:          "/",
+		AttrsJSON:     `{"source":"home"}`,
+	})
+	if err != nil {
+		t.Fatalf("InsertTelemetryEvent(a) error = %v", err)
+	}
+	idB, err := q.InsertTelemetryEvent(ctx, TelemetryEventRow{
+		EnvironmentID: envID,
+		EventName:     "cta_click",
+		Path:          "/pricing",
+		AttrsJSON:     `{"button":"buy"}`,
+	})
+	if err != nil {
+		t.Fatalf("InsertTelemetryEvent(b) error = %v", err)
+	}
+	idC, err := q.InsertTelemetryEvent(ctx, TelemetryEventRow{
+		EnvironmentID: envID,
+		EventName:     "page_view",
+		Path:          "/docs",
+		AttrsJSON:     `{"source":"docs"}`,
+	})
+	if err != nil {
+		t.Fatalf("InsertTelemetryEvent(c) error = %v", err)
+	}
+
+	if _, err := q.db.ExecContext(ctx, `UPDATE telemetry_events SET received_at = ? WHERE id = ?`, "2026-02-20T10:00:00Z", idA); err != nil {
+		t.Fatalf("update telemetry received_at(a): %v", err)
+	}
+	if _, err := q.db.ExecContext(ctx, `UPDATE telemetry_events SET received_at = ? WHERE id = ?`, "2026-02-21T10:00:00Z", idB); err != nil {
+		t.Fatalf("update telemetry received_at(b): %v", err)
+	}
+	if _, err := q.db.ExecContext(ctx, `UPDATE telemetry_events SET received_at = ? WHERE id = ?`, "2026-02-22T10:00:00Z", idC); err != nil {
+		t.Fatalf("update telemetry received_at(c): %v", err)
+	}
+
+	all, err := q.ListTelemetryEvents(ctx, ListTelemetryEventsParams{
+		EnvironmentID: envID,
+		Limit:         10,
+		Offset:        0,
+	})
+	if err != nil {
+		t.Fatalf("ListTelemetryEvents(all) error = %v", err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("expected 3 telemetry rows, got %d", len(all))
+	}
+	if all[0].ID != idC || all[1].ID != idB || all[2].ID != idA {
+		t.Fatalf("unexpected telemetry order: got ids [%d,%d,%d], want [%d,%d,%d]", all[0].ID, all[1].ID, all[2].ID, idC, idB, idA)
+	}
+
+	since := "2026-02-21T00:00:00Z"
+	until := "2026-02-22T00:00:00Z"
+	filtered, err := q.ListTelemetryEvents(ctx, ListTelemetryEventsParams{
+		EnvironmentID: envID,
+		EventName:     "cta_click",
+		Since:         &since,
+		Until:         &until,
+		Limit:         10,
+		Offset:        0,
+	})
+	if err != nil {
+		t.Fatalf("ListTelemetryEvents(filtered) error = %v", err)
+	}
+	if len(filtered) != 1 || filtered[0].ID != idB {
+		t.Fatalf("expected filtered telemetry id %d, got %#v", idB, filtered)
+	}
+}
+
+func TestDeleteTelemetryEventsOlderThanDays(t *testing.T) {
+	q, cleanup := setupDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	envID, err := q.InsertEnvironment(ctx, EnvironmentRow{WebsiteID: websiteID, Name: "staging"})
+	if err != nil {
+		t.Fatalf("InsertEnvironment() error = %v", err)
+	}
+
+	oldID, err := q.InsertTelemetryEvent(ctx, TelemetryEventRow{
+		EnvironmentID: envID,
+		EventName:     "page_view",
+		Path:          "/old",
+		AttrsJSON:     `{}`,
+	})
+	if err != nil {
+		t.Fatalf("InsertTelemetryEvent(old) error = %v", err)
+	}
+	newID, err := q.InsertTelemetryEvent(ctx, TelemetryEventRow{
+		EnvironmentID: envID,
+		EventName:     "page_view",
+		Path:          "/new",
+		AttrsJSON:     `{}`,
+	})
+	if err != nil {
+		t.Fatalf("InsertTelemetryEvent(new) error = %v", err)
+	}
+
+	if _, err := q.db.ExecContext(ctx, `UPDATE telemetry_events SET received_at = ? WHERE id = ?`, "2020-01-01T00:00:00Z", oldID); err != nil {
+		t.Fatalf("update telemetry old received_at: %v", err)
+	}
+	if _, err := q.db.ExecContext(ctx, `UPDATE telemetry_events SET received_at = ? WHERE id = ?`, "2099-01-01T00:00:00Z", newID); err != nil {
+		t.Fatalf("update telemetry new received_at: %v", err)
+	}
+
+	deleted, err := q.DeleteTelemetryEventsOlderThanDays(ctx, 30)
+	if err != nil {
+		t.Fatalf("DeleteTelemetryEventsOlderThanDays() error = %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("expected 1 deleted telemetry row, got %d", deleted)
+	}
+
+	rows, err := q.ListTelemetryEvents(ctx, ListTelemetryEventsParams{
+		EnvironmentID: envID,
+		Limit:         100,
+		Offset:        0,
+	})
+	if err != nil {
+		t.Fatalf("ListTelemetryEvents() error = %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != newID {
+		t.Fatalf("expected only new telemetry row %d to remain, got %#v", newID, rows)
+	}
+
+	deleted, err = q.DeleteTelemetryEventsOlderThanDays(ctx, 0)
+	if err != nil {
+		t.Fatalf("DeleteTelemetryEventsOlderThanDays(0) error = %v", err)
+	}
+	if deleted != 0 {
+		t.Fatalf("expected no-op delete count for retentionDays=0, got %d", deleted)
+	}
+}

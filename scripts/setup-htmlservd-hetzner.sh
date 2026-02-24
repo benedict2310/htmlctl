@@ -157,10 +157,7 @@ rm -f "${sshd_tmp}"
 run_root systemctl daemon-reload
 run_root systemctl enable htmlservd
 run_root systemctl start htmlservd
-if run_root systemctl list-unit-files | awk '{print $1}' | grep -qx 'ssh.service'; then
-  run_root systemctl reload ssh
-else
-  run_root systemctl reload sshd
-fi
+# Ubuntu 24.04 uses ssh.service (socket-activated); older distros use sshd.service.
+run_root systemctl reload ssh 2>/dev/null || run_root systemctl reload sshd
 
 echo "htmlservd Phase 1 setup complete"

@@ -169,6 +169,8 @@ func NewSSHTransport(ctx context.Context, cfg SSHConfig) (*SSHTransport, error) 
 			if keyPath, pathErr := resolvePrivateKeyPath(cfg.PrivateKeyPath); pathErr == nil && keyPath != "" {
 				if fileSigner, fileErr := signerFromPrivateKey(keyPath); fileErr == nil {
 					combinedFn = func() ([]ssh.Signer, error) {
+						// Ignore transient agent errors: the file signer alone
+						// still gives the server a key to evaluate.
 						signers, _ := agentFn()
 						return append(signers, fileSigner), nil
 					}

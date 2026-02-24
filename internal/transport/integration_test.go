@@ -405,8 +405,7 @@ func TestSSHTransportFallsBackToKeyFileWhenAgentHoldsWrongKey(t *testing.T) {
 	knownHostsPath := writeKnownHostsFile(t, srv.addr, srv.hostSigner.PublicKey())
 
 	// Start an in-memory SSH agent that holds only a wrong key.
-	wrongSigner, wrongKey := newEd25519SignerWithKey(t)
-	_ = wrongSigner
+	_, wrongKey := newEd25519SignerWithKey(t)
 	keyring := agent.NewKeyring()
 	if err := keyring.Add(agent.AddedKey{PrivateKey: wrongKey}); err != nil {
 		t.Fatalf("add wrong key to agent: %v", err)
@@ -423,6 +422,57 @@ func TestSSHTransportFallsBackToKeyFileWhenAgentHoldsWrongKey(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("NewSSHTransport() should fall back to key file when agent holds wrong key, got: %v", err)
+	}
+	defer tr.Close()
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://placeholder/healthz", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	resp, err := tr.Do(t.Context(), req)
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || strings.TrimSpace(string(body)) != "ok:/healthz" {
+		t.Fatalf("unexpected response status=%d body=%q", resp.StatusCode, string(body))
+	}
+}
+
+// TestSSHTransportAgentOnlyWhenNoKeyFileConfigured verifies that when the SSH
+// agent is available and no key file is configured, only the agent is used and
+// auth succeeds when the agent holds the correct key (AC-3).
+func TestSSHTransportAgentOnlyWhenNoKeyFileConfigured(t *testing.T) {
+	t.Setenv(envSSHKeyPath, "")
+	t.Setenv("HOME", t.TempDir()) // ensure no default key files exist
+
+	backendAddr, shutdownBackend := startHTTPBackend(t)
+	defer shutdownBackend()
+
+	// Server accepts the agent signer's key.
+	agentSigner, agentKey := newEd25519SignerWithKey(t)
+	srv := startSSHServer(t, agentSigner.PublicKey())
+	defer srv.Close()
+
+	knownHostsPath := writeKnownHostsFile(t, srv.addr, srv.hostSigner.PublicKey())
+
+	keyring := agent.NewKeyring()
+	if err := keyring.Add(agent.AddedKey{PrivateKey: agentKey}); err != nil {
+		t.Fatalf("add key to agent: %v", err)
+	}
+	agentSockPath := serveAgentOnSocket(t, keyring)
+	t.Setenv("SSH_AUTH_SOCK", agentSockPath)
+
+	tr, err := NewSSHTransport(t.Context(), SSHConfig{
+		ServerURL:      fmt.Sprintf("ssh://tester@%s", srv.addr),
+		RemoteAddr:     backendAddr,
+		KnownHostsPath: knownHostsPath,
+		// PrivateKeyPath intentionally omitted — agent-only path
+		Timeout: 5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewSSHTransport() should use agent when no key file is configured: %v", err)
 	}
 	defer tr.Close()
 

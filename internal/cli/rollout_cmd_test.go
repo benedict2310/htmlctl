@@ -12,14 +12,14 @@ func TestRolloutHistoryTableOutput(t *testing.T) {
 			if req.Method != "GET" {
 				t.Fatalf("expected GET, got %s", req.Method)
 			}
-			if req.Path != "/api/v1/websites/futurelab/environments/staging/releases" {
+			if req.Path != "/api/v1/websites/sample/environments/staging/releases" {
 				t.Fatalf("unexpected request path %s", req.Path)
 			}
 			if req.Query != "limit=2&offset=1" {
 				t.Fatalf("unexpected request query %q", req.Query)
 			}
 			return jsonHTTPResponse(200, `{
-  "website":"futurelab",
+  "website":"sample",
   "environment":"staging",
   "activeReleaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAC",
   "limit":2,
@@ -32,7 +32,7 @@ func TestRolloutHistoryTableOutput(t *testing.T) {
 		},
 	}
 
-	out, _, err := runCommandWithTransport(t, []string{"rollout", "history", "website/futurelab", "--limit", "2", "--offset", "1"}, tr)
+	out, _, err := runCommandWithTransport(t, []string{"rollout", "history", "website/sample", "--limit", "2", "--offset", "1"}, tr)
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -47,7 +47,7 @@ func TestRolloutHistoryJSONOutput(t *testing.T) {
 	tr := &scriptedTransport{
 		handle: func(call int, req recordedRequest) (*http.Response, error) {
 			return jsonHTTPResponse(200, `{
-  "website":"futurelab",
+  "website":"sample",
   "environment":"staging",
   "activeReleaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAC",
   "limit":20,
@@ -59,7 +59,7 @@ func TestRolloutHistoryJSONOutput(t *testing.T) {
 		},
 	}
 
-	out, _, err := runCommandWithTransport(t, []string{"rollout", "history", "website/futurelab", "--output", "json"}, tr)
+	out, _, err := runCommandWithTransport(t, []string{"rollout", "history", "website/sample", "--output", "json"}, tr)
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -71,11 +71,11 @@ func TestRolloutHistoryJSONOutput(t *testing.T) {
 func TestRolloutHistoryShowsEmptyMessage(t *testing.T) {
 	tr := &scriptedTransport{
 		handle: func(call int, req recordedRequest) (*http.Response, error) {
-			return jsonHTTPResponse(200, `{"website":"futurelab","environment":"staging","limit":20,"offset":0,"releases":[]}`), nil
+			return jsonHTTPResponse(200, `{"website":"sample","environment":"staging","limit":20,"offset":0,"releases":[]}`), nil
 		},
 	}
 
-	out, _, err := runCommandWithTransport(t, []string{"rollout", "history", "website/futurelab"}, tr)
+	out, _, err := runCommandWithTransport(t, []string{"rollout", "history", "website/sample"}, tr)
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -86,7 +86,7 @@ func TestRolloutHistoryShowsEmptyMessage(t *testing.T) {
 
 func TestRolloutHistoryRejectsNegativePagination(t *testing.T) {
 	tr := &scriptedTransport{}
-	_, _, err := runCommandWithTransport(t, []string{"rollout", "history", "website/futurelab", "--limit", "-1"}, tr)
+	_, _, err := runCommandWithTransport(t, []string{"rollout", "history", "website/sample", "--limit", "-1"}, tr)
 	if err == nil {
 		t.Fatalf("expected error for negative limit")
 	}
@@ -97,7 +97,7 @@ func TestRolloutHistoryRejectsNegativePagination(t *testing.T) {
 
 func TestRolloutHistoryRejectsNegativeOffset(t *testing.T) {
 	tr := &scriptedTransport{}
-	_, _, err := runCommandWithTransport(t, []string{"rollout", "history", "website/futurelab", "--offset", "-1"}, tr)
+	_, _, err := runCommandWithTransport(t, []string{"rollout", "history", "website/sample", "--offset", "-1"}, tr)
 	if err == nil {
 		t.Fatalf("expected error for negative offset")
 	}
@@ -112,11 +112,11 @@ func TestRolloutUndoTableOutput(t *testing.T) {
 			if req.Method != "POST" {
 				t.Fatalf("expected POST, got %s", req.Method)
 			}
-			if req.Path != "/api/v1/websites/futurelab/environments/staging/rollback" {
+			if req.Path != "/api/v1/websites/sample/environments/staging/rollback" {
 				t.Fatalf("unexpected request path %s", req.Path)
 			}
 			return jsonHTTPResponse(200, `{
-  "website":"futurelab",
+  "website":"sample",
   "environment":"staging",
   "fromReleaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAC",
   "toReleaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAB"
@@ -124,11 +124,11 @@ func TestRolloutUndoTableOutput(t *testing.T) {
 		},
 	}
 
-	out, _, err := runCommandWithTransport(t, []string{"rollout", "undo", "website/futurelab"}, tr)
+	out, _, err := runCommandWithTransport(t, []string{"rollout", "undo", "website/sample"}, tr)
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if !strings.Contains(out, "Rolled back futurelab/staging") || !strings.Contains(out, "01ARZ3NDEKTSV4RRFFQ69G5FAB") {
+	if !strings.Contains(out, "Rolled back sample/staging") || !strings.Contains(out, "01ARZ3NDEKTSV4RRFFQ69G5FAB") {
 		t.Fatalf("unexpected output: %s", out)
 	}
 }
@@ -137,7 +137,7 @@ func TestRolloutUndoJSONOutput(t *testing.T) {
 	tr := &scriptedTransport{
 		handle: func(call int, req recordedRequest) (*http.Response, error) {
 			return jsonHTTPResponse(200, `{
-  "website":"futurelab",
+  "website":"sample",
   "environment":"staging",
   "fromReleaseId":"A",
   "toReleaseId":"B"
@@ -145,7 +145,7 @@ func TestRolloutUndoJSONOutput(t *testing.T) {
 		},
 	}
 
-	out, _, err := runCommandWithTransport(t, []string{"rollout", "undo", "website/futurelab", "--output", "json"}, tr)
+	out, _, err := runCommandWithTransport(t, []string{"rollout", "undo", "website/sample", "--output", "json"}, tr)
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -171,7 +171,7 @@ func TestRolloutUndoPropagatesAPIError(t *testing.T) {
 			return jsonHTTPResponse(409, `{"error":"rollback is not possible because no previous release exists"}`), nil
 		},
 	}
-	_, _, err := runCommandWithTransport(t, []string{"rollout", "undo", "website/futurelab"}, tr)
+	_, _, err := runCommandWithTransport(t, []string{"rollout", "undo", "website/sample"}, tr)
 	if err == nil {
 		t.Fatalf("expected rollback conflict error")
 	}

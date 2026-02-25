@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DOMAIN="staging.futurelab.studio"
-SITE_ROOT="/var/lib/htmlservd/websites/futurelab/envs/staging/current"
+DOMAIN="staging.example.com"
+SITE_ROOT="/var/lib/htmlservd/websites/sample/envs/staging/current"
 SITE_FILE="/etc/nginx/sites-available/${DOMAIN}"
 SITE_ENABLED="/etc/nginx/sites-enabled/${DOMAIN}"
 GENERAL_LIMIT_FILE="/etc/nginx/conf.d/general_limit.conf"

@@ -4,6 +4,11 @@
   <img src="assets/logo.png" alt="htmlctl logo" width="180">
 </p>
 
+## Agent Skill
+
+`htmlctl-publish` is now located at:
+[`./.agent/skills/htmlctl-publish/SKILL.md`](./.agent/skills/htmlctl-publish/SKILL.md)
+
 <p align="center">
   <a href="https://go.dev/"><img src="https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go&logoColor=white" alt="Go 1.24+"></a>
   <a href="https://sqlite.org/"><img src="https://img.shields.io/badge/SQLite-embedded-003B57?logo=sqlite&logoColor=white" alt="SQLite"></a>
@@ -11,6 +16,10 @@
   <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white" alt="Docker"></a>
   <a href="https://github.com/benedict2310/htmlctl/actions/workflows/docker-e2e.yml"><img src="https://github.com/benedict2310/htmlctl/actions/workflows/docker-e2e.yml/badge.svg" alt="Docker E2E"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
+</p>
+
+<p align="center">
+  <img src="assets/htmlctl-demo.gif" alt="htmlctl demo: diff, apply, rollback" width="960">
 </p>
 
 Deploy static HTML/CSS/JS sites like infrastructure.
@@ -356,6 +365,7 @@ docker build --target htmlctl -t htmlctl:local .               # CLI-only image
 | Document | Description |
 |----------|-------------|
 | [`docs/guides/first-deploy-docker.md`](docs/guides/first-deploy-docker.md) | Full Docker quickstart with telemetry |
+| [`docs/guides/showcase-demo.md`](docs/guides/showcase-demo.md) | Repeatable showcase demo recording flow |
 | [`docs/setup/hetzner-htmlservd.md`](docs/setup/hetzner-htmlservd.md) | VPS setup runbook |
 | [`docs/technical-spec.md`](docs/technical-spec.md) | Architecture, API, and resource model |
 | [`docs/reference/docker-images.md`](docs/reference/docker-images.md) | Docker image reference |

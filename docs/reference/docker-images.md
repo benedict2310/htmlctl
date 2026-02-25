@@ -23,7 +23,7 @@ docker build --target htmlservd-ssh -t htmlservd-ssh:local .
 - `HTMLSERVD_CADDYFILE_PATH=/etc/caddy/Caddyfile`
 - `HTMLSERVD_CADDY_BOOTSTRAP_MODE=preview` (`preview|bootstrap`)
 - `HTMLSERVD_CADDY_BOOTSTRAP_LISTEN=:80`
-- `HTMLSERVD_PREVIEW_WEBSITE=futurelab`
+- `HTMLSERVD_PREVIEW_WEBSITE=sample`
 - `HTMLSERVD_PREVIEW_ENV=staging`
 - `HTMLSERVD_PREVIEW_ROOT` (optional explicit override)
 - `HTMLSERVD_CADDY_AUTO_HTTPS=true` (set `false` for local plain-HTTP workflows)

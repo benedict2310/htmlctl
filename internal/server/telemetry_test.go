@@ -31,7 +31,7 @@ func TestTelemetryIngestAcceptedAndPersisted(t *testing.T) {
 		},
 	})
 	baseURL := "http://" + srv.Addr()
-	envID := seedTelemetryEnvironment(t, srv, "futurelab", "staging", "futurelab.studio")
+	envID := seedTelemetryEnvironment(t, srv, "sample", "staging", "example.com")
 
 	occurred := time.Now().UTC().Add(-time.Minute).Format(time.RFC3339)
 	payload := `{"events":[{"name":"page_view","path":"/pricing/../pricing","occurredAt":"` + occurred + `","sessionId":"session_123","attrs":{"source":"landing"}}]}`
@@ -40,7 +40,7 @@ func TestTelemetryIngestAcceptedAndPersisted(t *testing.T) {
 		t.Fatalf("new request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Host = "futurelab.studio"
+	req.Host = "example.com"
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -94,13 +94,13 @@ func TestTelemetryIngestNoAuthRequired(t *testing.T) {
 		},
 	})
 	baseURL := "http://" + srv.Addr()
-	seedTelemetryEnvironment(t, srv, "futurelab", "staging", "futurelab.studio")
+	seedTelemetryEnvironment(t, srv, "sample", "staging", "example.com")
 
 	req, err := http.NewRequest(http.MethodPost, baseURL+"/collect/v1/events", strings.NewReader(`{"events":[{"name":"page_view","path":"/"}]}`))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	req.Host = "futurelab.studio"
+	req.Host = "example.com"
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -134,7 +134,7 @@ func TestTelemetryReadRequiresAuth(t *testing.T) {
 	})
 	baseURL := "http://" + srv.Addr()
 
-	resp, err := http.Get(baseURL + "/api/v1/websites/futurelab/environments/staging/telemetry/events")
+	resp, err := http.Get(baseURL + "/api/v1/websites/sample/environments/staging/telemetry/events")
 	if err != nil {
 		t.Fatalf("GET telemetry events error = %v", err)
 	}
@@ -161,13 +161,13 @@ func TestTelemetryIngestValidationAndSanitizedErrors(t *testing.T) {
 			},
 		})
 		baseURL := "http://" + srv.Addr()
-		seedTelemetryEnvironment(t, srv, "futurelab", "staging", "futurelab.studio")
+		seedTelemetryEnvironment(t, srv, "sample", "staging", "example.com")
 
 		req, err := http.NewRequest(http.MethodPost, baseURL+"/collect/v1/events", strings.NewReader(`{"events":[{"name":"page_view","path":"/"},{"name":"page_view","path":"/x"}]}`))
 		if err != nil {
 			t.Fatalf("new request: %v", err)
 		}
-		req.Host = "futurelab.studio"
+		req.Host = "example.com"
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("POST /collect/v1/events error = %v", err)
@@ -194,7 +194,7 @@ func TestTelemetryIngestValidationAndSanitizedErrors(t *testing.T) {
 			},
 		})
 		baseURL := "http://" + srv.Addr()
-		seedTelemetryEnvironment(t, srv, "futurelab", "staging", "futurelab.studio")
+		seedTelemetryEnvironment(t, srv, "sample", "staging", "example.com")
 
 		largeAttrs := strings.Repeat("a", 1024)
 		payload := `{"events":[{"name":"page_view","path":"/","attrs":{"x":"` + largeAttrs + `"}}]}`
@@ -202,7 +202,7 @@ func TestTelemetryIngestValidationAndSanitizedErrors(t *testing.T) {
 		if err != nil {
 			t.Fatalf("new request: %v", err)
 		}
-		req.Host = "futurelab.studio"
+		req.Host = "example.com"
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("POST /collect/v1/events error = %v", err)
@@ -261,7 +261,7 @@ func TestTelemetryIngestValidationAndSanitizedErrors(t *testing.T) {
 			},
 		})
 		baseURL := "http://" + srv.Addr()
-		seedTelemetryEnvironment(t, srv, "futurelab", "staging", "futurelab.studio")
+		seedTelemetryEnvironment(t, srv, "sample", "staging", "example.com")
 		if err := srv.db.Close(); err != nil {
 			t.Fatalf("Close() db error = %v", err)
 		}
@@ -270,7 +270,7 @@ func TestTelemetryIngestValidationAndSanitizedErrors(t *testing.T) {
 		if err != nil {
 			t.Fatalf("new request: %v", err)
 		}
-		req.Host = "futurelab.studio"
+		req.Host = "example.com"
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("POST /collect/v1/events error = %v", err)
@@ -313,7 +313,7 @@ func TestTelemetryReadListFilters(t *testing.T) {
 		},
 	})
 	baseURL := "http://" + srv.Addr()
-	envID := seedTelemetryEnvironment(t, srv, "futurelab", "staging", "futurelab.studio")
+	envID := seedTelemetryEnvironment(t, srv, "sample", "staging", "example.com")
 
 	q := dbpkg.NewQueries(srv.db)
 	ctx := context.Background()
@@ -332,7 +332,7 @@ func TestTelemetryReadListFilters(t *testing.T) {
 		t.Fatalf("update telemetry received_at(b): %v", err)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, baseURL+"/api/v1/websites/futurelab/environments/staging/telemetry/events?event=cta_click&since=2026-02-21T00:00:00Z&until=2026-02-23T00:00:00Z&limit=10&offset=0", nil)
+	req, err := http.NewRequest(http.MethodGet, baseURL+"/api/v1/websites/sample/environments/staging/telemetry/events?event=cta_click&since=2026-02-21T00:00:00Z&until=2026-02-23T00:00:00Z&limit=10&offset=0", nil)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -351,7 +351,7 @@ func TestTelemetryReadListFilters(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		t.Fatalf("decode telemetry list response: %v", err)
 	}
-	if out.Website != "futurelab" || out.Environment != "staging" {
+	if out.Website != "sample" || out.Environment != "staging" {
 		t.Fatalf("unexpected response identity: %#v", out)
 	}
 	if len(out.Events) != 1 {
@@ -366,7 +366,7 @@ func TestTelemetryReadListFilters(t *testing.T) {
 }
 
 func TestParseTelemetryHelpers(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/websites/futurelab/environments/staging/telemetry/events", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/websites/sample/environments/staging/telemetry/events", nil)
 	limit, offset, err := parseListTelemetryPagination(req)
 	if err != nil {
 		t.Fatalf("parseListTelemetryPagination(default) error = %v", err)
@@ -375,7 +375,7 @@ func TestParseTelemetryHelpers(t *testing.T) {
 		t.Fatalf("unexpected default pagination: limit=%d offset=%d", limit, offset)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/api/v1/websites/futurelab/environments/staging/telemetry/events?limit=99999&offset=7", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/websites/sample/environments/staging/telemetry/events?limit=99999&offset=7", nil)
 	limit, offset, err = parseListTelemetryPagination(req)
 	if err != nil {
 		t.Fatalf("parseListTelemetryPagination(clamped) error = %v", err)
@@ -384,19 +384,19 @@ func TestParseTelemetryHelpers(t *testing.T) {
 		t.Fatalf("unexpected clamped pagination: limit=%d offset=%d", limit, offset)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/api/v1/websites/futurelab/environments/staging/telemetry/events?limit=-1", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/websites/sample/environments/staging/telemetry/events?limit=-1", nil)
 	if _, _, err := parseListTelemetryPagination(req); err == nil {
 		t.Fatalf("expected negative limit error")
 	}
 
-	website, env, ok, err := parseTelemetryEventsPath("/api/v1/websites/futurelab/environments/staging/telemetry/events")
+	website, env, ok, err := parseTelemetryEventsPath("/api/v1/websites/sample/environments/staging/telemetry/events")
 	if err != nil || !ok {
 		t.Fatalf("expected telemetry path parse success, got ok=%v err=%v", ok, err)
 	}
-	if website != "futurelab" || env != "staging" {
+	if website != "sample" || env != "staging" {
 		t.Fatalf("unexpected telemetry parse result website=%q env=%q", website, env)
 	}
-	if _, _, ok, _ := parseTelemetryEventsPath("/api/v1/websites/futurelab/environments/staging/telemetry/event"); ok {
+	if _, _, ok, _ := parseTelemetryEventsPath("/api/v1/websites/sample/environments/staging/telemetry/event"); ok {
 		t.Fatalf("expected invalid telemetry path to fail parsing")
 	}
 }
@@ -415,7 +415,7 @@ func TestRunTelemetryRetentionCleanup(t *testing.T) {
 			RetentionDays: 30,
 		},
 	})
-	envID := seedTelemetryEnvironment(t, srv, "futurelab", "staging", "futurelab.studio")
+	envID := seedTelemetryEnvironment(t, srv, "sample", "staging", "example.com")
 
 	q := dbpkg.NewQueries(srv.db)
 	ctx := context.Background()
@@ -536,14 +536,14 @@ func TestTelemetryReadSanitizesAttrsUnmarshalFailure(t *testing.T) {
 		},
 	})
 	baseURL := "http://" + srv.Addr()
-	envID := seedTelemetryEnvironment(t, srv, "futurelab", "staging", "futurelab.studio")
+	envID := seedTelemetryEnvironment(t, srv, "sample", "staging", "example.com")
 	if _, err := srv.db.ExecContext(context.Background(), `
 INSERT INTO telemetry_events(environment_id, event_name, path, attrs_json)
 VALUES(?, 'page_view', '/', '{bad')`, envID); err != nil {
 		t.Fatalf("insert malformed telemetry attrs row: %v", err)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, baseURL+"/api/v1/websites/futurelab/environments/staging/telemetry/events", bytes.NewReader(nil))
+	req, err := http.NewRequest(http.MethodGet, baseURL+"/api/v1/websites/sample/environments/staging/telemetry/events", bytes.NewReader(nil))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -581,7 +581,7 @@ func TestResolveTelemetryEnvironmentIDNotFound(t *testing.T) {
 		},
 	})
 
-	_, err := srv.resolveTelemetryEnvironmentID(context.Background(), "futurelab.studio")
+	_, err := srv.resolveTelemetryEnvironmentID(context.Background(), "example.com")
 	if !errors.Is(err, errTelemetryHostNotBound) {
 		t.Fatalf("expected errTelemetryHostNotBound, got %v", err)
 	}
@@ -631,13 +631,13 @@ func TestTelemetryIngestHostWithPort(t *testing.T) {
 		},
 	})
 	baseURL := "http://" + srv.Addr()
-	seedTelemetryEnvironment(t, srv, "futurelab", "staging", "futurelab.studio")
+	seedTelemetryEnvironment(t, srv, "sample", "staging", "example.com")
 
 	req, err := http.NewRequest(http.MethodPost, baseURL+"/collect/v1/events", strings.NewReader(`{"events":[{"name":"page_view","path":"/"}]}`))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	req.Host = "futurelab.studio:443"
+	req.Host = "example.com:443"
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("POST /collect/v1/events error = %v", err)
@@ -664,13 +664,13 @@ func TestTelemetryIngestAcceptsSendBeaconContentType(t *testing.T) {
 		},
 	})
 	baseURL := "http://" + srv.Addr()
-	seedTelemetryEnvironment(t, srv, "futurelab", "staging", "futurelab.studio")
+	seedTelemetryEnvironment(t, srv, "sample", "staging", "example.com")
 
 	req, err := http.NewRequest(http.MethodPost, baseURL+"/collect/v1/events", strings.NewReader(`{"events":[{"name":"page_view","path":"/"}]}`))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	req.Host = "futurelab.studio"
+	req.Host = "example.com"
 	req.Header.Set("Content-Type", "text/plain;charset=UTF-8")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -698,13 +698,13 @@ func TestTelemetryIngestRejectsUnsupportedContentType(t *testing.T) {
 		},
 	})
 	baseURL := "http://" + srv.Addr()
-	seedTelemetryEnvironment(t, srv, "futurelab", "staging", "futurelab.studio")
+	seedTelemetryEnvironment(t, srv, "sample", "staging", "example.com")
 
 	req, err := http.NewRequest(http.MethodPost, baseURL+"/collect/v1/events", strings.NewReader(`{"events":[{"name":"page_view","path":"/"}]}`))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	req.Host = "futurelab.studio"
+	req.Host = "example.com"
 	req.Header.Set("Content-Type", "application/xml")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -732,14 +732,14 @@ func TestTelemetryIngestRejectsCrossOrigin(t *testing.T) {
 		},
 	})
 	baseURL := "http://" + srv.Addr()
-	seedTelemetryEnvironment(t, srv, "futurelab", "staging", "futurelab.studio")
+	seedTelemetryEnvironment(t, srv, "sample", "staging", "example.com")
 
 	req, err := http.NewRequest(http.MethodPost, baseURL+"/collect/v1/events", strings.NewReader(`{"events":[{"name":"page_view","path":"/"}]}`))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	req.Host = "futurelab.studio"
-	req.Header.Set("Origin", "https://www.futurelab.studio")
+	req.Host = "example.com"
+	req.Header.Set("Origin", "https://www.example.com")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("POST /collect/v1/events error = %v", err)

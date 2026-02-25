@@ -138,8 +138,8 @@ As an operator or AI agent, I want to promote a verified staging release to prod
 
 ### Manual Tests
 
-- [ ] Apply a release to staging, run `htmlctl promote website/futurelab --from staging --to prod`, verify prod serves the same content
-- [ ] Run `htmlctl rollout history website/futurelab --context prod` and verify the promoted release appears
+- [ ] Apply a release to staging, run `htmlctl promote website/sample --from staging --to prod`, verify prod serves the same content
+- [ ] Run `htmlctl rollout history website/sample --context prod` and verify the promoted release appears
 - [ ] Compare file hashes manually between staging and prod release directories (`sha256sum`)
 - [ ] Attempt promotion when staging has no releases, verify clear error message
 - [ ] Verify audit log entry via `htmlctl logs`

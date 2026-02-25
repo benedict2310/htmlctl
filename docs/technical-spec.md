@@ -67,7 +67,7 @@ metadata:
   name: product
 spec:
   route: /product
-  title: "Futurelab — Product"
+  title: "Sample — Product"
   description: "..."
   layout:
     - include: header
@@ -77,27 +77,27 @@ spec:
     - include: faq
     - include: footer
   head:
-    canonicalURL: https://futurelab.studio/product
+    canonicalURL: https://example.com/product
     meta:
       robots: index,follow
-      keywords: Futurelab product
+      keywords: Sample product
     openGraph:
       type: website
-      url: https://futurelab.studio/product
-      title: Futurelab Product
+      url: https://example.com/product
+      title: Sample Product
       description: Product details
-      image: https://futurelab.studio/assets/product/og-image.jpg
+      image: https://example.com/assets/product/og-image.jpg
     twitter:
       card: summary_large_image
-      title: Futurelab Product
+      title: Sample Product
       description: Product details
-      image: https://futurelab.studio/assets/product/og-image.jpg
+      image: https://example.com/assets/product/og-image.jpg
     jsonLD:
       - id: product
         payload:
           "@context": https://schema.org
           "@type": Product
-          name: Futurelab Product
+          name: Sample Product
 ```
 
 ### 2.4 Component
@@ -218,7 +218,7 @@ For any environment apply:
   db.sqlite
   blobs/
     sha256/<hash>
-  websites/futurelab/
+  websites/sample/
     envs/staging/
       releases/<releaseId>/
       current -> releases/<releaseId>/
@@ -286,8 +286,8 @@ Audit log records:
 - Recommended front proxy: **Caddy**
 - `htmlservd` writes Caddy snippets and triggers reload safely.
 - Domain binding per environment:
-  - `futurelab.studio` -> prod current directory
-  - `staging.futurelab.studio` -> staging current directory
+  - `example.com` -> prod current directory
+  - `staging.example.com` -> staging current directory
 - When telemetry is enabled, generated site blocks include:
   - `handle /collect/v1/events* { reverse_proxy 127.0.0.1:<htmlservd-port> }`
   - static file serving behavior is unchanged for all non-telemetry paths.
@@ -305,12 +305,12 @@ current-context: staging
 contexts:
   - name: staging
     server: ssh://root@yourserver
-    website: futurelab
+    website: sample
     environment: staging
     token: "<shared-api-token>"
   - name: prod
     server: ssh://root@yourserver
-    website: futurelab
+    website: sample
     environment: prod
     token: "<shared-api-token>"
 ```
@@ -331,17 +331,17 @@ Remote ops:
 
 - `htmlctl diff -f ./site --context staging`
 - `htmlctl apply -f ./site --context staging [--dry-run]`
-- `htmlctl status website/futurelab --context staging`
-- `htmlctl promote website/futurelab --from staging --to prod`
-- `htmlctl rollout history website/futurelab --context prod`
-- `htmlctl rollout undo website/futurelab --context prod`
-- `htmlctl logs website/futurelab --context prod`
+- `htmlctl status website/sample --context staging`
+- `htmlctl promote website/sample --from staging --to prod`
+- `htmlctl rollout history website/sample --context prod`
+- `htmlctl rollout undo website/sample --context prod`
+- `htmlctl logs website/sample --context prod`
 
 Domains:
 
-- `htmlctl domain add futurelab.studio --context prod`
-- `htmlctl domain add staging.futurelab.studio --context staging`
-- `htmlctl domain verify futurelab.studio --context prod`
+- `htmlctl domain add example.com --context prod`
+- `htmlctl domain add staging.example.com --context staging`
+- `htmlctl domain verify example.com --context prod`
 
 ### 9.3 Agent-friendly partial apply (v1 UX)
 

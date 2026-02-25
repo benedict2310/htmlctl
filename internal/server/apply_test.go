@@ -41,7 +41,7 @@ func TestApplyEndpointSuccessAndAutoCreate(t *testing.T) {
 		"apiVersion": "htmlctl.dev/v1",
 		"kind":       "Bundle",
 		"mode":       "partial",
-		"website":    "futurelab",
+		"website":    "sample",
 		"resources": []map[string]any{
 			{
 				"kind": "Component", "name": "header", "file": "components/header.html", "hash": "sha256:" + sha256Hex(component),
@@ -61,7 +61,7 @@ func TestApplyEndpointSuccessAndAutoCreate(t *testing.T) {
 		},
 	})
 
-	resp := postBundle(t, baseURL+"/api/v1/websites/futurelab/environments/staging/apply", body)
+	resp := postBundle(t, baseURL+"/api/v1/websites/sample/environments/staging/apply", body)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
@@ -72,7 +72,7 @@ func TestApplyEndpointSuccessAndAutoCreate(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if out.Website != "futurelab" || out.Environment != "staging" || out.Mode != "partial" {
+	if out.Website != "sample" || out.Environment != "staging" || out.Mode != "partial" {
 		t.Fatalf("unexpected response metadata: %#v", out)
 	}
 	if len(out.AcceptedResource) != 4 {
@@ -80,7 +80,7 @@ func TestApplyEndpointSuccessAndAutoCreate(t *testing.T) {
 	}
 
 	q := dbpkg.NewQueries(srv.db)
-	websiteRow, err := q.GetWebsiteByName(context.Background(), "futurelab")
+	websiteRow, err := q.GetWebsiteByName(context.Background(), "sample")
 	if err != nil {
 		t.Fatalf("GetWebsiteByName() error = %v", err)
 	}
@@ -119,13 +119,13 @@ func TestApplyEndpointDryRunDoesNotPersist(t *testing.T) {
 		"apiVersion": "htmlctl.dev/v1",
 		"kind":       "Bundle",
 		"mode":       "partial",
-		"website":    "futurelab",
+		"website":    "sample",
 		"resources": []map[string]any{
 			{"kind": "Component", "name": "header", "file": "components/header.html", "hash": "sha256:" + sha256Hex(component)},
 		},
 	})
 
-	resp := postBundle(t, baseURL+"/api/v1/websites/futurelab/environments/staging/apply?dry_run=true", body)
+	resp := postBundle(t, baseURL+"/api/v1/websites/sample/environments/staging/apply?dry_run=true", body)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
@@ -133,7 +133,7 @@ func TestApplyEndpointDryRunDoesNotPersist(t *testing.T) {
 	}
 
 	q := dbpkg.NewQueries(srv.db)
-	_, err := q.GetWebsiteByName(context.Background(), "futurelab")
+	_, err := q.GetWebsiteByName(context.Background(), "sample")
 	if err == nil || !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("expected website to not persist in dry_run, got err=%v", err)
 	}
@@ -150,13 +150,13 @@ func TestApplyEndpointHashMismatch(t *testing.T) {
 		"apiVersion": "htmlctl.dev/v1",
 		"kind":       "Bundle",
 		"mode":       "partial",
-		"website":    "futurelab",
+		"website":    "sample",
 		"resources": []map[string]any{
 			{"kind": "Component", "name": "header", "file": "components/header.html", "hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
 		},
 	})
 
-	resp := postBundle(t, baseURL+"/api/v1/websites/futurelab/environments/staging/apply", body)
+	resp := postBundle(t, baseURL+"/api/v1/websites/sample/environments/staging/apply", body)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		b, _ := io.ReadAll(resp.Body)
@@ -175,7 +175,7 @@ func TestApplyEndpointInternalErrorIsSanitized(t *testing.T) {
 		"apiVersion": "htmlctl.dev/v1",
 		"kind":       "Bundle",
 		"mode":       "partial",
-		"website":    "futurelab",
+		"website":    "sample",
 		"resources": []map[string]any{
 			{"kind": "Component", "name": "header", "file": "components/header.html", "hash": "sha256:" + sha256Hex(component)},
 		},
@@ -185,7 +185,7 @@ func TestApplyEndpointInternalErrorIsSanitized(t *testing.T) {
 		t.Fatalf("Close() db error = %v", err)
 	}
 
-	resp := postBundle(t, baseURL+"/api/v1/websites/futurelab/environments/staging/apply", body)
+	resp := postBundle(t, baseURL+"/api/v1/websites/sample/environments/staging/apply", body)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusInternalServerError {
 		b, _ := io.ReadAll(resp.Body)
@@ -245,13 +245,13 @@ func TestApplyEndpointRejectsInvalidPathNames(t *testing.T) {
 		"apiVersion": "htmlctl.dev/v1",
 		"kind":       "Bundle",
 		"mode":       "partial",
-		"website":    "futurelab",
+		"website":    "sample",
 		"resources": []map[string]any{
 			{"kind": "Component", "name": "header", "file": "components/header.html", "hash": "sha256:" + sha256Hex(component)},
 		},
 	})
 
-	resp = postBundle(t, baseURL+"/api/v1/websites/futurelab/environments/prod%0Areverse_proxy/apply", validWebsiteBundle)
+	resp = postBundle(t, baseURL+"/api/v1/websites/sample/environments/prod%0Areverse_proxy/apply", validWebsiteBundle)
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected 400 for invalid environment name, got %d", resp.StatusCode)
@@ -272,13 +272,13 @@ func TestApplyEndpointFullModeDeletesMissingResources(t *testing.T) {
 		"apiVersion": "htmlctl.dev/v1",
 		"kind":       "Bundle",
 		"mode":       "partial",
-		"website":    "futurelab",
+		"website":    "sample",
 		"resources": []map[string]any{
 			{"kind": "Component", "name": "header", "file": "components/header.html", "hash": "sha256:" + sha256Hex(header)},
 			{"kind": "Component", "name": "footer", "file": "components/footer.html", "hash": "sha256:" + sha256Hex(footer)},
 		},
 	})
-	resp := postBundle(t, baseURL+"/api/v1/websites/futurelab/environments/staging/apply", partial)
+	resp := postBundle(t, baseURL+"/api/v1/websites/sample/environments/staging/apply", partial)
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected first apply to succeed, got %d", resp.StatusCode)
@@ -290,12 +290,12 @@ func TestApplyEndpointFullModeDeletesMissingResources(t *testing.T) {
 		"apiVersion": "htmlctl.dev/v1",
 		"kind":       "Bundle",
 		"mode":       "full",
-		"website":    "futurelab",
+		"website":    "sample",
 		"resources": []map[string]any{
 			{"kind": "Component", "name": "header", "file": "components/header.html", "hash": "sha256:" + sha256Hex(header)},
 		},
 	})
-	resp = postBundle(t, baseURL+"/api/v1/websites/futurelab/environments/staging/apply", full)
+	resp = postBundle(t, baseURL+"/api/v1/websites/sample/environments/staging/apply", full)
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
@@ -304,7 +304,7 @@ func TestApplyEndpointFullModeDeletesMissingResources(t *testing.T) {
 	resp.Body.Close()
 
 	q := dbpkg.NewQueries(srv.db)
-	websiteRow, err := q.GetWebsiteByName(context.Background(), "futurelab")
+	websiteRow, err := q.GetWebsiteByName(context.Background(), "sample")
 	if err != nil {
 		t.Fatalf("GetWebsiteByName() error = %v", err)
 	}
@@ -329,20 +329,20 @@ func TestApplyEndpointNormalizesHashFormat(t *testing.T) {
 		"apiVersion": "htmlctl.dev/v1",
 		"kind":       "Bundle",
 		"mode":       "partial",
-		"website":    "futurelab",
+		"website":    "sample",
 		"resources": []map[string]any{
 			{"kind": "Component", "name": "header", "file": "components/header.html", "hash": rawHex},
 		},
 	})
 
-	resp := postBundle(t, baseURL+"/api/v1/websites/futurelab/environments/staging/apply", body)
+	resp := postBundle(t, baseURL+"/api/v1/websites/sample/environments/staging/apply", body)
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected apply to succeed, got %d", resp.StatusCode)
 	}
 
 	q := dbpkg.NewQueries(srv.db)
-	websiteRow, err := q.GetWebsiteByName(context.Background(), "futurelab")
+	websiteRow, err := q.GetWebsiteByName(context.Background(), "sample")
 	if err != nil {
 		t.Fatalf("GetWebsiteByName() error = %v", err)
 	}
@@ -370,12 +370,12 @@ func TestApplyEndpointPartialModeDeletesAsset(t *testing.T) {
 		"apiVersion": "htmlctl.dev/v1",
 		"kind":       "Bundle",
 		"mode":       "partial",
-		"website":    "futurelab",
+		"website":    "sample",
 		"resources": []map[string]any{
 			{"kind": "Asset", "name": "assets/logo.svg", "file": "assets/logo.svg", "hash": "sha256:" + sha256Hex(asset), "contentType": "image/svg+xml"},
 		},
 	})
-	resp := postBundle(t, baseURL+"/api/v1/websites/futurelab/environments/staging/apply", createBundle)
+	resp := postBundle(t, baseURL+"/api/v1/websites/sample/environments/staging/apply", createBundle)
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected first apply to succeed, got %d", resp.StatusCode)
@@ -385,12 +385,12 @@ func TestApplyEndpointPartialModeDeletesAsset(t *testing.T) {
 		"apiVersion": "htmlctl.dev/v1",
 		"kind":       "Bundle",
 		"mode":       "partial",
-		"website":    "futurelab",
+		"website":    "sample",
 		"resources": []map[string]any{
 			{"kind": "Asset", "name": "assets/logo.svg", "file": "assets/logo.svg", "deleted": true},
 		},
 	})
-	resp = postBundle(t, baseURL+"/api/v1/websites/futurelab/environments/staging/apply", deleteBundle)
+	resp = postBundle(t, baseURL+"/api/v1/websites/sample/environments/staging/apply", deleteBundle)
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
@@ -399,7 +399,7 @@ func TestApplyEndpointPartialModeDeletesAsset(t *testing.T) {
 	resp.Body.Close()
 
 	q := dbpkg.NewQueries(srv.db)
-	websiteRow, err := q.GetWebsiteByName(context.Background(), "futurelab")
+	websiteRow, err := q.GetWebsiteByName(context.Background(), "sample")
 	if err != nil {
 		t.Fatalf("GetWebsiteByName() error = %v", err)
 	}

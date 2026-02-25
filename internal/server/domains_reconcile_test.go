@@ -33,13 +33,13 @@ func TestReconcileDomainConfigSuccess(t *testing.T) {
 		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
 		caddyReloader: reloader,
 	}
-	if err := s.reconcileDomainConfig(context.Background(), "remove rollback failure futurelab.example.com"); err != nil {
+	if err := s.reconcileDomainConfig(context.Background(), "remove rollback failure sample.example.com"); err != nil {
 		t.Fatalf("reconcileDomainConfig() error = %v", err)
 	}
 	if len(reloader.reasons) != 1 {
 		t.Fatalf("expected one reload call, got %d", len(reloader.reasons))
 	}
-	if reloader.reasons[0] != "domain.reconcile remove rollback failure futurelab.example.com" {
+	if reloader.reasons[0] != "domain.reconcile remove rollback failure sample.example.com" {
 		t.Fatalf("unexpected reconcile reason %q", reloader.reasons[0])
 	}
 }
@@ -50,7 +50,7 @@ func TestReconcileDomainConfigError(t *testing.T) {
 		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
 		caddyReloader: reloader,
 	}
-	err := s.reconcileDomainConfig(context.Background(), "add rollback failure futurelab.example.com")
+	err := s.reconcileDomainConfig(context.Background(), "add rollback failure sample.example.com")
 	if err == nil {
 		t.Fatalf("expected reconcileDomainConfig error")
 	}

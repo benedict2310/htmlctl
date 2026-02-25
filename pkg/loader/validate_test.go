@@ -32,7 +32,7 @@ func TestNormalizeRoute(t *testing.T) {
 
 func TestValidateSiteRejectsDuplicateRoutes(t *testing.T) {
 	site := &model.Site{
-		Website: model.Website{Metadata: model.Metadata{Name: "futurelab"}},
+		Website: model.Website{Metadata: model.Metadata{Name: "sample"}},
 		Components: map[string]model.Component{
 			"header": {Name: "header", Scope: model.ComponentScopeGlobal, HTML: "<section></section>"},
 		},
@@ -59,7 +59,7 @@ func TestValidateSiteRejectsDuplicateRoutes(t *testing.T) {
 
 func TestValidateSiteRejectsMissingInclude(t *testing.T) {
 	site := &model.Site{
-		Website: model.Website{Metadata: model.Metadata{Name: "futurelab"}},
+		Website: model.Website{Metadata: model.Metadata{Name: "sample"}},
 		Pages: map[string]model.Page{
 			"index": {
 				Metadata: model.Metadata{Name: "index"},
@@ -80,7 +80,7 @@ func TestValidateSiteRejectsMissingInclude(t *testing.T) {
 
 func TestValidateSiteNormalizesRoute(t *testing.T) {
 	site := &model.Site{
-		Website: model.Website{Metadata: model.Metadata{Name: "futurelab"}},
+		Website: model.Website{Metadata: model.Metadata{Name: "sample"}},
 		Components: map[string]model.Component{
 			"header": {Name: "header", Scope: model.ComponentScopeGlobal, HTML: "<section></section>"},
 		},
@@ -103,7 +103,7 @@ func TestValidateSiteNormalizesRoute(t *testing.T) {
 
 func TestValidateSiteRejectsUnsupportedHeadURLSchemes(t *testing.T) {
 	site := &model.Site{
-		Website: model.Website{Metadata: model.Metadata{Name: "futurelab"}},
+		Website: model.Website{Metadata: model.Metadata{Name: "sample"}},
 		Components: map[string]model.Component{
 			"header": {Name: "header", Scope: model.ComponentScopeGlobal, HTML: "<section></section>"},
 		},
@@ -132,7 +132,7 @@ func TestValidateSiteRejectsUnsupportedHeadURLSchemes(t *testing.T) {
 
 func TestValidateSiteAllowsRelativeHeadURLs(t *testing.T) {
 	site := &model.Site{
-		Website: model.Website{Metadata: model.Metadata{Name: "futurelab"}},
+		Website: model.Website{Metadata: model.Metadata{Name: "sample"}},
 		Components: map[string]model.Component{
 			"header": {Name: "header", Scope: model.ComponentScopeGlobal, HTML: "<section></section>"},
 		},
@@ -267,7 +267,7 @@ func TestValidateSiteEnforcesHeadMetadataLimits(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			site := &model.Site{
-				Website: model.Website{Metadata: model.Metadata{Name: "futurelab"}},
+				Website: model.Website{Metadata: model.Metadata{Name: "sample"}},
 				Components: map[string]model.Component{
 					"header": {Name: "header", Scope: model.ComponentScopeGlobal, HTML: "<section></section>"},
 				},

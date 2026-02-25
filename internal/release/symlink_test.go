@@ -7,7 +7,7 @@ import (
 )
 
 func TestSwitchCurrentSymlink(t *testing.T) {
-	envDir := filepath.Join(t.TempDir(), "websites", "futurelab", "envs", "staging")
+	envDir := filepath.Join(t.TempDir(), "websites", "sample", "envs", "staging")
 	if err := os.MkdirAll(filepath.Join(envDir, "releases", "01A"), 0o755); err != nil {
 		t.Fatalf("mkdir release 01A: %v", err)
 	}

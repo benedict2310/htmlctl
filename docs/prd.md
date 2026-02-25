@@ -30,7 +30,7 @@ Plain websites are easy to serve but hard to manage safely at scale when an **ag
 2. **Production-safe deployments**: immutable releases, atomic switch, instant rollback.
 3. **Token-efficient agent workflow**: edit a single component (subsection) and deploy.
 4. **Deterministic rendering**: local preview matches server output.
-5. **Support custom domains + TLS** for real sites (e.g., `futurelab.studio`).
+5. **Support custom domains + TLS** for real sites (e.g., `example.com`).
 
 ## 3. Non-goals (v1)
 
@@ -117,5 +117,5 @@ Promotion should be **artifact promotion** (no rebuild): staging release bytes c
 
 - `htmlctl` binary
 - `htmlservd` binary
-- sample `site/` repo for `futurelab` demo
+- sample `site/` repo for `sample` demo
 - service unit files (systemd) for `htmlservd` and `caddy`

@@ -50,7 +50,7 @@ jobs:
             -p 18080:80 \
             -e SSH_PUBLIC_KEY="$(cat "$STATE_DIR/id_ed25519.pub")" \
             -e HTMLSERVD_CADDY_BOOTSTRAP_MODE=preview \
-            -e HTMLSERVD_PREVIEW_WEBSITE=futurelab \
+            -e HTMLSERVD_PREVIEW_WEBSITE=sample \
             -e HTMLSERVD_PREVIEW_ENV=staging \
             -e HTMLSERVD_CADDY_AUTO_HTTPS=false \
             -v "$STATE_DIR/data:/var/lib/htmlservd" \
@@ -84,7 +84,7 @@ jobs:
           contexts:
             - name: local-staging
               server: ssh://htmlservd@htmlservd-first-deploy:22
-              website: futurelab
+              website: sample
               environment: staging
               port: 9400
           YAML
@@ -99,7 +99,7 @@ jobs:
             -w /work \
             htmlctl:ci apply -f testdata/valid-site --context local-staging
 
-          curl -sf http://127.0.0.1:18080/ | grep -q "Futurelab"
+          curl -sf http://127.0.0.1:18080/ | grep -q "Sample"
 
           docker run --rm \
             --network htmlctl-net \
@@ -109,6 +109,6 @@ jobs:
             -v "$STATE_DIR/id_ed25519:/home/htmlctl/.ssh/id_ed25519:ro" \
             -v "$STATE_DIR/known_hosts:/home/htmlctl/.ssh/known_hosts:ro" \
             -w /work \
-            htmlctl:ci domain add futurelab.localtest.me --context local-staging
+            htmlctl:ci domain add sample.localtest.me --context local-staging
 
-          curl -sf -H "Host: futurelab.localtest.me" http://127.0.0.1:18080/ | grep -q "Futurelab"
+          curl -sf -H "Host: sample.localtest.me" http://127.0.0.1:18080/ | grep -q "Sample"

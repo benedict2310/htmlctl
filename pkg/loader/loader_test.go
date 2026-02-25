@@ -13,7 +13,7 @@ func TestLoadSiteValidSite(t *testing.T) {
 		t.Fatalf("LoadSite() error = %v", err)
 	}
 
-	if site.Website.Metadata.Name != "futurelab" {
+	if site.Website.Metadata.Name != "sample" {
 		t.Fatalf("unexpected website name: %q", site.Website.Metadata.Name)
 	}
 
@@ -31,7 +31,7 @@ func TestLoadSiteValidSite(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected page 'ora' to be present")
 	}
-	if ora.Spec.Head == nil || ora.Spec.Head.CanonicalURL != "https://futurelab.studio/ora" {
+	if ora.Spec.Head == nil || ora.Spec.Head.CanonicalURL != "https://example.com/ora" {
 		t.Fatalf("expected ora head metadata to be parsed, got %#v", ora.Spec.Head)
 	}
 

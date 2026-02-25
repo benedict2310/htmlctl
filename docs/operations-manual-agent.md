@@ -56,7 +56,7 @@ Primary references:
 Docker entrypoint controls:
 - `HTMLSERVD_CADDY_BOOTSTRAP_MODE` (`preview|bootstrap`, default `preview`)
 - `HTMLSERVD_CADDY_BOOTSTRAP_LISTEN` (default `:80`)
-- `HTMLSERVD_PREVIEW_WEBSITE` (default `futurelab`)
+- `HTMLSERVD_PREVIEW_WEBSITE` (default `sample`)
 - `HTMLSERVD_PREVIEW_ENV` (default `staging`)
 - `HTMLSERVD_PREVIEW_ROOT` (explicit preview root override)
 - `SSH_PUBLIC_KEY` (required for `htmlservd-ssh`; must be a single bare public key line with no options prefix)
@@ -93,7 +93,7 @@ Minimum valid example:
 apiVersion: htmlctl.dev/v1
 kind: Website
 metadata:
-  name: futurelab
+  name: sample
 spec:
   defaultStyleBundle: default
   baseTemplate: default
@@ -107,7 +107,7 @@ metadata:
   name: index
 spec:
   route: /
-  title: Futurelab
+  title: Sample
   description: Landing page
   layout:
     - include: hero
@@ -116,7 +116,7 @@ spec:
 ```html
 <!-- components/hero.html -->
 <section id="hero">
-  <h1>Futurelab</h1>
+  <h1>Sample</h1>
 </section>
 ```
 
@@ -163,7 +163,7 @@ docker run -d \
   -p 18080:80 \
   -e SSH_PUBLIC_KEY="$(cat ~/.ssh/id_ed25519.pub)" \
   -e HTMLSERVD_CADDY_BOOTSTRAP_MODE=preview \
-  -e HTMLSERVD_PREVIEW_WEBSITE=futurelab \
+  -e HTMLSERVD_PREVIEW_WEBSITE=sample \
   -e HTMLSERVD_PREVIEW_ENV=staging \
   -e HTMLSERVD_API_TOKEN="$API_TOKEN" \
   -e HTMLSERVD_CADDY_AUTO_HTTPS=false \
@@ -190,7 +190,7 @@ current-context: local-staging
 contexts:
   - name: local-staging
     server: ssh://htmlservd@127.0.0.1:23222
-    website: futurelab
+    website: sample
     environment: staging
     port: 9400
     token: ${API_TOKEN}
@@ -212,7 +212,7 @@ htmlctl apply -f .tmp/first-deploy/site --context local-staging
 ```bash
 HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
 HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
-htmlctl status website/futurelab --context local-staging
+htmlctl status website/sample --context local-staging
 
 HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
 HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
@@ -222,7 +222,7 @@ open http://127.0.0.1.nip.io:18080/
 
 curl -sS \
   -H "Authorization: Bearer ${API_TOKEN}" \
-  "http://127.0.0.1:19420/api/v1/websites/futurelab/environments/staging/telemetry/events?limit=20"
+  "http://127.0.0.1:19420/api/v1/websites/sample/environments/staging/telemetry/events?limit=20"
 ```
 
 ## 7. Runbook RB-REMOTE-01: Standard Remote Workflow (SSH Tunnel)
@@ -237,13 +237,13 @@ current-context: staging
 contexts:
   - name: staging
     server: ssh://deploy@YOUR_HOST
-    website: futurelab
+    website: sample
     environment: staging
     port: 9400
     token: YOUR_SHARED_API_TOKEN
   - name: prod
     server: ssh://deploy@YOUR_HOST
-    website: futurelab
+    website: sample
     environment: prod
     port: 9400
     token: YOUR_SHARED_API_TOKEN
@@ -255,8 +255,8 @@ contexts:
 htmlctl config current-context
 htmlctl diff -f ./site --context staging
 htmlctl apply -f ./site --context staging
-htmlctl status website/futurelab --context staging
-htmlctl logs website/futurelab --context staging --limit 50
+htmlctl status website/sample --context staging
+htmlctl logs website/sample --context staging --limit 50
 ```
 
 3. Dry-run-only.
@@ -270,28 +270,28 @@ htmlctl apply -f ./site --context staging --dry-run
 Release history:
 
 ```bash
-htmlctl rollout history website/futurelab --context staging
+htmlctl rollout history website/sample --context staging
 htmlctl get releases --context staging
 ```
 
 Rollback previous active release:
 
 ```bash
-htmlctl rollout undo website/futurelab --context staging
+htmlctl rollout undo website/sample --context staging
 ```
 
 Promote active staging artifact to prod (no rebuild):
 
 ```bash
-htmlctl promote website/futurelab --from staging --to prod --context staging
-htmlctl rollout history website/futurelab --context prod
+htmlctl promote website/sample --from staging --to prod --context staging
+htmlctl rollout history website/sample --context prod
 ```
 
 Post-promote verification:
 
 ```bash
-htmlctl status website/futurelab --context prod
-htmlctl logs website/futurelab --context prod --limit 20
+htmlctl status website/sample --context prod
+htmlctl logs website/sample --context prod --limit 20
 ```
 
 ## 9. Runbook RB-DOMAIN-01: Domain Binding + Verification
@@ -299,15 +299,15 @@ htmlctl logs website/futurelab --context prod --limit 20
 Add/list/remove:
 
 ```bash
-htmlctl domain add futurelab.studio --context prod
+htmlctl domain add example.com --context prod
 htmlctl domain list --context prod
-htmlctl domain remove futurelab.studio --context prod
+htmlctl domain remove example.com --context prod
 ```
 
 Verify DNS + TLS:
 
 ```bash
-htmlctl domain verify futurelab.studio --context prod
+htmlctl domain verify example.com --context prod
 ```
 
 Expected behavior:

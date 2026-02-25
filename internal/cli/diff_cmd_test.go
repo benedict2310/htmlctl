@@ -18,10 +18,10 @@ func TestDiffCommandReturnsExitCodeOneWhenChangesDetected(t *testing.T) {
 			if call != 0 {
 				t.Fatalf("unexpected transport call %d: %#v", call, req)
 			}
-			if req.Method != "GET" || req.Path != "/api/v1/websites/futurelab/environments/staging/manifest" {
+			if req.Method != "GET" || req.Path != "/api/v1/websites/sample/environments/staging/manifest" {
 				t.Fatalf("unexpected diff request: %#v", req)
 			}
-			return jsonHTTPResponse(200, `{"website":"futurelab","environment":"staging","files":[]}`), nil
+			return jsonHTTPResponse(200, `{"website":"sample","environment":"staging","files":[]}`), nil
 		},
 	}
 
@@ -46,7 +46,7 @@ func TestDiffCommandNoChangesReturnsExitCodeZero(t *testing.T) {
 			if call != 0 {
 				t.Fatalf("unexpected transport call %d: %#v", call, req)
 			}
-			if req.Method != "GET" || req.Path != "/api/v1/websites/futurelab/environments/staging/manifest" {
+			if req.Method != "GET" || req.Path != "/api/v1/websites/sample/environments/staging/manifest" {
 				t.Fatalf("unexpected diff request: %#v", req)
 			}
 			return jsonHTTPResponse(200, remotePayload), nil
@@ -70,7 +70,7 @@ func TestDiffCommandJSONIncludesFullHashes(t *testing.T) {
 			if call != 0 {
 				t.Fatalf("unexpected transport call %d: %#v", call, req)
 			}
-			return jsonHTTPResponse(200, `{"website":"futurelab","environment":"staging","files":[]}`), nil
+			return jsonHTTPResponse(200, `{"website":"sample","environment":"staging","files":[]}`), nil
 		},
 	}
 
@@ -109,7 +109,7 @@ func TestDiffCommandMissingFromReturnsExitCodeTwo(t *testing.T) {
 func buildManifestPayloadForSite(t *testing.T, siteDir string) string {
 	t.Helper()
 
-	_, manifest, err := bundle.BuildTarFromDir(siteDir, "futurelab")
+	_, manifest, err := bundle.BuildTarFromDir(siteDir, "sample")
 	if err != nil {
 		t.Fatalf("BuildTarFromDir() error = %v", err)
 	}
@@ -128,7 +128,7 @@ func buildManifestPayloadForSite(t *testing.T, siteDir string) string {
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	payload := map[string]any{
-		"website":     "futurelab",
+		"website":     "sample",
 		"environment": "staging",
 		"files":       files,
 	}

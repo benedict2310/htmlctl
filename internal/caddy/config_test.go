@@ -9,18 +9,18 @@ import (
 
 func TestGenerateConfigSorted(t *testing.T) {
 	cfg, err := GenerateConfig([]Site{
-		{Domain: "staging.futurelab.studio", Root: "/srv/futurelab/staging/current"},
-		{Domain: "futurelab.studio", Root: "/srv/futurelab/prod/current"},
+		{Domain: "staging.example.com", Root: "/srv/sample/staging/current"},
+		{Domain: "example.com", Root: "/srv/sample/prod/current"},
 	})
 	if err != nil {
 		t.Fatalf("GenerateConfig() error = %v", err)
 	}
-	first := strings.Index(cfg, "futurelab.studio {")
-	second := strings.Index(cfg, "staging.futurelab.studio {")
+	first := strings.Index(cfg, "example.com {")
+	second := strings.Index(cfg, "staging.example.com {")
 	if first == -1 || second == -1 || first > second {
 		t.Fatalf("expected deterministic sorted output, got:\n%s", cfg)
 	}
-	if !strings.Contains(cfg, "\troot * /srv/futurelab/prod/current") {
+	if !strings.Contains(cfg, "\troot * /srv/sample/prod/current") {
 		t.Fatalf("expected prod root path in config, got:\n%s", cfg)
 	}
 }
@@ -39,20 +39,20 @@ func TestGenerateConfigRejectsInvalidSite(t *testing.T) {
 	if _, err := GenerateConfig([]Site{{Domain: "", Root: "/x"}}); err == nil {
 		t.Fatalf("expected missing-domain error")
 	}
-	if _, err := GenerateConfig([]Site{{Domain: "futurelab.studio", Root: ""}}); err == nil {
+	if _, err := GenerateConfig([]Site{{Domain: "example.com", Root: ""}}); err == nil {
 		t.Fatalf("expected missing-root error")
 	}
-	if _, err := GenerateConfig([]Site{{Domain: "futurelab.studio", Root: "/srv/futurelab/\ncurrent"}}); err == nil {
+	if _, err := GenerateConfig([]Site{{Domain: "example.com", Root: "/srv/sample/\ncurrent"}}); err == nil {
 		t.Fatalf("expected forbidden-root-character error")
 	}
-	if _, err := GenerateConfig([]Site{{Domain: "futurelab.studio", Root: "/srv/futurelab/{current}"}}); err == nil {
+	if _, err := GenerateConfig([]Site{{Domain: "example.com", Root: "/srv/sample/{current}"}}); err == nil {
 		t.Fatalf("expected forbidden-root-character error")
 	}
 }
 
 func TestGenerateConfigWithAutoHTTPSDisabled(t *testing.T) {
 	cfg, err := GenerateConfigWithOptions([]Site{
-		{Domain: "futurelab.studio", Root: "/srv/futurelab/prod/current"},
+		{Domain: "example.com", Root: "/srv/sample/prod/current"},
 	}, ConfigOptions{DisableAutoHTTPS: true})
 	if err != nil {
 		t.Fatalf("GenerateConfigWithOptions() error = %v", err)
@@ -60,14 +60,14 @@ func TestGenerateConfigWithAutoHTTPSDisabled(t *testing.T) {
 	if !strings.Contains(cfg, "auto_https off") {
 		t.Fatalf("expected auto_https off in config, got:\n%s", cfg)
 	}
-	if !strings.Contains(cfg, "http://futurelab.studio {") {
+	if !strings.Contains(cfg, "http://example.com {") {
 		t.Fatalf("expected explicit http site address in config, got:\n%s", cfg)
 	}
 }
 
 func TestGenerateConfigWithTelemetryProxy(t *testing.T) {
 	cfg, err := GenerateConfigWithOptions([]Site{
-		{Domain: "futurelab.studio", Root: "/srv/futurelab/prod/current"},
+		{Domain: "example.com", Root: "/srv/sample/prod/current"},
 	}, ConfigOptions{TelemetryPort: 9400})
 	if err != nil {
 		t.Fatalf("GenerateConfigWithOptions() error = %v", err)
@@ -82,7 +82,7 @@ func TestGenerateConfigWithTelemetryProxy(t *testing.T) {
 
 func TestGenerateConfigWithoutTelemetryProxyWhenDisabled(t *testing.T) {
 	cfg, err := GenerateConfigWithOptions([]Site{
-		{Domain: "futurelab.studio", Root: "/srv/futurelab/prod/current"},
+		{Domain: "example.com", Root: "/srv/sample/prod/current"},
 	}, ConfigOptions{TelemetryPort: 0})
 	if err != nil {
 		t.Fatalf("GenerateConfigWithOptions() error = %v", err)
@@ -94,7 +94,7 @@ func TestGenerateConfigWithoutTelemetryProxyWhenDisabled(t *testing.T) {
 
 func TestGenerateConfigRejectsInvalidTelemetryPort(t *testing.T) {
 	if _, err := GenerateConfigWithOptions([]Site{
-		{Domain: "futurelab.studio", Root: "/srv/futurelab/prod/current"},
+		{Domain: "example.com", Root: "/srv/sample/prod/current"},
 	}, ConfigOptions{TelemetryPort: 70000}); err == nil {
 		t.Fatalf("expected invalid telemetry port error")
 	}
@@ -102,14 +102,14 @@ func TestGenerateConfigRejectsInvalidTelemetryPort(t *testing.T) {
 
 func TestWriteConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "Caddyfile")
-	if err := WriteConfig(path, "futurelab.studio {\n\tfile_server\n}\n"); err != nil {
+	if err := WriteConfig(path, "example.com {\n\tfile_server\n}\n"); err != nil {
 		t.Fatalf("WriteConfig() error = %v", err)
 	}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read config: %v", err)
 	}
-	if !strings.Contains(string(b), "futurelab.studio") {
+	if !strings.Contains(string(b), "example.com") {
 		t.Fatalf("unexpected config content: %s", string(b))
 	}
 }

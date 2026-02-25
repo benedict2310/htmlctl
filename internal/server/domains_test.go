@@ -24,12 +24,12 @@ func (f *fakeCaddyReloader) Reload(ctx context.Context, reason string) error {
 func TestDomainsCreateListGetDelete(t *testing.T) {
 	srv := startTestServer(t)
 	baseURL := "http://" + srv.Addr()
-	seedDomainWebsiteEnv(t, srv, "futurelab", "staging")
+	seedDomainWebsiteEnv(t, srv, "sample", "staging")
 
 	reloader := &fakeCaddyReloader{}
 	srv.caddyReloader = reloader
 
-	body := bytes.NewBufferString(`{"domain":"FutureLab.Studio","website":"futurelab","environment":"staging"}`)
+	body := bytes.NewBufferString(`{"domain":"Example.Com","website":"sample","environment":"staging"}`)
 	resp, err := http.Post(baseURL+"/api/v1/domains", "application/json", body)
 	if err != nil {
 		t.Fatalf("POST /domains error = %v", err)
@@ -45,11 +45,11 @@ func TestDomainsCreateListGetDelete(t *testing.T) {
 		t.Fatalf("decode create response: %v", err)
 	}
 	resp.Body.Close()
-	if created.Domain != "futurelab.studio" || created.Website != "futurelab" || created.Environment != "staging" {
+	if created.Domain != "example.com" || created.Website != "sample" || created.Environment != "staging" {
 		t.Fatalf("unexpected create response: %#v", created)
 	}
 
-	listResp, err := http.Get(baseURL + "/api/v1/domains?website=futurelab")
+	listResp, err := http.Get(baseURL + "/api/v1/domains?website=sample")
 	if err != nil {
 		t.Fatalf("GET /domains error = %v", err)
 	}
@@ -64,11 +64,11 @@ func TestDomainsCreateListGetDelete(t *testing.T) {
 		t.Fatalf("decode list response: %v", err)
 	}
 	listResp.Body.Close()
-	if len(listed.Domains) != 1 || listed.Domains[0].Domain != "futurelab.studio" {
+	if len(listed.Domains) != 1 || listed.Domains[0].Domain != "example.com" {
 		t.Fatalf("unexpected listed domains: %#v", listed.Domains)
 	}
 
-	getResp, err := http.Get(baseURL + "/api/v1/domains/futurelab.studio")
+	getResp, err := http.Get(baseURL + "/api/v1/domains/example.com")
 	if err != nil {
 		t.Fatalf("GET /domains/{domain} error = %v", err)
 	}
@@ -83,11 +83,11 @@ func TestDomainsCreateListGetDelete(t *testing.T) {
 		t.Fatalf("decode get response: %v", err)
 	}
 	getResp.Body.Close()
-	if got.Domain != "futurelab.studio" {
+	if got.Domain != "example.com" {
 		t.Fatalf("unexpected get response: %#v", got)
 	}
 
-	req, err := http.NewRequest(http.MethodDelete, baseURL+"/api/v1/domains/futurelab.studio", nil)
+	req, err := http.NewRequest(http.MethodDelete, baseURL+"/api/v1/domains/example.com", nil)
 	if err != nil {
 		t.Fatalf("new delete request: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestDomainsCreateListGetDelete(t *testing.T) {
 		t.Fatalf("expected 204 delete, got %d", deleteResp.StatusCode)
 	}
 
-	listResp, err = http.Get(baseURL + "/api/v1/domains?website=futurelab")
+	listResp, err = http.Get(baseURL + "/api/v1/domains?website=sample")
 	if err != nil {
 		t.Fatalf("GET /domains after delete error = %v", err)
 	}
@@ -121,11 +121,11 @@ func TestDomainsCreateListGetDelete(t *testing.T) {
 func TestDomainsRejectInvalidAndDuplicate(t *testing.T) {
 	srv := startTestServer(t)
 	baseURL := "http://" + srv.Addr()
-	seedDomainWebsiteEnv(t, srv, "futurelab", "staging")
-	seedDomainWebsiteEnv(t, srv, "futurelab", "prod")
+	seedDomainWebsiteEnv(t, srv, "sample", "staging")
+	seedDomainWebsiteEnv(t, srv, "sample", "prod")
 	srv.caddyReloader = &fakeCaddyReloader{}
 
-	resp, err := http.Post(baseURL+"/api/v1/domains", "application/json", bytes.NewBufferString(`{"domain":"bad domain","website":"futurelab","environment":"staging"}`))
+	resp, err := http.Post(baseURL+"/api/v1/domains", "application/json", bytes.NewBufferString(`{"domain":"bad domain","website":"sample","environment":"staging"}`))
 	if err != nil {
 		t.Fatalf("POST invalid domain error = %v", err)
 	}
@@ -134,7 +134,7 @@ func TestDomainsRejectInvalidAndDuplicate(t *testing.T) {
 		t.Fatalf("expected 400 for invalid domain, got %d", resp.StatusCode)
 	}
 
-	resp, err = http.Post(baseURL+"/api/v1/domains", "application/json", bytes.NewBufferString(`{"domain":"futurelab.studio","website":"futurelab","environment":"staging"}`))
+	resp, err = http.Post(baseURL+"/api/v1/domains", "application/json", bytes.NewBufferString(`{"domain":"example.com","website":"sample","environment":"staging"}`))
 	if err != nil {
 		t.Fatalf("POST first domain error = %v", err)
 	}
@@ -143,7 +143,7 @@ func TestDomainsRejectInvalidAndDuplicate(t *testing.T) {
 		t.Fatalf("expected 201 for first bind, got %d", resp.StatusCode)
 	}
 
-	resp, err = http.Post(baseURL+"/api/v1/domains", "application/json", bytes.NewBufferString(`{"domain":"futurelab.studio","website":"futurelab","environment":"prod"}`))
+	resp, err = http.Post(baseURL+"/api/v1/domains", "application/json", bytes.NewBufferString(`{"domain":"example.com","website":"sample","environment":"prod"}`))
 	if err != nil {
 		t.Fatalf("POST duplicate domain error = %v", err)
 	}
@@ -156,10 +156,10 @@ func TestDomainsRejectInvalidAndDuplicate(t *testing.T) {
 func TestDomainsReloadFailureReturnsError(t *testing.T) {
 	srv := startTestServer(t)
 	baseURL := "http://" + srv.Addr()
-	seedDomainWebsiteEnv(t, srv, "futurelab", "staging")
+	seedDomainWebsiteEnv(t, srv, "sample", "staging")
 	srv.caddyReloader = &fakeCaddyReloader{err: context.DeadlineExceeded}
 
-	resp, err := http.Post(baseURL+"/api/v1/domains", "application/json", bytes.NewBufferString(`{"domain":"futurelab.studio","website":"futurelab","environment":"staging"}`))
+	resp, err := http.Post(baseURL+"/api/v1/domains", "application/json", bytes.NewBufferString(`{"domain":"example.com","website":"sample","environment":"staging"}`))
 	if err != nil {
 		t.Fatalf("POST /domains error = %v", err)
 	}
@@ -171,7 +171,7 @@ func TestDomainsReloadFailureReturnsError(t *testing.T) {
 	resp.Body.Close()
 
 	q := dbpkg.NewQueries(srv.db)
-	rows, err := q.ListDomainBindings(context.Background(), "futurelab", "staging")
+	rows, err := q.ListDomainBindings(context.Background(), "sample", "staging")
 	if err != nil {
 		t.Fatalf("ListDomainBindings() error = %v", err)
 	}

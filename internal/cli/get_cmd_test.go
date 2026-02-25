@@ -15,7 +15,7 @@ func TestGetWebsitesTableOutput(t *testing.T) {
 			if req.Method != "GET" || req.Path != "/api/v1/websites" {
 				t.Fatalf("unexpected request: %#v", req)
 			}
-			return jsonHTTPResponse(200, `{"websites":[{"name":"futurelab","defaultStyleBundle":"default","baseTemplate":"default","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z"}]}`), nil
+			return jsonHTTPResponse(200, `{"websites":[{"name":"sample","defaultStyleBundle":"default","baseTemplate":"default","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z"}]}`), nil
 		},
 	}
 
@@ -23,7 +23,7 @@ func TestGetWebsitesTableOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if !strings.Contains(out, "futurelab") {
+	if !strings.Contains(out, "sample") {
 		t.Fatalf("expected website in output, got: %s", out)
 	}
 	if !tr.closed {
@@ -34,10 +34,10 @@ func TestGetWebsitesTableOutput(t *testing.T) {
 func TestGetEnvironmentsJSONOutput(t *testing.T) {
 	tr := &scriptedTransport{
 		handle: func(call int, req recordedRequest) (*http.Response, error) {
-			if req.Path != "/api/v1/websites/futurelab/environments" {
+			if req.Path != "/api/v1/websites/sample/environments" {
 				t.Fatalf("unexpected request path %s", req.Path)
 			}
-			return jsonHTTPResponse(200, `{"website":"futurelab","environments":[{"name":"staging","activeReleaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAV","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z"}]}`), nil
+			return jsonHTTPResponse(200, `{"website":"sample","environments":[{"name":"staging","activeReleaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAV","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z"}]}`), nil
 		},
 	}
 

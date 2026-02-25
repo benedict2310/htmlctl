@@ -161,7 +161,7 @@ As an operator using `htmlctl apply`, I want the server to accept my bundle of r
   "apiVersion": "htmlctl.dev/v1",
   "kind": "Bundle",
   "mode": "partial",
-  "website": "futurelab",
+  "website": "sample",
   "resources": [
     {
       "kind": "Component",

@@ -16,7 +16,7 @@ func TestReleaseHistoryPaginationAndActor(t *testing.T) {
 	first := createReleaseWithActor(t, baseURL, "alice")
 	second := createReleaseWithActor(t, baseURL, "bob")
 
-	resp, err := http.Get(baseURL + "/api/v1/websites/futurelab/environments/staging/releases?limit=1")
+	resp, err := http.Get(baseURL + "/api/v1/websites/sample/environments/staging/releases?limit=1")
 	if err != nil {
 		t.Fatalf("GET release history error = %v", err)
 	}
@@ -39,7 +39,7 @@ func TestReleaseHistoryPaginationAndActor(t *testing.T) {
 		t.Fatalf("unexpected first page row: %#v", pageOne.Releases[0])
 	}
 
-	resp, err = http.Get(baseURL + "/api/v1/websites/futurelab/environments/staging/releases?limit=1&offset=1")
+	resp, err = http.Get(baseURL + "/api/v1/websites/sample/environments/staging/releases?limit=1&offset=1")
 	if err != nil {
 		t.Fatalf("GET release history page two error = %v", err)
 	}
@@ -67,7 +67,7 @@ func TestReleaseHistoryRejectsInvalidPagination(t *testing.T) {
 	srv := startTestServer(t)
 	baseURL := "http://" + srv.Addr()
 
-	resp, err := http.Get(baseURL + "/api/v1/websites/futurelab/environments/staging/releases?limit=-1")
+	resp, err := http.Get(baseURL + "/api/v1/websites/sample/environments/staging/releases?limit=-1")
 	if err != nil {
 		t.Fatalf("GET release history invalid pagination error = %v", err)
 	}
@@ -80,7 +80,7 @@ func TestReleaseHistoryRejectsInvalidPagination(t *testing.T) {
 
 func createReleaseWithActor(t *testing.T, baseURL, actor string) string {
 	t.Helper()
-	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/websites/futurelab/environments/staging/releases", nil)
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/websites/sample/environments/staging/releases", nil)
 	if err != nil {
 		t.Fatalf("new release request: %v", err)
 	}

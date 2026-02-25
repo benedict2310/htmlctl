@@ -156,7 +156,7 @@ As an operator, I want every state-changing operation recorded in a structured a
   - Pagination is essential for large audit logs; cursor-based pagination is more robust than offset-based for concurrent appends, but offset is simpler for v1.
 - **API design for log retrieval:**
   ```
-  GET /api/v1/websites/futurelab/environments/staging/logs?limit=20&operation=apply
+  GET /api/v1/websites/sample/environments/staging/logs?limit=20&operation=apply
 
   Response:
   {

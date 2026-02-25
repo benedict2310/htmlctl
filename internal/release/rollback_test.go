@@ -20,30 +20,30 @@ func TestRollbackSuccessAndRepeatedUndo(t *testing.T) {
 	defer db.Close()
 	q := dbpkg.NewQueries(db)
 
-	envID := seedRollbackEnvironment(t, ctx, q, websitesRoot, "futurelab", "staging", []string{
+	envID := seedRollbackEnvironment(t, ctx, q, websitesRoot, "sample", "staging", []string{
 		"01ARZ3NDEKTSV4RRFFQ69G5FAA",
 		"01ARZ3NDEKTSV4RRFFQ69G5FAB",
 		"01ARZ3NDEKTSV4RRFFQ69G5FAC",
 	}, "01ARZ3NDEKTSV4RRFFQ69G5FAC")
 	_ = envID
 
-	first, err := Rollback(ctx, db, websitesRoot, "futurelab", "staging")
+	first, err := Rollback(ctx, db, websitesRoot, "sample", "staging")
 	if err != nil {
 		t.Fatalf("Rollback(first) error = %v", err)
 	}
 	if first.FromReleaseID != "01ARZ3NDEKTSV4RRFFQ69G5FAC" || first.ToReleaseID != "01ARZ3NDEKTSV4RRFFQ69G5FAB" {
 		t.Fatalf("unexpected first rollback result: %#v", first)
 	}
-	assertActiveRelease(t, ctx, q, websitesRoot, "futurelab", "staging", "01ARZ3NDEKTSV4RRFFQ69G5FAB")
+	assertActiveRelease(t, ctx, q, websitesRoot, "sample", "staging", "01ARZ3NDEKTSV4RRFFQ69G5FAB")
 
-	second, err := Rollback(ctx, db, websitesRoot, "futurelab", "staging")
+	second, err := Rollback(ctx, db, websitesRoot, "sample", "staging")
 	if err != nil {
 		t.Fatalf("Rollback(second) error = %v", err)
 	}
 	if second.FromReleaseID != "01ARZ3NDEKTSV4RRFFQ69G5FAB" || second.ToReleaseID != "01ARZ3NDEKTSV4RRFFQ69G5FAA" {
 		t.Fatalf("unexpected second rollback result: %#v", second)
 	}
-	assertActiveRelease(t, ctx, q, websitesRoot, "futurelab", "staging", "01ARZ3NDEKTSV4RRFFQ69G5FAA")
+	assertActiveRelease(t, ctx, q, websitesRoot, "sample", "staging", "01ARZ3NDEKTSV4RRFFQ69G5FAA")
 }
 
 func TestRollbackReturnsNoPreviousReleaseError(t *testing.T) {
@@ -55,11 +55,11 @@ func TestRollbackReturnsNoPreviousReleaseError(t *testing.T) {
 	defer db.Close()
 	q := dbpkg.NewQueries(db)
 
-	seedRollbackEnvironment(t, ctx, q, websitesRoot, "futurelab", "staging", []string{
+	seedRollbackEnvironment(t, ctx, q, websitesRoot, "sample", "staging", []string{
 		"01ARZ3NDEKTSV4RRFFQ69G5FAA",
 	}, "01ARZ3NDEKTSV4RRFFQ69G5FAA")
 
-	_, err := Rollback(ctx, db, websitesRoot, "futurelab", "staging")
+	_, err := Rollback(ctx, db, websitesRoot, "sample", "staging")
 	if !errors.Is(err, ErrNoPreviousRelease) {
 		t.Fatalf("expected ErrNoPreviousRelease, got %v", err)
 	}
@@ -74,7 +74,7 @@ func TestRollbackSkipsFailedReleaseTargets(t *testing.T) {
 	defer db.Close()
 	q := dbpkg.NewQueries(db)
 
-	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}
@@ -103,7 +103,7 @@ func TestRollbackSkipsFailedReleaseTargets(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("InsertRelease(%q) error = %v", row.id, err)
 		}
-		releaseDir := filepath.Join(websitesRoot, "futurelab", "envs", "staging", "releases", row.id)
+		releaseDir := filepath.Join(websitesRoot, "sample", "envs", "staging", "releases", row.id)
 		if err := os.MkdirAll(releaseDir, 0o755); err != nil {
 			t.Fatalf("MkdirAll(%s) error = %v", releaseDir, err)
 		}
@@ -112,12 +112,12 @@ func TestRollbackSkipsFailedReleaseTargets(t *testing.T) {
 	if err := q.UpdateEnvironmentActiveRelease(ctx, envID, &activeID); err != nil {
 		t.Fatalf("UpdateEnvironmentActiveRelease() error = %v", err)
 	}
-	envDir := filepath.Join(websitesRoot, "futurelab", "envs", "staging")
+	envDir := filepath.Join(websitesRoot, "sample", "envs", "staging")
 	if err := SwitchCurrentSymlink(envDir, activeID); err != nil {
 		t.Fatalf("SwitchCurrentSymlink(%q) error = %v", activeID, err)
 	}
 
-	result, err := Rollback(ctx, db, websitesRoot, "futurelab", "staging")
+	result, err := Rollback(ctx, db, websitesRoot, "sample", "staging")
 	if err != nil {
 		t.Fatalf("Rollback() error = %v", err)
 	}
@@ -135,27 +135,27 @@ func TestRollbackMissingReleaseDirectoryDoesNotMutateActiveState(t *testing.T) {
 	defer db.Close()
 	q := dbpkg.NewQueries(db)
 
-	seedRollbackEnvironment(t, ctx, q, websitesRoot, "futurelab", "staging", []string{
+	seedRollbackEnvironment(t, ctx, q, websitesRoot, "sample", "staging", []string{
 		"01ARZ3NDEKTSV4RRFFQ69G5FAA",
 		"01ARZ3NDEKTSV4RRFFQ69G5FAB",
 	}, "01ARZ3NDEKTSV4RRFFQ69G5FAB")
 
-	missingDir := filepath.Join(websitesRoot, "futurelab", "envs", "staging", "releases", "01ARZ3NDEKTSV4RRFFQ69G5FAA")
+	missingDir := filepath.Join(websitesRoot, "sample", "envs", "staging", "releases", "01ARZ3NDEKTSV4RRFFQ69G5FAA")
 	if err := os.RemoveAll(missingDir); err != nil {
 		t.Fatalf("RemoveAll(%s) error = %v", missingDir, err)
 	}
 
-	_, err := Rollback(ctx, db, websitesRoot, "futurelab", "staging")
+	_, err := Rollback(ctx, db, websitesRoot, "sample", "staging")
 	var missingErr *MissingReleaseDirError
 	if !errors.As(err, &missingErr) {
 		t.Fatalf("expected MissingReleaseDirError, got %v", err)
 	}
-	assertActiveRelease(t, ctx, q, websitesRoot, "futurelab", "staging", "01ARZ3NDEKTSV4RRFFQ69G5FAB")
+	assertActiveRelease(t, ctx, q, websitesRoot, "sample", "staging", "01ARZ3NDEKTSV4RRFFQ69G5FAB")
 }
 
 func TestRollbackReturnsErrorWhenDBNilOrInputsInvalid(t *testing.T) {
 	ctx := context.Background()
-	_, err := Rollback(ctx, nil, "/tmp/x", "futurelab", "staging")
+	_, err := Rollback(ctx, nil, "/tmp/x", "sample", "staging")
 	if err == nil || !strings.Contains(err.Error(), "database is required") {
 		t.Fatalf("expected database required error, got %v", err)
 	}
@@ -179,17 +179,17 @@ func TestRollbackNotFoundBranches(t *testing.T) {
 		t.Fatalf("expected website not found error")
 	}
 
-	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}
-	if _, err := Rollback(ctx, db, websitesRoot, "futurelab", "staging"); err == nil {
+	if _, err := Rollback(ctx, db, websitesRoot, "sample", "staging"); err == nil {
 		t.Fatalf("expected environment not found error")
 	}
 	if _, err := q.InsertEnvironment(ctx, dbpkg.EnvironmentRow{WebsiteID: websiteID, Name: "staging"}); err != nil {
 		t.Fatalf("InsertEnvironment() error = %v", err)
 	}
-	if _, err := Rollback(ctx, db, websitesRoot, "futurelab", "staging"); !errors.Is(err, ErrNoPreviousRelease) {
+	if _, err := Rollback(ctx, db, websitesRoot, "sample", "staging"); !errors.Is(err, ErrNoPreviousRelease) {
 		t.Fatalf("expected ErrNoPreviousRelease for no active release, got %v", err)
 	}
 }
@@ -202,7 +202,7 @@ func TestRollbackActiveReleaseNotInEnvironmentHistory(t *testing.T) {
 	defer db.Close()
 	q := dbpkg.NewQueries(db)
 
-	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}
@@ -229,7 +229,7 @@ func TestRollbackActiveReleaseNotInEnvironmentHistory(t *testing.T) {
 		t.Fatalf("UpdateEnvironmentActiveRelease(staging) error = %v", err)
 	}
 
-	_, err = Rollback(ctx, db, websitesRoot, "futurelab", "staging")
+	_, err = Rollback(ctx, db, websitesRoot, "sample", "staging")
 	if err == nil || !strings.Contains(err.Error(), "was not found in release history") {
 		t.Fatalf("expected active release history mismatch error, got %v", err)
 	}
@@ -243,7 +243,7 @@ func TestRollbackTargetPathNotDirectory(t *testing.T) {
 	defer db.Close()
 	q := dbpkg.NewQueries(db)
 
-	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}
@@ -265,7 +265,7 @@ func TestRollbackTargetPathNotDirectory(t *testing.T) {
 			t.Fatalf("InsertRelease(%q) error = %v", id, err)
 		}
 	}
-	envDir := filepath.Join(websitesRoot, "futurelab", "envs", "staging")
+	envDir := filepath.Join(websitesRoot, "sample", "envs", "staging")
 	if err := os.MkdirAll(filepath.Join(envDir, "releases"), 0o755); err != nil {
 		t.Fatalf("MkdirAll(releases) error = %v", err)
 	}
@@ -282,7 +282,7 @@ func TestRollbackTargetPathNotDirectory(t *testing.T) {
 		t.Fatalf("SwitchCurrentSymlink() error = %v", err)
 	}
 
-	_, err = Rollback(ctx, db, websitesRoot, "futurelab", "staging")
+	_, err = Rollback(ctx, db, websitesRoot, "sample", "staging")
 	if err == nil || !strings.Contains(err.Error(), "is not a directory") {
 		t.Fatalf("expected not-a-directory error, got %v", err)
 	}
@@ -296,12 +296,12 @@ func TestRollbackReadCurrentSymlinkError(t *testing.T) {
 	defer db.Close()
 	q := dbpkg.NewQueries(db)
 
-	seedRollbackEnvironment(t, ctx, q, websitesRoot, "futurelab", "staging", []string{
+	seedRollbackEnvironment(t, ctx, q, websitesRoot, "sample", "staging", []string{
 		"01ARZ3NDEKTSV4RRFFQ69G5FAA",
 		"01ARZ3NDEKTSV4RRFFQ69G5FAB",
 	}, "01ARZ3NDEKTSV4RRFFQ69G5FAB")
 
-	currentPath := filepath.Join(websitesRoot, "futurelab", "envs", "staging", "current")
+	currentPath := filepath.Join(websitesRoot, "sample", "envs", "staging", "current")
 	if err := os.Remove(currentPath); err != nil {
 		t.Fatalf("remove current symlink: %v", err)
 	}
@@ -309,7 +309,7 @@ func TestRollbackReadCurrentSymlinkError(t *testing.T) {
 		t.Fatalf("write regular current file: %v", err)
 	}
 
-	_, err := Rollback(ctx, db, websitesRoot, "futurelab", "staging")
+	_, err := Rollback(ctx, db, websitesRoot, "sample", "staging")
 	if err == nil || !strings.Contains(err.Error(), "read current symlink") {
 		t.Fatalf("expected read current symlink error, got %v", err)
 	}

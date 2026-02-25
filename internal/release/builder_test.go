@@ -34,7 +34,7 @@ func TestBuilderBuildSuccess(t *testing.T) {
 		t.Fatalf("NewBuilder() error = %v", err)
 	}
 
-	res, err := builder.Build(ctx, "futurelab", "staging")
+	res, err := builder.Build(ctx, "sample", "staging")
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
@@ -45,7 +45,7 @@ func TestBuilderBuildSuccess(t *testing.T) {
 		t.Fatalf("expected non-empty output hashes")
 	}
 
-	releaseDir := filepath.Join(dataDir, "websites", "futurelab", "envs", "staging", "releases", res.ReleaseID)
+	releaseDir := filepath.Join(dataDir, "websites", "sample", "envs", "staging", "releases", res.ReleaseID)
 	for _, rel := range []string{"index.html", "styles/tokens.css", "styles/default.css", "assets/logo.svg", ".manifest.json", ".build-log.txt", ".output-hashes.json"} {
 		if _, err := os.Stat(filepath.Join(releaseDir, filepath.FromSlash(rel))); err != nil {
 			t.Fatalf("expected release file %s to exist: %v", rel, err)
@@ -57,8 +57,8 @@ func TestBuilderBuildSuccess(t *testing.T) {
 	}
 	indexText := string(indexHTML)
 	for _, needle := range []string{
-		`<link rel="canonical" href="https://futurelab.studio/">`,
-		`<meta property="og:title" content="Futurelab Home">`,
+		`<link rel="canonical" href="https://example.com/">`,
+		`<meta property="og:title" content="Sample Home">`,
 		`<meta property="twitter:card" content="summary_large_image">`,
 		`<script type="application/ld+json">`,
 	} {
@@ -67,7 +67,7 @@ func TestBuilderBuildSuccess(t *testing.T) {
 		}
 	}
 
-	currentTarget, err := os.Readlink(filepath.Join(dataDir, "websites", "futurelab", "envs", "staging", "current"))
+	currentTarget, err := os.Readlink(filepath.Join(dataDir, "websites", "sample", "envs", "staging", "current"))
 	if err != nil {
 		t.Fatalf("Readlink(current) error = %v", err)
 	}
@@ -124,7 +124,7 @@ func TestBuilderBuildFailureRecordsFailedRelease(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBuilder() error = %v", err)
 	}
-	if _, err := builder.Build(ctx, "futurelab", "staging"); err == nil {
+	if _, err := builder.Build(ctx, "sample", "staging"); err == nil {
 		t.Fatalf("expected build failure")
 	}
 
@@ -181,7 +181,7 @@ func TestBuilderBuildRejectsInvalidStoredResourceNames(t *testing.T) {
 				t.Fatalf("NewBuilder() error = %v", err)
 			}
 
-			_, err = builder.Build(ctx, "futurelab", "staging")
+			_, err = builder.Build(ctx, "sample", "staging")
 			if err == nil {
 				t.Fatalf("expected build failure")
 			}
@@ -207,7 +207,7 @@ func openReleaseTestDB(t *testing.T, path string) *sql.DB {
 
 func seedReleaseState(t *testing.T, ctx context.Context, q *dbpkg.Queries, blobs *blob.Store) (websiteID int64, envID int64) {
 	t.Helper()
-	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}
@@ -232,7 +232,7 @@ func seedReleaseState(t *testing.T, ctx context.Context, q *dbpkg.Queries, blobs
 		t.Fatalf("UpsertComponent() error = %v", err)
 	}
 	layoutJSON, _ := json.Marshal([]map[string]string{{"include": "header"}})
-	headJSON := `{"canonicalURL":"https://futurelab.studio/","meta":{"robots":"index,follow"},"openGraph":{"title":"Futurelab Home","url":"https://futurelab.studio/"},"twitter":{"card":"summary_large_image","title":"Futurelab Home"},"jsonLD":[{"id":"website","payload":{"@context":"https://schema.org","@type":"WebSite","name":"Futurelab"}}]}`
+	headJSON := `{"canonicalURL":"https://example.com/","meta":{"robots":"index,follow"},"openGraph":{"title":"Sample Home","url":"https://example.com/"},"twitter":{"card":"summary_large_image","title":"Sample Home"},"jsonLD":[{"id":"website","payload":{"@context":"https://schema.org","@type":"WebSite","name":"Sample"}}]}`
 	if err := q.UpsertPage(ctx, dbpkg.PageRow{WebsiteID: websiteID, Name: "index", Route: "/", Title: "Home", Description: "Home", LayoutJSON: string(layoutJSON), HeadJSON: headJSON, ContentHash: pageHash}); err != nil {
 		t.Fatalf("UpsertPage() error = %v", err)
 	}

@@ -121,7 +121,7 @@ As an operator or AI agent, I want to instantly roll back an environment to its 
 
 ### Manual Tests
 
-- [ ] Deploy 2+ releases to staging, run `htmlctl rollout undo website/futurelab --context staging`, verify the site serves the previous release content
+- [ ] Deploy 2+ releases to staging, run `htmlctl rollout undo website/sample --context staging`, verify the site serves the previous release content
 - [ ] Verify rollback completes in under 1 second (time the command)
 - [ ] Verify `htmlctl rollout history` reflects the rollback
 - [ ] Attempt rollback on environment with only 1 release, verify clear error message

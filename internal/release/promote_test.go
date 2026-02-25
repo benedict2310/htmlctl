@@ -21,7 +21,7 @@ func TestPromoteSuccess(t *testing.T) {
 	sourceReleaseID := "01ARZ3NDEKTSV4RRFFQ69G5FAA"
 	sourceDir := fix.seedSourceRelease(t, sourceReleaseID, "")
 
-	result, err := Promote(ctx, fix.db, fix.websitesRoot, "futurelab", "staging", "prod")
+	result, err := Promote(ctx, fix.db, fix.websitesRoot, "sample", "staging", "prod")
 	if err != nil {
 		t.Fatalf("Promote() error = %v", err)
 	}
@@ -35,7 +35,7 @@ func TestPromoteSuccess(t *testing.T) {
 		t.Fatalf("expected 3 promoted content files, got %d", result.FileCount)
 	}
 
-	targetDir := filepath.Join(fix.websitesRoot, "futurelab", "envs", "prod", "releases", result.ReleaseID)
+	targetDir := filepath.Join(fix.websitesRoot, "sample", "envs", "prod", "releases", result.ReleaseID)
 	for _, rel := range []string{
 		"index.html",
 		"styles/default.css",
@@ -108,7 +108,7 @@ func TestPromoteCopyFallbackWhenHardLinkFails(t *testing.T) {
 		linkFile = prevLinkFile
 	}()
 
-	result, err := Promote(ctx, fix.db, fix.websitesRoot, "futurelab", "staging", "prod")
+	result, err := Promote(ctx, fix.db, fix.websitesRoot, "sample", "staging", "prod")
 	if err != nil {
 		t.Fatalf("Promote() error = %v", err)
 	}
@@ -122,7 +122,7 @@ func TestPromoteRejectsSourceWithoutActiveRelease(t *testing.T) {
 	fix := setupPromotionFixture(t)
 	defer fix.db.Close()
 
-	_, err := Promote(ctx, fix.db, fix.websitesRoot, "futurelab", "staging", "prod")
+	_, err := Promote(ctx, fix.db, fix.websitesRoot, "sample", "staging", "prod")
 	if !errors.Is(err, ErrPromotionSourceNoActive) {
 		t.Fatalf("expected ErrPromotionSourceNoActive, got %v", err)
 	}
@@ -158,11 +158,11 @@ func TestPromoteCopyFallbackPreservesSymlinks(t *testing.T) {
 		linkFile = prevLinkFile
 	}()
 
-	result, err := Promote(ctx, fix.db, fix.websitesRoot, "futurelab", "staging", "prod")
+	result, err := Promote(ctx, fix.db, fix.websitesRoot, "sample", "staging", "prod")
 	if err != nil {
 		t.Fatalf("Promote() error = %v", err)
 	}
-	targetSymlink := filepath.Join(fix.websitesRoot, "futurelab", "envs", "prod", "releases", result.ReleaseID, "assets", "logo-link.svg")
+	targetSymlink := filepath.Join(fix.websitesRoot, "sample", "envs", "prod", "releases", result.ReleaseID, "assets", "logo-link.svg")
 	info, err := os.Lstat(targetSymlink)
 	if err != nil {
 		t.Fatalf("Lstat(target symlink) error = %v", err)
@@ -191,7 +191,7 @@ func TestPromoteMixedLinkAndCopyStrategy(t *testing.T) {
 		linkFile = prevLinkFile
 	}()
 
-	result, err := Promote(ctx, fix.db, fix.websitesRoot, "futurelab", "staging", "prod")
+	result, err := Promote(ctx, fix.db, fix.websitesRoot, "sample", "staging", "prod")
 	if err != nil {
 		t.Fatalf("Promote() error = %v", err)
 	}
@@ -210,7 +210,7 @@ func TestPromoteHashMismatchKeepsTargetUnchanged(t *testing.T) {
 	fix.seedSourceRelease(t, sourceReleaseID, badHashes)
 
 	oldTargetReleaseID := "01ARZ3NDEKTSV4RRFFQ69G5FAB"
-	oldTargetDir := filepath.Join(fix.websitesRoot, "futurelab", "envs", "prod", "releases", oldTargetReleaseID)
+	oldTargetDir := filepath.Join(fix.websitesRoot, "sample", "envs", "prod", "releases", oldTargetReleaseID)
 	if err := os.MkdirAll(oldTargetDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(old target release dir) error = %v", err)
 	}
@@ -227,12 +227,12 @@ func TestPromoteHashMismatchKeepsTargetUnchanged(t *testing.T) {
 	if err := fix.q.UpdateEnvironmentActiveRelease(ctx, fix.targetEnvID, &oldTargetReleaseID); err != nil {
 		t.Fatalf("UpdateEnvironmentActiveRelease(old target) error = %v", err)
 	}
-	targetEnvDir := filepath.Join(fix.websitesRoot, "futurelab", "envs", "prod")
+	targetEnvDir := filepath.Join(fix.websitesRoot, "sample", "envs", "prod")
 	if err := SwitchCurrentSymlink(targetEnvDir, oldTargetReleaseID); err != nil {
 		t.Fatalf("SwitchCurrentSymlink(old target) error = %v", err)
 	}
 
-	_, err := Promote(ctx, fix.db, fix.websitesRoot, "futurelab", "staging", "prod")
+	_, err := Promote(ctx, fix.db, fix.websitesRoot, "sample", "staging", "prod")
 	var mismatchErr *HashMismatchError
 	if !errors.As(err, &mismatchErr) {
 		t.Fatalf("expected HashMismatchError, got %v", err)
@@ -259,7 +259,7 @@ func TestPromoteRejectsSameEnvironment(t *testing.T) {
 	fix := setupPromotionFixture(t)
 	defer fix.db.Close()
 
-	_, err := Promote(ctx, fix.db, fix.websitesRoot, "futurelab", "staging", "staging")
+	_, err := Promote(ctx, fix.db, fix.websitesRoot, "sample", "staging", "staging")
 	if !errors.Is(err, ErrPromotionSourceTargetMatch) {
 		t.Fatalf("expected ErrPromotionSourceTargetMatch, got %v", err)
 	}
@@ -267,7 +267,7 @@ func TestPromoteRejectsSameEnvironment(t *testing.T) {
 
 func TestPromoteReturnsErrorWhenDBNilOrInputsInvalid(t *testing.T) {
 	ctx := context.Background()
-	_, err := Promote(ctx, nil, "/tmp/x", "futurelab", "staging", "prod")
+	_, err := Promote(ctx, nil, "/tmp/x", "sample", "staging", "prod")
 	if err == nil || !strings.Contains(err.Error(), "database is required") {
 		t.Fatalf("expected database required error, got %v", err)
 	}
@@ -288,11 +288,11 @@ func TestPromoteNotFoundAndSourceValidationBranches(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected website not found error")
 	}
-	_, err = Promote(ctx, fix.db, fix.websitesRoot, "futurelab", "missing", "prod")
+	_, err = Promote(ctx, fix.db, fix.websitesRoot, "sample", "missing", "prod")
 	if err == nil {
 		t.Fatalf("expected source env not found error")
 	}
-	_, err = Promote(ctx, fix.db, fix.websitesRoot, "futurelab", "staging", "missing")
+	_, err = Promote(ctx, fix.db, fix.websitesRoot, "sample", "staging", "missing")
 	if err == nil {
 		t.Fatalf("expected target env not found error")
 	}
@@ -312,7 +312,7 @@ func TestPromoteNotFoundAndSourceValidationBranches(t *testing.T) {
 	if err := fix.q.UpdateEnvironmentActiveRelease(ctx, fix.sourceEnvID, &foreignReleaseID); err != nil {
 		t.Fatalf("UpdateEnvironmentActiveRelease(source->foreign) error = %v", err)
 	}
-	_, err = Promote(ctx, fix.db, fix.websitesRoot, "futurelab", "staging", "prod")
+	_, err = Promote(ctx, fix.db, fix.websitesRoot, "sample", "staging", "prod")
 	if err == nil || !strings.Contains(err.Error(), "does not belong to environment") {
 		t.Fatalf("expected source validation error, got %v", err)
 	}
@@ -334,7 +334,7 @@ func TestPromoteSourceReleaseRowMissingBranch(t *testing.T) {
 		t.Fatalf("re-enable foreign keys error = %v", err)
 	}
 
-	_, err := Promote(ctx, fix.db, fix.websitesRoot, "futurelab", "staging", "prod")
+	_, err := Promote(ctx, fix.db, fix.websitesRoot, "sample", "staging", "prod")
 	if err == nil || !strings.Contains(err.Error(), "source release") || !strings.Contains(err.Error(), "not found") {
 		t.Fatalf("expected source release missing error, got %v", err)
 	}
@@ -350,7 +350,7 @@ func TestPromoteSourceReleaseDirectoryValidation(t *testing.T) {
 	if err := os.RemoveAll(sourceDir); err != nil {
 		t.Fatalf("RemoveAll(source dir) error = %v", err)
 	}
-	if _, err := Promote(ctx, fix.db, fix.websitesRoot, "futurelab", "staging", "prod"); err == nil {
+	if _, err := Promote(ctx, fix.db, fix.websitesRoot, "sample", "staging", "prod"); err == nil {
 		t.Fatalf("expected missing source directory error")
 	}
 
@@ -365,7 +365,7 @@ func TestPromoteSourceReleaseDirectoryValidation(t *testing.T) {
 	if err := os.WriteFile(sourceDir, []byte("not dir"), 0o644); err != nil {
 		t.Fatalf("WriteFile(source path) error = %v", err)
 	}
-	if _, err := Promote(ctx, fix.db, fix.websitesRoot, "futurelab", "staging", "prod"); err == nil {
+	if _, err := Promote(ctx, fix.db, fix.websitesRoot, "sample", "staging", "prod"); err == nil {
 		t.Fatalf("expected source path not directory error")
 	}
 }
@@ -377,7 +377,7 @@ func TestPromoteRejectsMalformedStoredOutputHashes(t *testing.T) {
 
 	sourceReleaseID := "01ARZ3NDEKTSV4RRFFQ69G5FAA"
 	fix.seedSourceRelease(t, sourceReleaseID, "{malformed")
-	_, err := Promote(ctx, fix.db, fix.websitesRoot, "futurelab", "staging", "prod")
+	_, err := Promote(ctx, fix.db, fix.websitesRoot, "sample", "staging", "prod")
 	if err == nil || !strings.Contains(err.Error(), "load source release hashes") {
 		t.Fatalf("expected malformed hash payload error, got %v", err)
 	}
@@ -390,7 +390,7 @@ func TestPromoteRecomputesSourceHashesWhenStoredEmpty(t *testing.T) {
 
 	sourceReleaseID := "01ARZ3NDEKTSV4RRFFQ69G5FAA"
 	fix.seedSourceRelease(t, sourceReleaseID, "{}")
-	result, err := Promote(ctx, fix.db, fix.websitesRoot, "futurelab", "staging", "prod")
+	result, err := Promote(ctx, fix.db, fix.websitesRoot, "sample", "staging", "prod")
 	if err != nil {
 		t.Fatalf("Promote() with empty stored hashes error = %v", err)
 	}
@@ -436,7 +436,7 @@ func TestPromoteErrorHelpersAndInternalUtils(t *testing.T) {
 	if _, err := promoteManifestJSON("{malformed", "staging", "prod", "R1"); err == nil {
 		t.Fatalf("expected promoteManifestJSON parse error")
 	}
-	manifestJSON, err := promoteManifestJSON(`{"website":"futurelab"}`, "staging", "prod", "R1")
+	manifestJSON, err := promoteManifestJSON(`{"website":"sample"}`, "staging", "prod", "R1")
 	if err != nil {
 		t.Fatalf("promoteManifestJSON valid error = %v", err)
 	}
@@ -529,7 +529,7 @@ func setupPromotionFixture(t *testing.T) promotionFixture {
 	db := openReleaseTestDB(t, filepath.Join(dataDir, "db.sqlite"))
 	q := dbpkg.NewQueries(db)
 
-	websiteID, err := q.InsertWebsite(context.Background(), dbpkg.WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := q.InsertWebsite(context.Background(), dbpkg.WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}
@@ -555,7 +555,7 @@ func setupPromotionFixture(t *testing.T) promotionFixture {
 func (f promotionFixture) seedSourceRelease(t *testing.T, releaseID string, outputHashesOverride string) string {
 	t.Helper()
 	ctx := context.Background()
-	sourceDir := filepath.Join(f.websitesRoot, "futurelab", "envs", "staging", "releases", releaseID)
+	sourceDir := filepath.Join(f.websitesRoot, "sample", "envs", "staging", "releases", releaseID)
 	if err := os.MkdirAll(filepath.Join(sourceDir, "styles"), 0o755); err != nil {
 		t.Fatalf("MkdirAll(styles) error = %v", err)
 	}
@@ -571,7 +571,7 @@ func (f promotionFixture) seedSourceRelease(t *testing.T, releaseID string, outp
 	if err := os.WriteFile(filepath.Join(sourceDir, "assets", "logo.svg"), []byte("<svg></svg>\n"), 0o644); err != nil {
 		t.Fatalf("write assets/logo.svg: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(sourceDir, ".manifest.json"), []byte(`{"website":"futurelab","environment":"staging"}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(sourceDir, ".manifest.json"), []byte(`{"website":"sample","environment":"staging"}`), 0o644); err != nil {
 		t.Fatalf("write .manifest.json: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(sourceDir, ".build-log.txt"), []byte("build ok\n"), 0o644); err != nil {
@@ -596,7 +596,7 @@ func (f promotionFixture) seedSourceRelease(t *testing.T, releaseID string, outp
 	if err := f.q.InsertRelease(ctx, dbpkg.ReleaseRow{
 		ID:            releaseID,
 		EnvironmentID: f.sourceEnvID,
-		ManifestJSON:  `{"website":"futurelab","environment":"staging"}`,
+		ManifestJSON:  `{"website":"sample","environment":"staging"}`,
 		OutputHashes:  outputHashesJSON,
 		BuildLog:      "source release",
 		Status:        "active",
@@ -606,7 +606,7 @@ func (f promotionFixture) seedSourceRelease(t *testing.T, releaseID string, outp
 	if err := f.q.UpdateEnvironmentActiveRelease(ctx, f.sourceEnvID, &releaseID); err != nil {
 		t.Fatalf("UpdateEnvironmentActiveRelease(source) error = %v", err)
 	}
-	sourceEnvDir := filepath.Join(f.websitesRoot, "futurelab", "envs", "staging")
+	sourceEnvDir := filepath.Join(f.websitesRoot, "sample", "envs", "staging")
 	if err := SwitchCurrentSymlink(sourceEnvDir, releaseID); err != nil {
 		t.Fatalf("SwitchCurrentSymlink(source) error = %v", err)
 	}

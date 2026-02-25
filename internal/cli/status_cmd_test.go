@@ -9,11 +9,11 @@ import (
 func TestStatusCommandTableOutput(t *testing.T) {
 	tr := &scriptedTransport{
 		handle: func(call int, req recordedRequest) (*http.Response, error) {
-			if req.Path != "/api/v1/websites/futurelab/environments/staging/status" {
+			if req.Path != "/api/v1/websites/sample/environments/staging/status" {
 				t.Fatalf("unexpected request path %s", req.Path)
 			}
 			return jsonHTTPResponse(200, `{
-  "website":"futurelab",
+  "website":"sample",
   "environment":"staging",
   "activeReleaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAV",
   "activeReleaseTimestamp":"2026-01-02T00:00:00Z",
@@ -22,7 +22,7 @@ func TestStatusCommandTableOutput(t *testing.T) {
 		},
 	}
 
-	out, _, err := runCommandWithTransport(t, []string{"status", "website/futurelab"}, tr)
+	out, _, err := runCommandWithTransport(t, []string{"status", "website/sample"}, tr)
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}

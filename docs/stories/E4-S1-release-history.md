@@ -49,7 +49,7 @@ As an operator or AI agent, I want to view the history of releases deployed to a
 - Technical spec section 2.7 (Release: ULID, manifests, rendered output, hashes)
 - Technical spec section 4 (Release pipeline: atomic activation, rollback)
 - Technical spec section 5 (Storage layout: releases directory, `current` symlink)
-- Technical spec section 9.2 (`htmlctl rollout history website/futurelab --context prod`)
+- Technical spec section 9.2 (`htmlctl rollout history website/sample --context prod`)
 
 ## 5. Implementation Plan (Draft)
 
@@ -105,7 +105,7 @@ As an operator or AI agent, I want to view the history of releases deployed to a
 
 ### Manual Tests
 
-- [ ] Deploy 3+ releases to a staging environment, run `htmlctl rollout history website/futurelab --context staging`, verify output shows all releases with correct active marker
+- [ ] Deploy 3+ releases to a staging environment, run `htmlctl rollout history website/sample --context staging`, verify output shows all releases with correct active marker
 - [ ] Verify ULID-based ordering matches chronological deployment order
 - [ ] Verify command works over SSH tunnel to remote server
 

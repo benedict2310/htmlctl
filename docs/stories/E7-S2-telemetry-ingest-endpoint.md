@@ -74,7 +74,7 @@ Public ingest payload:
       "occurredAt": "2026-02-23T11:15:00Z",
       "sessionId": "b2f1d4d9-...",
       "attrs": {
-        "referrer": "https://futurelab.studio/",
+        "referrer": "https://example.com/",
         "source": "landing"
       }
     }

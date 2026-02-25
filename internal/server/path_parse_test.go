@@ -3,7 +3,7 @@ package server
 import "testing"
 
 func TestParsePathsWithValidNames(t *testing.T) {
-	website := "futurelab"
+	website := "sample"
 	env := "staging-1"
 
 	if gotWebsite, gotEnv, ok, err := parseApplyPath("/api/v1/websites/" + website + "/environments/" + env + "/apply"); !ok || err != nil || gotWebsite != website || gotEnv != env {
@@ -33,7 +33,7 @@ func TestParsePathsWithValidNames(t *testing.T) {
 	if gotWebsite, ok, err := parsePromotePath("/api/v1/websites/" + website + "/promote"); !ok || err != nil || gotWebsite != website {
 		t.Fatalf("parsePromotePath() = (%q, %v, %v)", gotWebsite, ok, err)
 	}
-	if gotDomain, ok := parseDomainItemPath("/api/v1/domains/futurelab.studio"); !ok || gotDomain != "futurelab.studio" {
+	if gotDomain, ok := parseDomainItemPath("/api/v1/domains/example.com"); !ok || gotDomain != "example.com" {
 		t.Fatalf("parseDomainItemPath() = (%q, %v)", gotDomain, ok)
 	}
 }
@@ -42,10 +42,10 @@ func TestParsePathsRejectInvalidNames(t *testing.T) {
 	if _, _, ok, err := parseApplyPath("/api/v1/websites/future.lab/environments/staging/apply"); ok || err == nil {
 		t.Fatalf("expected apply path name validation error, got ok=%v err=%v", ok, err)
 	}
-	if _, _, ok, err := parseReleasePath("/api/v1/websites/futurelab/environments/staging%1/releases"); ok || err == nil {
+	if _, _, ok, err := parseReleasePath("/api/v1/websites/sample/environments/staging%1/releases"); ok || err == nil {
 		t.Fatalf("expected release path name validation error, got ok=%v err=%v", ok, err)
 	}
-	if _, _, ok, err := parseRollbackPath("/api/v1/websites/futurelab/environments/../rollback"); ok || err == nil {
+	if _, _, ok, err := parseRollbackPath("/api/v1/websites/sample/environments/../rollback"); ok || err == nil {
 		t.Fatalf("expected rollback path name validation error, got ok=%v err=%v", ok, err)
 	}
 	if _, ok, err := parsePromotePath("/api/v1/websites/future%lab/promote"); ok || err == nil {
@@ -54,13 +54,13 @@ func TestParsePathsRejectInvalidNames(t *testing.T) {
 	if _, _, ok, err := parseStatusPath("/api/v1/websites/future.lab/environments/staging/status"); ok || err == nil {
 		t.Fatalf("expected status path name validation error, got ok=%v err=%v", ok, err)
 	}
-	if _, _, ok, err := parseManifestPath("/api/v1/websites/futurelab/environments/staging%1/manifest"); ok || err == nil {
+	if _, _, ok, err := parseManifestPath("/api/v1/websites/sample/environments/staging%1/manifest"); ok || err == nil {
 		t.Fatalf("expected manifest path name validation error, got ok=%v err=%v", ok, err)
 	}
 	if _, _, _, ok, err := parseLogsPath("/api/v1/websites/future%lab/logs"); ok || err == nil {
 		t.Fatalf("expected website logs path name validation error, got ok=%v err=%v", ok, err)
 	}
-	if _, _, _, ok, err := parseLogsPath("/api/v1/websites/futurelab/environments/staging%1/logs"); ok || err == nil {
+	if _, _, _, ok, err := parseLogsPath("/api/v1/websites/sample/environments/staging%1/logs"); ok || err == nil {
 		t.Fatalf("expected environment logs path name validation error, got ok=%v err=%v", ok, err)
 	}
 	if _, ok, err := parseEnvironmentsPath("/api/v1/websites/future.lab/environments"); ok || err == nil {

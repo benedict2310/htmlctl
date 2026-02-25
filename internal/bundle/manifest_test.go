@@ -7,7 +7,7 @@ func TestParseManifestValid(t *testing.T) {
 		"apiVersion":"htmlctl.dev/v1",
 		"kind":"Bundle",
 		"mode":"partial",
-		"website":"futurelab",
+		"website":"sample",
 		"resources":[
 			{"kind":"Component","name":"header","file":"components/header.html","hash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
 			{"kind":"StyleBundle","name":"default","files":[
@@ -29,7 +29,7 @@ func TestParseManifestValid(t *testing.T) {
 }
 
 func TestParseManifestInvalidMode(t *testing.T) {
-	data := []byte(`{"mode":"bad","website":"futurelab","resources":[{"kind":"Component","name":"x","file":"components/x.html","hash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}`)
+	data := []byte(`{"mode":"bad","website":"sample","resources":[{"kind":"Component","name":"x","file":"components/x.html","hash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}`)
 	if _, err := ParseManifest(data); err == nil {
 		t.Fatalf("expected invalid mode error")
 	}
@@ -47,7 +47,7 @@ func TestHashHexValidation(t *testing.T) {
 func TestParseManifestAssetNameMustMatchFile(t *testing.T) {
 	data := []byte(`{
 		"mode":"partial",
-		"website":"futurelab",
+		"website":"sample",
 		"resources":[
 			{"kind":"Asset","name":"logo.svg","file":"assets/logo.svg","hash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
 		]
@@ -60,7 +60,7 @@ func TestParseManifestAssetNameMustMatchFile(t *testing.T) {
 func TestParseManifestAssetMustHaveExactlyOneFile(t *testing.T) {
 	data := []byte(`{
 		"mode":"partial",
-		"website":"futurelab",
+		"website":"sample",
 		"resources":[
 			{"kind":"Asset","name":"assets/logo.svg","files":[
 				{"file":"assets/logo.svg","hash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
@@ -76,7 +76,7 @@ func TestParseManifestAssetMustHaveExactlyOneFile(t *testing.T) {
 func TestParseManifestComponentMustHaveExactlyOneFile(t *testing.T) {
 	data := []byte(`{
 		"mode":"partial",
-		"website":"futurelab",
+		"website":"sample",
 		"resources":[
 			{"kind":"Component","name":"header","files":[
 				{"file":"components/header.html","hash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
@@ -92,7 +92,7 @@ func TestParseManifestComponentMustHaveExactlyOneFile(t *testing.T) {
 func TestParseManifestDeletedAssetRequiresFile(t *testing.T) {
 	data := []byte(`{
 		"mode":"partial",
-		"website":"futurelab",
+		"website":"sample",
 		"resources":[
 			{"kind":"Asset","name":"assets/logo.svg","deleted":true}
 		]
@@ -105,7 +105,7 @@ func TestParseManifestDeletedAssetRequiresFile(t *testing.T) {
 func TestParseManifestRejectsDuplicateResourceKindName(t *testing.T) {
 	data := []byte(`{
 		"mode":"partial",
-		"website":"futurelab",
+		"website":"sample",
 		"resources":[
 			{"kind":"Component","name":"header","file":"components/header.html","hash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
 			{"kind":"component","name":"header","file":"components/header-v2.html","hash":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}

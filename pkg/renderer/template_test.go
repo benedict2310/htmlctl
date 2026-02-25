@@ -89,7 +89,7 @@ func TestRenderDefaultTemplatePreservesTrustedContentHTML(t *testing.T) {
 
 func TestRenderDefaultTemplateInjectsHeadMetaBeforeStyles(t *testing.T) {
 	headMeta, err := renderHeadMeta(&model.PageHead{
-		CanonicalURL: "https://futurelab.studio/ora",
+		CanonicalURL: "https://example.com/ora",
 		OpenGraph: &model.OpenGraph{
 			Title: "Ora for macOS",
 		},
@@ -109,7 +109,7 @@ func TestRenderDefaultTemplateInjectsHeadMetaBeforeStyles(t *testing.T) {
 	}
 
 	html := string(output)
-	canonicalIdx := strings.Index(html, `<link rel="canonical" href="https://futurelab.studio/ora">`)
+	canonicalIdx := strings.Index(html, `<link rel="canonical" href="https://example.com/ora">`)
 	styleIdx := strings.Index(html, `/styles/tokens-abc.css`)
 	if canonicalIdx == -1 || styleIdx == -1 {
 		t.Fatalf("expected canonical and styles in output, got: %s", html)

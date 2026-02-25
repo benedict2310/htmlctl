@@ -28,11 +28,11 @@ func TestQueriesInsertAndFetchCoreRows(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}
-	website, err := q.GetWebsiteByName(ctx, "futurelab")
+	website, err := q.GetWebsiteByName(ctx, "sample")
 	if err != nil {
 		t.Fatalf("GetWebsiteByName() error = %v", err)
 	}
@@ -79,11 +79,11 @@ func TestUpsertPagePersistsHeadJSON(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}
-	headJSON := `{"canonicalURL":"https://futurelab.studio/","meta":{"robots":"index,follow"}}`
+	headJSON := `{"canonicalURL":"https://example.com/","meta":{"robots":"index,follow"}}`
 	if err := q.UpsertPage(ctx, PageRow{
 		WebsiteID:   websiteID,
 		Name:        "index",
@@ -114,7 +114,7 @@ func TestInsertPageDefaultsHeadJSONToObject(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}
@@ -147,11 +147,11 @@ func TestQueriesUniqueConstraints(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}
-	if _, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"}); err == nil {
+	if _, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"}); err == nil {
 		t.Fatalf("expected duplicate website name violation")
 	}
 
@@ -172,7 +172,7 @@ func TestQueriesErrorBranches(t *testing.T) {
 		t.Fatalf("expected not-found error for website")
 	}
 
-	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}
@@ -219,7 +219,7 @@ func TestDeleteAssetsNotInHandlesLargeKeepSet(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}
@@ -509,7 +509,7 @@ func TestDeleteByWebsiteNotInAllowlistedTargets(t *testing.T) {
 			q, cleanup := setupDB(t)
 			defer cleanup()
 
-			websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+			websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 			if err != nil {
 				t.Fatalf("InsertWebsite() error = %v", err)
 			}
@@ -550,7 +550,7 @@ func TestDeleteByWebsiteSetDifferenceAllowlistedTargets(t *testing.T) {
 			q, cleanup := setupDB(t)
 			defer cleanup()
 
-			websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+			websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 			if err != nil {
 				t.Fatalf("InsertWebsite() error = %v", err)
 			}
@@ -591,7 +591,7 @@ func TestDeleteByWebsiteAndKeyAllowlistedTargets(t *testing.T) {
 			q, cleanup := setupDB(t)
 			defer cleanup()
 
-			websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+			websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 			if err != nil {
 				t.Fatalf("InsertWebsite() error = %v", err)
 			}
@@ -618,7 +618,7 @@ func TestListReleasesByEnvironmentPage(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}
@@ -662,7 +662,7 @@ func TestListLatestReleaseActors(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}
@@ -737,7 +737,7 @@ func TestDomainBindingCRUD(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}
@@ -750,17 +750,17 @@ func TestDomainBindingCRUD(t *testing.T) {
 	}
 
 	if _, err := q.InsertDomainBinding(ctx, DomainBindingRow{
-		Domain:        "futurelab.studio",
+		Domain:        "example.com",
 		EnvironmentID: stagingID,
 	}); err != nil {
 		t.Fatalf("InsertDomainBinding() error = %v", err)
 	}
 
-	got, err := q.GetDomainBindingByDomain(ctx, "futurelab.studio")
+	got, err := q.GetDomainBindingByDomain(ctx, "example.com")
 	if err != nil {
 		t.Fatalf("GetDomainBindingByDomain() error = %v", err)
 	}
-	if got.Domain != "futurelab.studio" || got.WebsiteName != "futurelab" || got.EnvironmentName != "staging" {
+	if got.Domain != "example.com" || got.WebsiteName != "sample" || got.EnvironmentName != "staging" {
 		t.Fatalf("unexpected domain binding: %#v", got)
 	}
 
@@ -772,7 +772,7 @@ func TestDomainBindingCRUD(t *testing.T) {
 		t.Fatalf("expected 1 domain binding, got %d", len(all))
 	}
 
-	websiteFiltered, err := q.ListDomainBindings(ctx, "futurelab", "")
+	websiteFiltered, err := q.ListDomainBindings(ctx, "sample", "")
 	if err != nil {
 		t.Fatalf("ListDomainBindings(website) error = %v", err)
 	}
@@ -788,14 +788,14 @@ func TestDomainBindingCRUD(t *testing.T) {
 		t.Fatalf("expected 1 env-filtered domain binding, got %d", len(envFiltered))
 	}
 
-	deleted, err := q.DeleteDomainBindingByDomain(ctx, "futurelab.studio")
+	deleted, err := q.DeleteDomainBindingByDomain(ctx, "example.com")
 	if err != nil {
 		t.Fatalf("DeleteDomainBindingByDomain() error = %v", err)
 	}
 	if !deleted {
 		t.Fatalf("expected deleted=true")
 	}
-	deleted, err = q.DeleteDomainBindingByDomain(ctx, "futurelab.studio")
+	deleted, err = q.DeleteDomainBindingByDomain(ctx, "example.com")
 	if err != nil {
 		t.Fatalf("DeleteDomainBindingByDomain(second) error = %v", err)
 	}
@@ -809,7 +809,7 @@ func TestRestoreDomainBindingPreservesIdentity(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}
@@ -818,17 +818,17 @@ func TestRestoreDomainBindingPreservesIdentity(t *testing.T) {
 		t.Fatalf("InsertEnvironment() error = %v", err)
 	}
 	if _, err := q.InsertDomainBinding(ctx, DomainBindingRow{
-		Domain:        "futurelab.studio",
+		Domain:        "example.com",
 		EnvironmentID: envID,
 	}); err != nil {
 		t.Fatalf("InsertDomainBinding() error = %v", err)
 	}
 
-	before, err := q.GetDomainBindingByDomain(ctx, "futurelab.studio")
+	before, err := q.GetDomainBindingByDomain(ctx, "example.com")
 	if err != nil {
 		t.Fatalf("GetDomainBindingByDomain(before) error = %v", err)
 	}
-	deleted, err := q.DeleteDomainBindingByDomain(ctx, "futurelab.studio")
+	deleted, err := q.DeleteDomainBindingByDomain(ctx, "example.com")
 	if err != nil {
 		t.Fatalf("DeleteDomainBindingByDomain() error = %v", err)
 	}
@@ -846,7 +846,7 @@ func TestRestoreDomainBindingPreservesIdentity(t *testing.T) {
 		t.Fatalf("RestoreDomainBinding() error = %v", err)
 	}
 
-	after, err := q.GetDomainBindingByDomain(ctx, "futurelab.studio")
+	after, err := q.GetDomainBindingByDomain(ctx, "example.com")
 	if err != nil {
 		t.Fatalf("GetDomainBindingByDomain(after) error = %v", err)
 	}
@@ -863,7 +863,7 @@ func TestDomainBindingUniqueConstraint(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}
@@ -873,13 +873,13 @@ func TestDomainBindingUniqueConstraint(t *testing.T) {
 	}
 
 	if _, err := q.InsertDomainBinding(ctx, DomainBindingRow{
-		Domain:        "futurelab.studio",
+		Domain:        "example.com",
 		EnvironmentID: envID,
 	}); err != nil {
 		t.Fatalf("InsertDomainBinding(first) error = %v", err)
 	}
 	if _, err := q.InsertDomainBinding(ctx, DomainBindingRow{
-		Domain:        "futurelab.studio",
+		Domain:        "example.com",
 		EnvironmentID: envID,
 	}); err == nil {
 		t.Fatalf("expected unique constraint error on duplicate domain")
@@ -891,7 +891,7 @@ func TestTelemetryEventsInsertListAndFilters(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}
@@ -976,7 +976,7 @@ func TestDeleteTelemetryEventsOlderThanDays(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}

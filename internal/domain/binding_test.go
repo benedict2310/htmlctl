@@ -7,10 +7,10 @@ func TestNormalizeValidDomains(t *testing.T) {
 		in   string
 		want string
 	}{
-		{in: "futurelab.studio", want: "futurelab.studio"},
-		{in: "Staging.FutureLab.Studio", want: "staging.futurelab.studio"},
+		{in: "example.com", want: "example.com"},
+		{in: "Staging.Example.Com", want: "staging.example.com"},
 		{in: "my-site.example.com", want: "my-site.example.com"},
-		{in: "  futurelab.studio  ", want: "futurelab.studio"},
+		{in: "  example.com  ", want: "example.com"},
 	}
 	for _, tc := range tests {
 		got, err := Normalize(tc.in)
@@ -29,11 +29,11 @@ func TestNormalizeInvalidDomains(t *testing.T) {
 		" ",
 		"localhost",
 		"not a domain",
-		"futurelab_.studio",
-		"futurelab..studio",
-		"futurelab.studio.",
-		"-futurelab.studio",
-		"futurelab-.studio",
+		"example_.com",
+		"example..com",
+		"example.com.",
+		"-example.com",
+		"example-.com",
 		"127.0.0.1",
 	}
 	for _, in := range tests {

@@ -9,7 +9,7 @@ spec:
   layout:
     - include: header
   head:
-    canonicalURL: https://futurelab.studio/ora
+    canonicalURL: https://example.com/ora
     meta:
       keywords: Ora, macOS voice assistant
       robots: index,follow
@@ -17,15 +17,15 @@ spec:
       application-name: Ora
     openGraph:
       type: website
-      url: https://futurelab.studio/ora
-      siteName: Futurelab Studio
+      url: https://example.com/ora
+      siteName: Sample Studio
       locale: en_US
       title: Ora for macOS | Local Voice Assistant
       description: Local-first voice assistant for macOS.
       image: /assets/ora/og-image.jpg
     twitter:
       card: summary_large_image
-      url: https://futurelab.studio/ora
+      url: https://example.com/ora
       title: Ora for macOS | Local Voice Assistant
       description: A privacy-first macOS assistant running fully on your device.
       image: /assets/ora/og-image.jpg

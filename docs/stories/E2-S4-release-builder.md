@@ -137,7 +137,7 @@ As an operator, after applying changes to an environment, I want the server to b
 ### Manual Tests
 
 - [ ] Apply a sample site via E2-S3, trigger a build, inspect the release directory on disk
-- [ ] Verify `current` symlink: `ls -la websites/futurelab/envs/staging/current` points to the ULID directory
+- [ ] Verify `current` symlink: `ls -la websites/sample/envs/staging/current` points to the ULID directory
 - [ ] Trigger two builds in quick succession; verify only one runs at a time
 - [ ] Introduce a render error; verify temp directory is cleaned up and symlink unchanged
 

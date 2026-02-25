@@ -29,7 +29,7 @@ docker run -d \
   -p 18080:80 \
   -e SSH_PUBLIC_KEY="$(cat ~/.ssh/id_ed25519.pub)" \
   -e HTMLSERVD_CADDY_BOOTSTRAP_MODE=preview \
-  -e HTMLSERVD_PREVIEW_WEBSITE=futurelab \
+  -e HTMLSERVD_PREVIEW_WEBSITE=sample \
   -e HTMLSERVD_PREVIEW_ENV=staging \
   -e HTMLSERVD_API_TOKEN="$API_TOKEN" \
   -e HTMLSERVD_CADDY_AUTO_HTTPS=false \
@@ -61,7 +61,7 @@ current-context: local-staging
 contexts:
   - name: local-staging
     server: ssh://htmlservd@127.0.0.1:23222
-    website: futurelab
+    website: sample
     environment: staging
     port: 9400
     token: ${API_TOKEN}
@@ -79,7 +79,7 @@ cat > .tmp/first-deploy/site/website.yaml <<'YAML'
 apiVersion: htmlctl.dev/v1
 kind: Website
 metadata:
-  name: futurelab
+  name: sample
 spec:
   defaultStyleBundle: default
   baseTemplate: default
@@ -94,7 +94,7 @@ metadata:
   name: index
 spec:
   route: /
-  title: Futurelab
+  title: Sample
   description: Demo landing page
   layout:
     - include: hero
@@ -104,7 +104,7 @@ YAML
 ```bash
 cat > .tmp/first-deploy/site/components/hero.html <<'HTML'
 <section id="hero">
-  <h1>Futurelab</h1>
+  <h1>Sample</h1>
   <p>htmlctl first deploy</p>
 </section>
 HTML
@@ -180,7 +180,7 @@ Status:
 ```bash
 HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
 HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
-htmlctl status website/futurelab --context local-staging
+htmlctl status website/sample --context local-staging
 ```
 
 Bind a loopback-safe domain (required for telemetry host attribution, because IP hosts are rejected):
@@ -202,7 +202,7 @@ Verify telemetry events:
 ```bash
 curl -sS \
   -H "Authorization: Bearer ${API_TOKEN}" \
-  "http://127.0.0.1:19420/api/v1/websites/futurelab/environments/staging/telemetry/events?limit=20"
+  "http://127.0.0.1:19420/api/v1/websites/sample/environments/staging/telemetry/events?limit=20"
 ```
 
 Telemetry note:
@@ -224,7 +224,7 @@ docker run --rm \
   -v "$HOME/.ssh/id_ed25519:/home/htmlctl/.ssh/id_ed25519:ro" \
   -v "$PWD/.tmp/first-deploy/known_hosts:/home/htmlctl/.ssh/known_hosts:ro" \
   -w /work \
-  htmlctl:local status website/futurelab --context local-staging
+  htmlctl:local status website/sample --context local-staging
 ```
 
 Use this config for containerized `htmlctl` (Docker-to-host networking):
@@ -236,7 +236,7 @@ current-context: local-staging
 contexts:
   - name: local-staging
     server: ssh://htmlservd@host.docker.internal:23222
-    website: futurelab
+    website: sample
     environment: staging
     port: 9400
     token: ${API_TOKEN}

@@ -12,7 +12,7 @@ func TestWebsiteYAMLDeserialization(t *testing.T) {
 	input := []byte(`apiVersion: htmlctl.dev/v1
 kind: Website
 metadata:
-  name: futurelab
+  name: sample
 spec:
   defaultStyleBundle: default
   baseTemplate: default
@@ -23,7 +23,7 @@ spec:
 		t.Fatalf("unmarshal website: %v", err)
 	}
 
-	if website.Metadata.Name != "futurelab" {
+	if website.Metadata.Name != "sample" {
 		t.Fatalf("unexpected website name: %q", website.Metadata.Name)
 	}
 	if website.Spec.DefaultStyleBundle != "default" {
@@ -47,21 +47,21 @@ spec:
     - include: header
     - include: pricing
   head:
-    canonicalURL: https://futurelab.studio/product
+    canonicalURL: https://example.com/product
     meta:
       robots: index,follow
-      keywords: Product, Futurelab
+      keywords: Product, Sample
     openGraph:
       type: website
-      url: https://futurelab.studio/product
-      siteName: Futurelab
+      url: https://example.com/product
+      siteName: Sample
       locale: en_US
       title: Product
       description: Product page
       image: /assets/product/og.jpg
     twitter:
       card: summary_large_image
-      url: https://futurelab.studio/product
+      url: https://example.com/product
       title: Product
       description: Product page
       image: /assets/product/og.jpg
@@ -90,10 +90,10 @@ spec:
 	if page.Spec.Head == nil {
 		t.Fatalf("expected page head to be parsed")
 	}
-	if page.Spec.Head.CanonicalURL != "https://futurelab.studio/product" {
+	if page.Spec.Head.CanonicalURL != "https://example.com/product" {
 		t.Fatalf("unexpected canonicalURL: %q", page.Spec.Head.CanonicalURL)
 	}
-	if page.Spec.Head.OpenGraph == nil || page.Spec.Head.OpenGraph.SiteName != "Futurelab" {
+	if page.Spec.Head.OpenGraph == nil || page.Spec.Head.OpenGraph.SiteName != "Sample" {
 		t.Fatalf("unexpected openGraph data: %#v", page.Spec.Head.OpenGraph)
 	}
 	if page.Spec.Head.Twitter == nil || page.Spec.Head.Twitter.Card != "summary_large_image" {
@@ -116,7 +116,7 @@ func TestPageLayoutItemJSONMarshaling(t *testing.T) {
 
 func TestPageHeadJSONMarshaling(t *testing.T) {
 	head := &PageHead{
-		CanonicalURL: "https://futurelab.studio/ora",
+		CanonicalURL: "https://example.com/ora",
 		Meta: map[string]string{
 			"application-name": "Ora",
 			"author":           "Benedict",
@@ -147,7 +147,7 @@ func TestPageHeadJSONMarshaling(t *testing.T) {
 	}
 	got := string(b)
 	for _, want := range []string{
-		`"canonicalURL":"https://futurelab.studio/ora"`,
+		`"canonicalURL":"https://example.com/ora"`,
 		`"meta":{"application-name":"Ora","author":"Benedict"}`,
 		`"openGraph":{"type":"website","title":"Ora"}`,
 		`"twitter":{"card":"summary_large_image","title":"Ora"}`,

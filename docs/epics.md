@@ -11,7 +11,7 @@
 | 1.3 | Component validation engine | [E1-S3](stories/E1-S3-component-validation.md) |
 | 1.4 | Local CLI commands (render + serve) | [E1-S4](stories/E1-S4-local-cli-commands.md) |
 
-**Done when:** local `render` + `serve` works for sample `futurelab` site.
+**Done when:** local `render` + `serve` works for sample `sample` site.
 
 ---
 
@@ -71,7 +71,7 @@
 | 5.3 | Reload Caddy safely | [E5-S3](stories/E5-S3-caddy-reload.md) |
 | 5.4 | `htmlctl domain add/verify` | [E5-S4](stories/E5-S4-domain-cli-commands.md) |
 
-**Done when:** `futurelab.studio` serves prod over HTTPS and `staging.futurelab.studio` serves staging.
+**Done when:** `example.com` serves prod over HTTPS and `staging.example.com` serves staging.
 
 ---
 

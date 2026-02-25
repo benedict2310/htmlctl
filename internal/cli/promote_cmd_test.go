@@ -9,7 +9,7 @@ import (
 func TestPromoteCommandTableOutput(t *testing.T) {
 	tr := &scriptedTransport{
 		handle: func(call int, req recordedRequest) (*http.Response, error) {
-			if req.Method != "POST" || req.Path != "/api/v1/websites/futurelab/promote" {
+			if req.Method != "POST" || req.Path != "/api/v1/websites/sample/promote" {
 				t.Fatalf("unexpected request: %#v", req)
 			}
 			body := string(req.Body)
@@ -17,7 +17,7 @@ func TestPromoteCommandTableOutput(t *testing.T) {
 				t.Fatalf("unexpected request body: %s", body)
 			}
 			return jsonHTTPResponse(200, `{
-  "website":"futurelab",
+  "website":"sample",
   "fromEnvironment":"staging",
   "toEnvironment":"prod",
   "sourceReleaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAA",
@@ -30,11 +30,11 @@ func TestPromoteCommandTableOutput(t *testing.T) {
 		},
 	}
 
-	out, _, err := runCommandWithTransport(t, []string{"promote", "website/futurelab", "--from", "staging", "--to", "prod"}, tr)
+	out, _, err := runCommandWithTransport(t, []string{"promote", "website/sample", "--from", "staging", "--to", "prod"}, tr)
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if !strings.Contains(out, "Promoted futurelab: staging -> prod") || !strings.Contains(out, "release 01ARZ3NDEKTSV4RRFFQ69G5FAB") {
+	if !strings.Contains(out, "Promoted sample: staging -> prod") || !strings.Contains(out, "release 01ARZ3NDEKTSV4RRFFQ69G5FAB") {
 		t.Fatalf("unexpected output: %s", out)
 	}
 }
@@ -43,7 +43,7 @@ func TestPromoteCommandJSONOutput(t *testing.T) {
 	tr := &scriptedTransport{
 		handle: func(call int, req recordedRequest) (*http.Response, error) {
 			return jsonHTTPResponse(200, `{
-  "website":"futurelab",
+  "website":"sample",
   "fromEnvironment":"staging",
   "toEnvironment":"prod",
   "sourceReleaseId":"A",
@@ -56,7 +56,7 @@ func TestPromoteCommandJSONOutput(t *testing.T) {
 		},
 	}
 
-	out, _, err := runCommandWithTransport(t, []string{"promote", "website/futurelab", "--from", "staging", "--to", "prod", "--output", "json"}, tr)
+	out, _, err := runCommandWithTransport(t, []string{"promote", "website/sample", "--from", "staging", "--to", "prod", "--output", "json"}, tr)
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -67,7 +67,7 @@ func TestPromoteCommandJSONOutput(t *testing.T) {
 
 func TestPromoteCommandRejectsInvalidFlags(t *testing.T) {
 	tr := &scriptedTransport{}
-	_, _, err := runCommandWithTransport(t, []string{"promote", "website/futurelab", "--from", "staging", "--to", "staging"}, tr)
+	_, _, err := runCommandWithTransport(t, []string{"promote", "website/sample", "--from", "staging", "--to", "staging"}, tr)
 	if err == nil {
 		t.Fatalf("expected validation error")
 	}
@@ -78,7 +78,7 @@ func TestPromoteCommandRejectsInvalidFlags(t *testing.T) {
 
 func TestPromoteCommandRequiresBothFlags(t *testing.T) {
 	tr := &scriptedTransport{}
-	_, _, err := runCommandWithTransport(t, []string{"promote", "website/futurelab", "--from", "staging"}, tr)
+	_, _, err := runCommandWithTransport(t, []string{"promote", "website/sample", "--from", "staging"}, tr)
 	if err == nil {
 		t.Fatalf("expected validation error")
 	}
@@ -104,7 +104,7 @@ func TestPromoteCommandPropagatesAPIError(t *testing.T) {
 			return jsonHTTPResponse(409, `{"error":"source environment has no active release to promote"}`), nil
 		},
 	}
-	_, _, err := runCommandWithTransport(t, []string{"promote", "website/futurelab", "--from", "staging", "--to", "prod"}, tr)
+	_, _, err := runCommandWithTransport(t, []string{"promote", "website/sample", "--from", "staging", "--to", "prod"}, tr)
 	if err == nil {
 		t.Fatalf("expected promote conflict error")
 	}

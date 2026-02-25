@@ -113,7 +113,7 @@ As an AI agent managing a website, I want to run `htmlctl render -f ./site -o ./
 
 ### Manual Tests
 
-- [ ] Build `htmlctl` binary, render the sample futurelab site, serve it, and open in a browser to verify the full local preview workflow
+- [ ] Build `htmlctl` binary, render the sample site, serve it, and open in a browser to verify the full local preview workflow
 - [ ] Verify that render + serve together complete the "local preview" user journey from the PRD
 
 ## 8. Performance / Reliability Considerations

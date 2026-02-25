@@ -94,7 +94,7 @@ As an AI agent operating via CLI, I want a site directory parsed into strongly-t
 - [ ] AC-5: `LoadSite()` returns error if `website.yaml` is missing
 - [ ] AC-6: `LoadSite()` returns error if a page layout references a component name that does not exist in `components/`
 - [ ] AC-7: `LoadSite()` returns error if YAML files contain syntax errors, with a clear error message including the filename
-- [ ] AC-8: `LoadSite()` successfully parses the sample `futurelab`-style site directory into a complete `Site` struct
+- [ ] AC-8: `LoadSite()` successfully parses the sample `sample`-style site directory into a complete `Site` struct
 - [ ] AC-9: Scripts (`scripts/site.js`) are detected as optional; missing script does not cause an error
 - [ ] AC-10: Assets in `assets/` directory are discovered and listed with original filenames
 - [ ] AC-11: `LoadSite()` returns error if `pages/` contains no valid `*.page.yaml` files
@@ -119,7 +119,7 @@ As an AI agent operating via CLI, I want a site directory parsed into strongly-t
 
 ### Manual Tests
 
-- [ ] Create a sample site directory matching the `futurelab` structure from the technical spec and verify `LoadSite()` parses it without errors
+- [ ] Create a sample site directory matching the `sample` structure from the technical spec and verify `LoadSite()` parses it without errors
 - [ ] Verify that Go struct tags produce clean YAML round-trip (marshal then unmarshal)
 
 ## 8. Performance / Reliability Considerations

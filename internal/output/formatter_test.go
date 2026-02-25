@@ -22,13 +22,13 @@ func TestParseFormat(t *testing.T) {
 }
 
 func TestWriteStructuredJSONAndYAML(t *testing.T) {
-	payload := map[string]any{"website": "futurelab", "count": 2}
+	payload := map[string]any{"website": "sample", "count": 2}
 
 	jsonOut := &bytes.Buffer{}
 	if err := WriteStructured(jsonOut, FormatJSON, payload); err != nil {
 		t.Fatalf("WriteStructured(JSON) error = %v", err)
 	}
-	if !strings.Contains(jsonOut.String(), "\"website\": \"futurelab\"") {
+	if !strings.Contains(jsonOut.String(), "\"website\": \"sample\"") {
 		t.Fatalf("unexpected json output: %s", jsonOut.String())
 	}
 
@@ -36,18 +36,18 @@ func TestWriteStructuredJSONAndYAML(t *testing.T) {
 	if err := WriteStructured(yamlOut, FormatYAML, payload); err != nil {
 		t.Fatalf("WriteStructured(YAML) error = %v", err)
 	}
-	if !strings.Contains(yamlOut.String(), "website: futurelab") {
+	if !strings.Contains(yamlOut.String(), "website: sample") {
 		t.Fatalf("unexpected yaml output: %s", yamlOut.String())
 	}
 }
 
 func TestWriteTable(t *testing.T) {
 	out := &bytes.Buffer{}
-	err := WriteTable(out, []string{"NAME", "STATUS"}, [][]string{{"futurelab", "active"}})
+	err := WriteTable(out, []string{"NAME", "STATUS"}, [][]string{{"sample", "active"}})
 	if err != nil {
 		t.Fatalf("WriteTable() error = %v", err)
 	}
-	if !strings.Contains(out.String(), "NAME") || !strings.Contains(out.String(), "futurelab") {
+	if !strings.Contains(out.String(), "NAME") || !strings.Contains(out.String(), "sample") {
 		t.Fatalf("unexpected table output: %s", out.String())
 	}
 }

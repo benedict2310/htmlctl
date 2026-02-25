@@ -14,7 +14,7 @@ func TestLogsEndpointsReturnApplyAndReleaseAuditEntries(t *testing.T) {
 
 	applySampleSite(t, baseURL)
 
-	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/websites/futurelab/environments/staging/releases", nil)
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/websites/sample/environments/staging/releases", nil)
 	if err != nil {
 		t.Fatalf("new release request: %v", err)
 	}
@@ -31,7 +31,7 @@ func TestLogsEndpointsReturnApplyAndReleaseAuditEntries(t *testing.T) {
 	var envLogs logsResponse
 	deadline := time.Now().Add(2 * time.Second)
 	for {
-		resp, err = http.Get(baseURL + "/api/v1/websites/futurelab/environments/staging/logs")
+		resp, err = http.Get(baseURL + "/api/v1/websites/sample/environments/staging/logs")
 		if err != nil {
 			t.Fatalf("GET env logs error = %v", err)
 		}
@@ -54,7 +54,7 @@ func TestLogsEndpointsReturnApplyAndReleaseAuditEntries(t *testing.T) {
 		time.Sleep(25 * time.Millisecond)
 	}
 
-	resp, err = http.Get(baseURL + "/api/v1/websites/futurelab/environments/staging/logs?operation=apply")
+	resp, err = http.Get(baseURL + "/api/v1/websites/sample/environments/staging/logs?operation=apply")
 	if err != nil {
 		t.Fatalf("GET filtered logs error = %v", err)
 	}
@@ -75,7 +75,7 @@ func TestLogsEndpointsReturnApplyAndReleaseAuditEntries(t *testing.T) {
 		}
 	}
 
-	resp, err = http.Get(baseURL + "/api/v1/websites/futurelab/logs?limit=2")
+	resp, err = http.Get(baseURL + "/api/v1/websites/sample/logs?limit=2")
 	if err != nil {
 		t.Fatalf("GET website logs error = %v", err)
 	}

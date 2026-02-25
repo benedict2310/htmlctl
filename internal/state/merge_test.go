@@ -63,7 +63,7 @@ func TestApplyRejectsInvalidComponentAndPageNames(t *testing.T) {
 
 			manifest := bundle.Manifest{
 				Mode:    bundle.ApplyModePartial,
-				Website: "futurelab",
+				Website: "sample",
 				Resources: []bundle.Resource{
 					{
 						Kind: tc.resourceKind,
@@ -80,7 +80,7 @@ func TestApplyRejectsInvalidComponentAndPageNames(t *testing.T) {
 				},
 			}
 
-			_, err = applier.Apply(ctx, "futurelab", "staging", b, false)
+			_, err = applier.Apply(ctx, "sample", "staging", b, false)
 			if err == nil {
 				t.Fatalf("Apply() expected error")
 			}
@@ -90,7 +90,7 @@ func TestApplyRejectsInvalidComponentAndPageNames(t *testing.T) {
 			}
 
 			q := dbpkg.NewQueries(db)
-			_, err = q.GetWebsiteByName(ctx, "futurelab")
+			_, err = q.GetWebsiteByName(ctx, "sample")
 			if !errors.Is(err, sql.ErrNoRows) {
 				t.Fatalf("expected no committed website row after failed apply, got err=%v", err)
 			}
@@ -121,11 +121,11 @@ spec:
   description: Home page
   layout: []
   head:
-    canonicalURL: https://futurelab.studio/
+    canonicalURL: https://example.com/
     meta:
       robots: index,follow
     openGraph:
-      title: Futurelab
+      title: Sample
     twitter:
       card: summary
     jsonLD:
@@ -133,12 +133,12 @@ spec:
         payload:
           "@context": https://schema.org
           "@type": WebSite
-          name: Futurelab
+          name: Sample
 `)
 
 	manifest := bundle.Manifest{
 		Mode:    bundle.ApplyModePartial,
-		Website: "futurelab",
+		Website: "sample",
 		Resources: []bundle.Resource{
 			{
 				Kind: "Page",
@@ -155,12 +155,12 @@ spec:
 		},
 	}
 
-	if _, err := applier.Apply(ctx, "futurelab", "staging", b, false); err != nil {
+	if _, err := applier.Apply(ctx, "sample", "staging", b, false); err != nil {
 		t.Fatalf("Apply() error = %v", err)
 	}
 
 	q := dbpkg.NewQueries(db)
-	website, err := q.GetWebsiteByName(ctx, "futurelab")
+	website, err := q.GetWebsiteByName(ctx, "sample")
 	if err != nil {
 		t.Fatalf("GetWebsiteByName() error = %v", err)
 	}
@@ -179,7 +179,7 @@ spec:
 	if err := json.Unmarshal([]byte(pages[0].HeadJSON), &got); err != nil {
 		t.Fatalf("unmarshal head_json: %v", err)
 	}
-	if got["canonicalURL"] != "https://futurelab.studio/" {
+	if got["canonicalURL"] != "https://example.com/" {
 		t.Fatalf("unexpected canonicalURL in head_json: %#v", got["canonicalURL"])
 	}
 }
@@ -224,10 +224,10 @@ spec:
 `)
 
 	apply := func(content []byte) (ApplyResult, error) {
-		return applier.Apply(ctx, "futurelab", "staging", bundle.Bundle{
+		return applier.Apply(ctx, "sample", "staging", bundle.Bundle{
 			Manifest: bundle.Manifest{
 				Mode:    bundle.ApplyModePartial,
-				Website: "futurelab",
+				Website: "sample",
 				Resources: []bundle.Resource{
 					{
 						Kind: "Page",
@@ -260,7 +260,7 @@ spec:
 	}
 
 	q := dbpkg.NewQueries(db)
-	website, err := q.GetWebsiteByName(ctx, "futurelab")
+	website, err := q.GetWebsiteByName(ctx, "sample")
 	if err != nil {
 		t.Fatalf("GetWebsiteByName() error = %v", err)
 	}

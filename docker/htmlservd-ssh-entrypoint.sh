@@ -166,7 +166,7 @@ main() {
 	local htmlservd_port="${HTMLSERVD_PORT:-9400}"
 	local telemetry_enabled_raw="${HTMLSERVD_TELEMETRY_ENABLED:-false}"
 	local telemetry_enabled=0
-	local preview_website="${HTMLSERVD_PREVIEW_WEBSITE:-futurelab}"
+	local preview_website="${HTMLSERVD_PREVIEW_WEBSITE:-sample}"
 	local preview_env="${HTMLSERVD_PREVIEW_ENV:-staging}"
 	local data_dir="${HTMLSERVD_DATA_DIR:-/var/lib/htmlservd}"
 	local preview_root_default="${data_dir}/websites/${preview_website}/envs/${preview_env}/current"

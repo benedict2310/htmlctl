@@ -157,11 +157,11 @@ current-context: ` + currentContext + `
 contexts:
   - name: staging
     server: ssh://root@staging.example.com
-    website: futurelab
+    website: sample
     environment: staging
   - name: prod
     server: ssh://root@prod.example.com
-    website: futurelab
+    website: sample
     environment: prod
 `
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {

@@ -81,7 +81,7 @@ func TestConcurrentReadDuringWriteWAL(t *testing.T) {
 		t.Fatalf("RunMigrations() error = %v", err)
 	}
 	queries := NewQueries(db)
-	websiteID, err := queries.InsertWebsite(ctx, WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := queries.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}

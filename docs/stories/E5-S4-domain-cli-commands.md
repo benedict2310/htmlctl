@@ -125,10 +125,10 @@ As an operator, I want to manage custom domains for my website environments from
 
 ### Manual Tests
 
-- [ ] Run `htmlctl domain add futurelab.studio --context prod` against a running htmlservd, verify domain binding created
+- [ ] Run `htmlctl domain add example.com --context prod` against a running htmlservd, verify domain binding created
 - [ ] Run `htmlctl domain list --context prod`, verify table output shows the binding
-- [ ] Run `htmlctl domain verify futurelab.studio --context prod`, verify DNS and TLS checks report correctly
-- [ ] Run `htmlctl domain remove futurelab.studio --context prod`, verify binding removed and list is empty
+- [ ] Run `htmlctl domain verify example.com --context prod`, verify DNS and TLS checks report correctly
+- [ ] Run `htmlctl domain remove example.com --context prod`, verify binding removed and list is empty
 - [ ] Run `htmlctl domain add` without arguments, verify usage help is printed
 - [ ] Run `htmlctl domain verify` for a domain with no DNS record, verify clear failure message
 
@@ -158,28 +158,28 @@ As an operator, I want to manage custom domains for my website environments from
 
 ### domain add
 ```
-$ htmlctl domain add futurelab.studio --context prod
+$ htmlctl domain add example.com --context prod
 Domain binding created:
-  Domain:      futurelab.studio
-  Website:     futurelab
+  Domain:      example.com
+  Website:     sample
   Environment: prod
 
 Caddy configuration updated and reloaded.
-Next: run 'htmlctl domain verify futurelab.studio --context prod' to check DNS and TLS.
+Next: run 'htmlctl domain verify example.com --context prod' to check DNS and TLS.
 ```
 
 ### domain list
 ```
 $ htmlctl domain list --context prod
 DOMAIN                        ENVIRONMENT   CREATED
-futurelab.studio              prod          2026-02-15T10:30:00Z
-staging.futurelab.studio      staging       2026-02-15T10:31:00Z
+example.com              prod          2026-02-15T10:30:00Z
+staging.example.com      staging       2026-02-15T10:31:00Z
 ```
 
 ### domain verify
 ```
-$ htmlctl domain verify futurelab.studio --context prod
-Verifying futurelab.studio...
+$ htmlctl domain verify example.com --context prod
+Verifying example.com...
 
 DNS Resolution:    PASS  (resolves to 203.0.113.10)
 TLS Certificate:   PASS  (valid, issued by Let's Encrypt, expires 2026-05-16)
@@ -187,19 +187,19 @@ TLS Certificate:   PASS  (valid, issued by Let's Encrypt, expires 2026-05-16)
 
 ### domain verify (failure)
 ```
-$ htmlctl domain verify futurelab.studio --context prod
-Verifying futurelab.studio...
+$ htmlctl domain verify example.com --context prod
+Verifying example.com...
 
 DNS Resolution:    FAIL  (no DNS records found)
-  -> Add an A record for futurelab.studio pointing to your server IP.
+  -> Add an A record for example.com pointing to your server IP.
 
 TLS Certificate:   SKIP  (cannot check TLS without DNS resolution)
 ```
 
 ### domain remove
 ```
-$ htmlctl domain remove futurelab.studio --context prod
-Domain binding removed: futurelab.studio
+$ htmlctl domain remove example.com --context prod
+Domain binding removed: example.com
 Caddy configuration updated and reloaded.
 ```
 

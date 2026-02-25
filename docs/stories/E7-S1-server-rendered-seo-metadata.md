@@ -6,7 +6,7 @@
 **Estimated Effort:** 2-3 days
 **Dependencies:** E1-S1 (resource schemas), E1-S2 (renderer), E2-S2 (SQLite schema), E2-S4 (release builder), E6-S3 (HTML hardening)
 **Target:** loader + state + release + renderer
-**Design Reference:** `docs/technical-spec.md` sections 2.3 and 3.1, production migration of `futurelab.studio/ora`
+**Design Reference:** `docs/technical-spec.md` sections 2.3 and 3.1, production migration of `example.com/ora`
 
 ---
 
@@ -68,7 +68,7 @@ Add optional page-level metadata object:
 ```yaml
 spec:
   head:
-    canonicalURL: https://futurelab.studio/ora
+    canonicalURL: https://example.com/ora
     meta:
       keywords: Ora, macOS voice assistant
       robots: index,follow
@@ -76,15 +76,15 @@ spec:
       application-name: Ora
     openGraph:
       type: website
-      url: https://futurelab.studio/ora
-      siteName: Futurelab Studio
+      url: https://example.com/ora
+      siteName: Sample Studio
       locale: en_US
       title: Ora for macOS | Local Voice Assistant
       description: Local-first voice assistant for macOS...
       image: /assets/ora/og-image.jpg
     twitter:
       card: summary_large_image
-      url: https://futurelab.studio/ora
+      url: https://example.com/ora
       title: Ora for macOS | Local Voice Assistant
       description: A privacy-first macOS assistant running fully on your device.
       image: /assets/ora/og-image.jpg

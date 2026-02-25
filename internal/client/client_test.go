@@ -24,7 +24,7 @@ func TestListWebsitesBuildsExpectedRequest(t *testing.T) {
 			if req.Header.Get("Accept") != "application/json" {
 				t.Fatalf("unexpected Accept header %q", req.Header.Get("Accept"))
 			}
-			return jsonResponse(http.StatusOK, `{"websites":[{"name":"futurelab","defaultStyleBundle":"default","baseTemplate":"default","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}]}`), nil
+			return jsonResponse(http.StatusOK, `{"websites":[{"name":"sample","defaultStyleBundle":"default","baseTemplate":"default","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}]}`), nil
 		},
 	}
 
@@ -33,7 +33,7 @@ func TestListWebsitesBuildsExpectedRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListWebsites() error = %v", err)
 	}
-	if len(out.Websites) != 1 || out.Websites[0].Name != "futurelab" {
+	if len(out.Websites) != 1 || out.Websites[0].Name != "sample" {
 		t.Fatalf("unexpected websites response: %#v", out)
 	}
 }
@@ -63,7 +63,7 @@ func TestApplyBundleSetsContentTypeAndDryRunQuery(t *testing.T) {
 			if req.Method != http.MethodPost {
 				t.Fatalf("expected POST, got %s", req.Method)
 			}
-			if req.URL.Path != "/api/v1/websites/futurelab/environments/staging/apply" {
+			if req.URL.Path != "/api/v1/websites/sample/environments/staging/apply" {
 				t.Fatalf("unexpected path %s", req.URL.Path)
 			}
 			if req.URL.Query().Get("dry_run") != "true" {
@@ -77,12 +77,12 @@ func TestApplyBundleSetsContentTypeAndDryRunQuery(t *testing.T) {
 			if err != nil {
 				t.Fatalf("read request body: %v", err)
 			}
-			return jsonResponse(http.StatusOK, `{"website":"futurelab","environment":"staging","mode":"full","dryRun":true,"acceptedResources":[],"changes":{"created":0,"updated":0,"deleted":0}}`), nil
+			return jsonResponse(http.StatusOK, `{"website":"sample","environment":"staging","mode":"full","dryRun":true,"acceptedResources":[],"changes":{"created":0,"updated":0,"deleted":0}}`), nil
 		},
 	}
 
 	api := New(mock)
-	_, err := api.ApplyBundle(context.Background(), "futurelab", "staging", bytes.NewReader([]byte("bundle-bytes")), true)
+	_, err := api.ApplyBundle(context.Background(), "sample", "staging", bytes.NewReader([]byte("bundle-bytes")), true)
 	if err != nil {
 		t.Fatalf("ApplyBundle() error = %v", err)
 	}
@@ -94,11 +94,11 @@ func TestApplyBundleSetsContentTypeAndDryRunQuery(t *testing.T) {
 func TestListEnvironmentsMapsNotFoundError(t *testing.T) {
 	mock := &mockTransport{
 		doFn: func(ctx context.Context, req *http.Request) (*http.Response, error) {
-			return jsonResponse(http.StatusNotFound, `{"error":"website \"futurelab\" not found"}`), nil
+			return jsonResponse(http.StatusNotFound, `{"error":"website \"sample\" not found"}`), nil
 		},
 	}
 	api := New(mock)
-	_, err := api.ListEnvironments(context.Background(), "futurelab")
+	_, err := api.ListEnvironments(context.Background(), "sample")
 	if err == nil {
 		t.Fatalf("expected not found error")
 	}
@@ -135,7 +135,7 @@ func TestListReleasesMapsConflictAndServerErrors(t *testing.T) {
 				},
 			}
 			api := New(mock)
-			_, err := api.ListReleases(context.Background(), "futurelab", "staging")
+			_, err := api.ListReleases(context.Background(), "sample", "staging")
 			if err == nil {
 				t.Fatalf("expected error")
 			}
@@ -149,17 +149,17 @@ func TestListReleasesMapsConflictAndServerErrors(t *testing.T) {
 func TestListReleasesPageBuildsPaginationQuery(t *testing.T) {
 	mock := &mockTransport{
 		doFn: func(ctx context.Context, req *http.Request) (*http.Response, error) {
-			if req.URL.Path != "/api/v1/websites/futurelab/environments/staging/releases" {
+			if req.URL.Path != "/api/v1/websites/sample/environments/staging/releases" {
 				t.Fatalf("unexpected path %s", req.URL.Path)
 			}
 			if req.URL.RawQuery != "limit=5&offset=10" {
 				t.Fatalf("unexpected query %q", req.URL.RawQuery)
 			}
-			return jsonResponse(http.StatusOK, `{"website":"futurelab","environment":"staging","limit":5,"offset":10,"releases":[]}`), nil
+			return jsonResponse(http.StatusOK, `{"website":"sample","environment":"staging","limit":5,"offset":10,"releases":[]}`), nil
 		},
 	}
 	api := New(mock)
-	out, err := api.ListReleasesPage(context.Background(), "futurelab", "staging", 5, 10)
+	out, err := api.ListReleasesPage(context.Background(), "sample", "staging", 5, 10)
 	if err != nil {
 		t.Fatalf("ListReleasesPage() error = %v", err)
 	}
@@ -173,7 +173,7 @@ func TestListReleasesFetchesAllPages(t *testing.T) {
 	mock := &mockTransport{
 		doFn: func(ctx context.Context, req *http.Request) (*http.Response, error) {
 			call++
-			if req.URL.Path != "/api/v1/websites/futurelab/environments/staging/releases" {
+			if req.URL.Path != "/api/v1/websites/sample/environments/staging/releases" {
 				t.Fatalf("unexpected path %s", req.URL.Path)
 			}
 			switch call {
@@ -182,7 +182,7 @@ func TestListReleasesFetchesAllPages(t *testing.T) {
 					t.Fatalf("unexpected first query %q", req.URL.RawQuery)
 				}
 				return jsonResponse(http.StatusOK, `{
-  "website":"futurelab",
+  "website":"sample",
   "environment":"staging",
   "activeReleaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAV",
   "limit":200,
@@ -194,7 +194,7 @@ func TestListReleasesFetchesAllPages(t *testing.T) {
 					t.Fatalf("unexpected second query %q", req.URL.RawQuery)
 				}
 				return jsonResponse(http.StatusOK, `{
-  "website":"futurelab",
+  "website":"sample",
   "environment":"staging",
   "activeReleaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAV",
   "limit":200,
@@ -209,7 +209,7 @@ func TestListReleasesFetchesAllPages(t *testing.T) {
 	}
 
 	api := New(mock)
-	out, err := api.ListReleases(context.Background(), "futurelab", "staging")
+	out, err := api.ListReleases(context.Background(), "sample", "staging")
 	if err != nil {
 		t.Fatalf("ListReleases() error = %v", err)
 	}
@@ -224,14 +224,14 @@ func TestRollbackBuildsExpectedRequest(t *testing.T) {
 			if req.Method != http.MethodPost {
 				t.Fatalf("expected POST, got %s", req.Method)
 			}
-			if req.URL.Path != "/api/v1/websites/futurelab/environments/staging/rollback" {
+			if req.URL.Path != "/api/v1/websites/sample/environments/staging/rollback" {
 				t.Fatalf("unexpected path %s", req.URL.Path)
 			}
-			return jsonResponse(http.StatusOK, `{"website":"futurelab","environment":"staging","fromReleaseId":"A","toReleaseId":"B"}`), nil
+			return jsonResponse(http.StatusOK, `{"website":"sample","environment":"staging","fromReleaseId":"A","toReleaseId":"B"}`), nil
 		},
 	}
 	api := New(mock)
-	out, err := api.Rollback(context.Background(), "futurelab", "staging")
+	out, err := api.Rollback(context.Background(), "sample", "staging")
 	if err != nil {
 		t.Fatalf("Rollback() error = %v", err)
 	}
@@ -247,7 +247,7 @@ func TestPromoteBuildsExpectedRequest(t *testing.T) {
 			if req.Method != http.MethodPost {
 				t.Fatalf("expected POST, got %s", req.Method)
 			}
-			if req.URL.Path != "/api/v1/websites/futurelab/promote" {
+			if req.URL.Path != "/api/v1/websites/sample/promote" {
 				t.Fatalf("unexpected path %s", req.URL.Path)
 			}
 			if req.Header.Get("Content-Type") != "application/json" {
@@ -258,11 +258,11 @@ func TestPromoteBuildsExpectedRequest(t *testing.T) {
 				t.Fatalf("read request body: %v", err)
 			}
 			gotBody = string(body)
-			return jsonResponse(http.StatusOK, `{"website":"futurelab","fromEnvironment":"staging","toEnvironment":"prod","sourceReleaseId":"A","releaseId":"B","fileCount":3,"hash":"sha256:abc","hashVerified":true,"strategy":"hardlink"}`), nil
+			return jsonResponse(http.StatusOK, `{"website":"sample","fromEnvironment":"staging","toEnvironment":"prod","sourceReleaseId":"A","releaseId":"B","fileCount":3,"hash":"sha256:abc","hashVerified":true,"strategy":"hardlink"}`), nil
 		},
 	}
 	api := New(mock)
-	out, err := api.Promote(context.Background(), "futurelab", "staging", "prod")
+	out, err := api.Promote(context.Background(), "sample", "staging", "prod")
 	if err != nil {
 		t.Fatalf("Promote() error = %v", err)
 	}
@@ -280,14 +280,14 @@ func TestCreateReleaseBuildsExpectedRequest(t *testing.T) {
 			if req.Method != http.MethodPost {
 				t.Fatalf("expected POST, got %s", req.Method)
 			}
-			if req.URL.Path != "/api/v1/websites/futurelab/environments/staging/releases" {
+			if req.URL.Path != "/api/v1/websites/sample/environments/staging/releases" {
 				t.Fatalf("unexpected path %s", req.URL.Path)
 			}
-			return jsonResponse(http.StatusCreated, `{"website":"futurelab","environment":"staging","releaseId":"R1","status":"active"}`), nil
+			return jsonResponse(http.StatusCreated, `{"website":"sample","environment":"staging","releaseId":"R1","status":"active"}`), nil
 		},
 	}
 	api := New(mock)
-	out, err := api.CreateRelease(context.Background(), "futurelab", "staging")
+	out, err := api.CreateRelease(context.Background(), "sample", "staging")
 	if err != nil {
 		t.Fatalf("CreateRelease() error = %v", err)
 	}
@@ -302,7 +302,7 @@ func TestGetLogsBuildsExpectedRequest(t *testing.T) {
 			if req.Method != http.MethodGet {
 				t.Fatalf("expected GET, got %s", req.Method)
 			}
-			if req.URL.Path != "/api/v1/websites/futurelab/environments/staging/logs" {
+			if req.URL.Path != "/api/v1/websites/sample/environments/staging/logs" {
 				t.Fatalf("unexpected path %s", req.URL.Path)
 			}
 			if req.URL.RawQuery != "limit=50" {
@@ -312,7 +312,7 @@ func TestGetLogsBuildsExpectedRequest(t *testing.T) {
 		},
 	}
 	api := New(mock)
-	out, err := api.GetLogs(context.Background(), "futurelab", "staging", 50)
+	out, err := api.GetLogs(context.Background(), "sample", "staging", 50)
 	if err != nil {
 		t.Fatalf("GetLogs() error = %v", err)
 	}
@@ -346,7 +346,7 @@ func TestGetStatusMapsTransportErrors(t *testing.T) {
 		},
 	}
 	api := New(mock)
-	_, err := api.GetStatus(context.Background(), "futurelab", "staging")
+	_, err := api.GetStatus(context.Background(), "sample", "staging")
 	if err == nil {
 		t.Fatalf("expected transport error")
 	}
@@ -361,15 +361,15 @@ func TestGetDesiredStateManifestBuildsExpectedRequest(t *testing.T) {
 			if req.Method != http.MethodGet {
 				t.Fatalf("expected GET, got %s", req.Method)
 			}
-			if req.URL.Path != "/api/v1/websites/futurelab/environments/staging/manifest" {
+			if req.URL.Path != "/api/v1/websites/sample/environments/staging/manifest" {
 				t.Fatalf("unexpected path %s", req.URL.Path)
 			}
-			return jsonResponse(http.StatusOK, `{"website":"futurelab","environment":"staging","files":[{"path":"components/header.html","hash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}`), nil
+			return jsonResponse(http.StatusOK, `{"website":"sample","environment":"staging","files":[{"path":"components/header.html","hash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}`), nil
 		},
 	}
 
 	api := New(mock)
-	out, err := api.GetDesiredStateManifest(context.Background(), "futurelab", "staging")
+	out, err := api.GetDesiredStateManifest(context.Background(), "sample", "staging")
 	if err != nil {
 		t.Fatalf("GetDesiredStateManifest() error = %v", err)
 	}
@@ -392,20 +392,20 @@ func TestDomainBindingClientMethods(t *testing.T) {
 					t.Fatalf("read create body: %v", err)
 				}
 				gotCreateBody = string(body)
-				return jsonResponse(http.StatusCreated, `{"id":1,"domain":"futurelab.studio","website":"futurelab","environment":"staging","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}`), nil
+				return jsonResponse(http.StatusCreated, `{"id":1,"domain":"example.com","website":"sample","environment":"staging","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}`), nil
 			case http.MethodGet:
 				if req.URL.Path == "/api/v1/domains" {
-					if req.URL.RawQuery != "website=futurelab" {
+					if req.URL.RawQuery != "website=sample" {
 						t.Fatalf("unexpected list query %q", req.URL.RawQuery)
 					}
-					return jsonResponse(http.StatusOK, `{"domains":[{"id":1,"domain":"futurelab.studio","website":"futurelab","environment":"staging","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}]}`), nil
+					return jsonResponse(http.StatusOK, `{"domains":[{"id":1,"domain":"example.com","website":"sample","environment":"staging","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}]}`), nil
 				}
-				if req.URL.Path == "/api/v1/domains/futurelab.studio" {
-					return jsonResponse(http.StatusOK, `{"id":1,"domain":"futurelab.studio","website":"futurelab","environment":"staging","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}`), nil
+				if req.URL.Path == "/api/v1/domains/example.com" {
+					return jsonResponse(http.StatusOK, `{"id":1,"domain":"example.com","website":"sample","environment":"staging","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}`), nil
 				}
 				t.Fatalf("unexpected GET path %s", req.URL.Path)
 			case http.MethodDelete:
-				if req.URL.Path != "/api/v1/domains/futurelab.studio" {
+				if req.URL.Path != "/api/v1/domains/example.com" {
 					t.Fatalf("unexpected delete path %s", req.URL.Path)
 				}
 				return &http.Response{
@@ -420,18 +420,18 @@ func TestDomainBindingClientMethods(t *testing.T) {
 	}
 
 	api := New(mock)
-	created, err := api.CreateDomainBinding(context.Background(), "futurelab.studio", "futurelab", "staging")
+	created, err := api.CreateDomainBinding(context.Background(), "example.com", "sample", "staging")
 	if err != nil {
 		t.Fatalf("CreateDomainBinding() error = %v", err)
 	}
-	if !strings.Contains(gotCreateBody, `"domain":"futurelab.studio"`) || !strings.Contains(gotCreateBody, `"website":"futurelab"`) || !strings.Contains(gotCreateBody, `"environment":"staging"`) {
+	if !strings.Contains(gotCreateBody, `"domain":"example.com"`) || !strings.Contains(gotCreateBody, `"website":"sample"`) || !strings.Contains(gotCreateBody, `"environment":"staging"`) {
 		t.Fatalf("unexpected create payload %s", gotCreateBody)
 	}
-	if created.Domain != "futurelab.studio" {
+	if created.Domain != "example.com" {
 		t.Fatalf("unexpected created domain: %#v", created)
 	}
 
-	listed, err := api.ListDomainBindings(context.Background(), "futurelab", "")
+	listed, err := api.ListDomainBindings(context.Background(), "sample", "")
 	if err != nil {
 		t.Fatalf("ListDomainBindings() error = %v", err)
 	}
@@ -439,15 +439,15 @@ func TestDomainBindingClientMethods(t *testing.T) {
 		t.Fatalf("expected one listed domain, got %#v", listed.Domains)
 	}
 
-	got, err := api.GetDomainBinding(context.Background(), "futurelab.studio")
+	got, err := api.GetDomainBinding(context.Background(), "example.com")
 	if err != nil {
 		t.Fatalf("GetDomainBinding() error = %v", err)
 	}
-	if got.Domain != "futurelab.studio" {
+	if got.Domain != "example.com" {
 		t.Fatalf("unexpected get domain response: %#v", got)
 	}
 
-	if err := api.DeleteDomainBinding(context.Background(), "futurelab.studio"); err != nil {
+	if err := api.DeleteDomainBinding(context.Background(), "example.com"); err != nil {
 		t.Fatalf("DeleteDomainBinding() error = %v", err)
 	}
 }

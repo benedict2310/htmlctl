@@ -22,7 +22,7 @@ func TestRollbackEndpointSuccess(t *testing.T) {
 	first := createReleaseWithActor(t, baseURL, "alice")
 	second := createReleaseWithActor(t, baseURL, "bob")
 
-	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/websites/futurelab/environments/staging/rollback", nil)
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/websites/sample/environments/staging/rollback", nil)
 	if err != nil {
 		t.Fatalf("new rollback request: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestRollbackEndpointSuccess(t *testing.T) {
 		t.Fatalf("unexpected rollback response: %#v", out)
 	}
 
-	currentTarget, err := os.Readlink(filepath.Join(srv.dataPaths.WebsitesRoot, "futurelab", "envs", "staging", "current"))
+	currentTarget, err := os.Readlink(filepath.Join(srv.dataPaths.WebsitesRoot, "sample", "envs", "staging", "current"))
 	if err != nil {
 		t.Fatalf("read current symlink: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestRollbackEndpointSuccess(t *testing.T) {
 	}
 
 	q := dbpkg.NewQueries(srv.db)
-	websiteRow, err := q.GetWebsiteByName(context.Background(), "futurelab")
+	websiteRow, err := q.GetWebsiteByName(context.Background(), "sample")
 	if err != nil {
 		t.Fatalf("GetWebsiteByName() error = %v", err)
 	}
@@ -75,7 +75,7 @@ func TestRollbackEndpointNoPreviousRelease(t *testing.T) {
 	applySampleSite(t, baseURL)
 	_ = createReleaseWithActor(t, baseURL, "alice")
 
-	resp, err := http.Post(baseURL+"/api/v1/websites/futurelab/environments/staging/rollback", "application/json", nil)
+	resp, err := http.Post(baseURL+"/api/v1/websites/sample/environments/staging/rollback", "application/json", nil)
 	if err != nil {
 		t.Fatalf("POST /rollback error = %v", err)
 	}
@@ -97,12 +97,12 @@ func TestRollbackEndpointMissingTargetReleaseDirectory(t *testing.T) {
 	first := createReleaseWithActor(t, baseURL, "alice")
 	second := createReleaseWithActor(t, baseURL, "bob")
 
-	missingDir := filepath.Join(srv.dataPaths.WebsitesRoot, "futurelab", "envs", "staging", "releases", first)
+	missingDir := filepath.Join(srv.dataPaths.WebsitesRoot, "sample", "envs", "staging", "releases", first)
 	if err := os.RemoveAll(missingDir); err != nil {
 		t.Fatalf("RemoveAll(%s) error = %v", missingDir, err)
 	}
 
-	resp, err := http.Post(baseURL+"/api/v1/websites/futurelab/environments/staging/rollback", "application/json", nil)
+	resp, err := http.Post(baseURL+"/api/v1/websites/sample/environments/staging/rollback", "application/json", nil)
 	if err != nil {
 		t.Fatalf("POST /rollback error = %v", err)
 	}
@@ -133,7 +133,7 @@ func TestRollbackEndpointMissingTargetReleaseDirectory(t *testing.T) {
 		t.Fatalf("expected no details for rollback missing-dir conflict, got %#v", out.Details)
 	}
 
-	currentTarget, err := os.Readlink(filepath.Join(srv.dataPaths.WebsitesRoot, "futurelab", "envs", "staging", "current"))
+	currentTarget, err := os.Readlink(filepath.Join(srv.dataPaths.WebsitesRoot, "sample", "envs", "staging", "current"))
 	if err != nil {
 		t.Fatalf("read current symlink: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestRollbackEndpointMethodNotAllowed(t *testing.T) {
 	srv := startTestServer(t)
 	baseURL := "http://" + srv.Addr()
 
-	resp, err := http.Get(baseURL + "/api/v1/websites/futurelab/environments/staging/rollback")
+	resp, err := http.Get(baseURL + "/api/v1/websites/sample/environments/staging/rollback")
 	if err != nil {
 		t.Fatalf("GET /rollback error = %v", err)
 	}
@@ -161,7 +161,7 @@ func waitForRollbackAuditEntry(t *testing.T, baseURL string) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		resp, err := http.Get(baseURL + "/api/v1/websites/futurelab/environments/staging/logs?operation=rollback")
+		resp, err := http.Get(baseURL + "/api/v1/websites/sample/environments/staging/logs?operation=rollback")
 		if err != nil {
 			t.Fatalf("GET /logs?operation=rollback error = %v", err)
 		}

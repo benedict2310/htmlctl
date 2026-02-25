@@ -26,10 +26,10 @@ func TestPromoteEndpointSuccess(t *testing.T) {
 
 	applySampleSite(t, baseURL)
 	sourceReleaseID := createReleaseWithActor(t, baseURL, "alice")
-	ensureEnvironment(t, srv.db, "futurelab", "prod")
+	ensureEnvironment(t, srv.db, "sample", "prod")
 
 	body := bytes.NewBufferString(`{"from":"staging","to":"prod"}`)
-	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/websites/futurelab/promote", body)
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/websites/sample/promote", body)
 	if err != nil {
 		t.Fatalf("new promote request: %v", err)
 	}
@@ -52,8 +52,8 @@ func TestPromoteEndpointSuccess(t *testing.T) {
 		t.Fatalf("unexpected promote response: %#v", out)
 	}
 
-	stagingDir := filepath.Join(srv.dataPaths.WebsitesRoot, "futurelab", "envs", "staging", "releases", sourceReleaseID)
-	prodDir := filepath.Join(srv.dataPaths.WebsitesRoot, "futurelab", "envs", "prod", "releases", out.ReleaseID)
+	stagingDir := filepath.Join(srv.dataPaths.WebsitesRoot, "sample", "envs", "staging", "releases", sourceReleaseID)
+	prodDir := filepath.Join(srv.dataPaths.WebsitesRoot, "sample", "envs", "prod", "releases", out.ReleaseID)
 	stagingHashes, err := computePromotedContentHashes(stagingDir)
 	if err != nil {
 		t.Fatalf("computePromotedContentHashes(staging) error = %v", err)
@@ -66,7 +66,7 @@ func TestPromoteEndpointSuccess(t *testing.T) {
 		t.Fatalf("expected promoted content hashes to match staging; mismatch=%s", mismatch)
 	}
 
-	currentTarget, err := os.Readlink(filepath.Join(srv.dataPaths.WebsitesRoot, "futurelab", "envs", "prod", "current"))
+	currentTarget, err := os.Readlink(filepath.Join(srv.dataPaths.WebsitesRoot, "sample", "envs", "prod", "current"))
 	if err != nil {
 		t.Fatalf("read prod current symlink: %v", err)
 	}
@@ -82,9 +82,9 @@ func TestPromoteEndpointSourceHasNoActiveRelease(t *testing.T) {
 	baseURL := "http://" + srv.Addr()
 
 	applySampleSite(t, baseURL)
-	ensureEnvironment(t, srv.db, "futurelab", "prod")
+	ensureEnvironment(t, srv.db, "sample", "prod")
 
-	resp, err := http.Post(baseURL+"/api/v1/websites/futurelab/promote", "application/json", bytes.NewBufferString(`{"from":"prod","to":"staging"}`))
+	resp, err := http.Post(baseURL+"/api/v1/websites/sample/promote", "application/json", bytes.NewBufferString(`{"from":"prod","to":"staging"}`))
 	if err != nil {
 		t.Fatalf("POST /promote error = %v", err)
 	}
@@ -102,7 +102,7 @@ func TestPromoteEndpointTargetEnvironmentNotFound(t *testing.T) {
 	applySampleSite(t, baseURL)
 	createReleaseWithActor(t, baseURL, "alice")
 
-	resp, err := http.Post(baseURL+"/api/v1/websites/futurelab/promote", "application/json", bytes.NewBufferString(`{"from":"staging","to":"prod"}`))
+	resp, err := http.Post(baseURL+"/api/v1/websites/sample/promote", "application/json", bytes.NewBufferString(`{"from":"staging","to":"prod"}`))
 	if err != nil {
 		t.Fatalf("POST /promote error = %v", err)
 	}
@@ -119,7 +119,7 @@ func TestPromoteEndpointRejectsSameEnvironment(t *testing.T) {
 
 	applySampleSite(t, baseURL)
 
-	resp, err := http.Post(baseURL+"/api/v1/websites/futurelab/promote", "application/json", bytes.NewBufferString(`{"from":"staging","to":"staging"}`))
+	resp, err := http.Post(baseURL+"/api/v1/websites/sample/promote", "application/json", bytes.NewBufferString(`{"from":"staging","to":"staging"}`))
 	if err != nil {
 		t.Fatalf("POST /promote error = %v", err)
 	}
@@ -136,13 +136,13 @@ func TestPromoteEndpointHashMismatchDoesNotSwitchTargetCurrent(t *testing.T) {
 
 	applySampleSite(t, baseURL)
 	sourceReleaseID := createReleaseWithActor(t, baseURL, "alice")
-	ensureEnvironment(t, srv.db, "futurelab", "prod")
+	ensureEnvironment(t, srv.db, "sample", "prod")
 
 	if _, err := srv.db.Exec(`UPDATE releases SET output_hashes = ? WHERE id = ?`, `{"index.html":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`, sourceReleaseID); err != nil {
 		t.Fatalf("inject hash mismatch in source release row: %v", err)
 	}
 
-	resp, err := http.Post(baseURL+"/api/v1/websites/futurelab/promote", "application/json", bytes.NewBufferString(`{"from":"staging","to":"prod"}`))
+	resp, err := http.Post(baseURL+"/api/v1/websites/sample/promote", "application/json", bytes.NewBufferString(`{"from":"staging","to":"prod"}`))
 	if err != nil {
 		t.Fatalf("POST /promote error = %v", err)
 	}
@@ -170,7 +170,7 @@ func TestPromoteEndpointHashMismatchDoesNotSwitchTargetCurrent(t *testing.T) {
 	if len(out.Details) != 0 {
 		t.Fatalf("expected no details in hash mismatch response, got %#v", out.Details)
 	}
-	if _, err := os.Readlink(filepath.Join(srv.dataPaths.WebsitesRoot, "futurelab", "envs", "prod", "current")); !os.IsNotExist(err) {
+	if _, err := os.Readlink(filepath.Join(srv.dataPaths.WebsitesRoot, "sample", "envs", "prod", "current")); !os.IsNotExist(err) {
 		t.Fatalf("expected prod current symlink to remain absent, got err=%v", err)
 	}
 }
@@ -179,7 +179,7 @@ func TestPromoteEndpointMethodNotAllowedAndInvalidBody(t *testing.T) {
 	srv := startTestServer(t)
 	baseURL := "http://" + srv.Addr()
 
-	resp, err := http.Get(baseURL + "/api/v1/websites/futurelab/promote")
+	resp, err := http.Get(baseURL + "/api/v1/websites/sample/promote")
 	if err != nil {
 		t.Fatalf("GET /promote error = %v", err)
 	}
@@ -189,7 +189,7 @@ func TestPromoteEndpointMethodNotAllowedAndInvalidBody(t *testing.T) {
 		t.Fatalf("expected 405, got %d body=%s", resp.StatusCode, string(b))
 	}
 
-	resp, err = http.Post(baseURL+"/api/v1/websites/futurelab/promote", "application/json", bytes.NewBufferString(`{`))
+	resp, err = http.Post(baseURL+"/api/v1/websites/sample/promote", "application/json", bytes.NewBufferString(`{`))
 	if err != nil {
 		t.Fatalf("POST /promote invalid body error = %v", err)
 	}
@@ -217,7 +217,7 @@ func TestPromoteEndpointMissingFields(t *testing.T) {
 	srv := startTestServer(t)
 	baseURL := "http://" + srv.Addr()
 
-	resp, err := http.Post(baseURL+"/api/v1/websites/futurelab/promote", "application/json", bytes.NewBufferString(`{"from":"staging"}`))
+	resp, err := http.Post(baseURL+"/api/v1/websites/sample/promote", "application/json", bytes.NewBufferString(`{"from":"staging"}`))
 	if err != nil {
 		t.Fatalf("POST /promote missing fields error = %v", err)
 	}
@@ -241,7 +241,7 @@ func TestPromoteEndpointRejectsInvalidNames(t *testing.T) {
 		t.Fatalf("expected 400 for invalid website name, got %d", resp.StatusCode)
 	}
 
-	resp, err = http.Post(baseURL+"/api/v1/websites/futurelab/promote", "application/json", bytes.NewBufferString(`{"from":"staging\nblue","to":"prod"}`))
+	resp, err = http.Post(baseURL+"/api/v1/websites/sample/promote", "application/json", bytes.NewBufferString(`{"from":"staging\nblue","to":"prod"}`))
 	if err != nil {
 		t.Fatalf("POST /promote invalid from env error = %v", err)
 	}
@@ -250,7 +250,7 @@ func TestPromoteEndpointRejectsInvalidNames(t *testing.T) {
 		t.Fatalf("expected 400 for invalid source env name, got %d", resp.StatusCode)
 	}
 
-	resp, err = http.Post(baseURL+"/api/v1/websites/futurelab/promote", "application/json", bytes.NewBufferString(`{"from":"staging","to":"prod{evil}"}`))
+	resp, err = http.Post(baseURL+"/api/v1/websites/sample/promote", "application/json", bytes.NewBufferString(`{"from":"staging","to":"prod{evil}"}`))
 	if err != nil {
 		t.Fatalf("POST /promote invalid to env error = %v", err)
 	}
@@ -279,7 +279,7 @@ func waitForPromoteAuditEntry(t *testing.T, baseURL string) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		resp, err := http.Get(baseURL + "/api/v1/websites/futurelab/environments/prod/logs?operation=promote")
+		resp, err := http.Get(baseURL + "/api/v1/websites/sample/environments/prod/logs?operation=promote")
 		if err != nil {
 			t.Fatalf("GET /logs?operation=promote error = %v", err)
 		}

@@ -38,7 +38,7 @@ func TestReloaderSuccess(t *testing.T) {
 
 	runner := &fakeRunner{}
 	reloader, err := NewReloader("caddy", configPath, backupPath, func(ctx context.Context) (string, error) {
-		return "futurelab.studio {\n\troot * /srv/futurelab/prod/current\n\tfile_server\n}\n", nil
+		return "example.com {\n\troot * /srv/sample/prod/current\n\tfile_server\n}\n", nil
 	}, runner)
 	if err != nil {
 		t.Fatalf("NewReloader() error = %v", err)
@@ -51,7 +51,7 @@ func TestReloaderSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read updated config: %v", err)
 	}
-	if !strings.Contains(string(b), "futurelab.studio") {
+	if !strings.Contains(string(b), "example.com") {
 		t.Fatalf("expected updated config, got: %s", string(b))
 	}
 	bak, err := os.ReadFile(backupPath)
@@ -134,7 +134,7 @@ func TestReloaderReloadFailureRestoresBackup(t *testing.T) {
 		},
 	}
 	reloader, err := NewReloader("caddy", configPath, backupPath, func(ctx context.Context) (string, error) {
-		return "futurelab.studio {\n\tfile_server\n}\n", nil
+		return "example.com {\n\tfile_server\n}\n", nil
 	}, runner)
 	if err != nil {
 		t.Fatalf("NewReloader() error = %v", err)
@@ -172,7 +172,7 @@ func TestReloaderSerializesConcurrentCalls(t *testing.T) {
 		}
 		time.Sleep(30 * time.Millisecond)
 		atomic.AddInt32(&active, -1)
-		return "futurelab.studio {\n\tfile_server\n}\n", nil
+		return "example.com {\n\tfile_server\n}\n", nil
 	}, runner)
 	if err != nil {
 		t.Fatalf("NewReloader() error = %v", err)
@@ -232,7 +232,7 @@ func TestReloaderReloadFailureWithoutPreviousConfigRemovesNewConfig(t *testing.T
 		},
 	}
 	reloader, err := NewReloader("caddy", configPath, "", func(ctx context.Context) (string, error) {
-		return "futurelab.studio {\n\tfile_server\n}\n", nil
+		return "example.com {\n\tfile_server\n}\n", nil
 	}, runner)
 	if err != nil {
 		t.Fatalf("NewReloader() error = %v", err)
@@ -271,7 +271,7 @@ func TestReloaderWriteTempConfigFailure(t *testing.T) {
 		t.Fatalf("write blocker file: %v", err)
 	}
 	reloader, err := NewReloader("caddy", filepath.Join(blocker, "Caddyfile"), "", func(ctx context.Context) (string, error) {
-		return "futurelab.studio {\n\tfile_server\n}\n", nil
+		return "example.com {\n\tfile_server\n}\n", nil
 	}, &fakeRunner{})
 	if err != nil {
 		t.Fatalf("NewReloader() error = %v", err)
@@ -293,7 +293,7 @@ func TestReloaderBackupFailure(t *testing.T) {
 	}
 
 	reloader, err := NewReloader("caddy", configPath, filepath.Join(blocker, "backup"), func(ctx context.Context) (string, error) {
-		return "futurelab.studio {\n\tfile_server\n}\n", nil
+		return "example.com {\n\tfile_server\n}\n", nil
 	}, &fakeRunner{})
 	if err != nil {
 		t.Fatalf("NewReloader() error = %v", err)

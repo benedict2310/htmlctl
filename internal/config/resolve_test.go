@@ -12,13 +12,13 @@ func TestResolveContextWithExplicitOverride(t *testing.T) {
 			{
 				Name:        "staging",
 				Server:      "ssh://root@staging.example.com",
-				Website:     "futurelab",
+				Website:     "sample",
 				Environment: "staging",
 			},
 			{
 				Name:        "prod",
 				Server:      "ssh://root@prod.example.com",
-				Website:     "futurelab",
+				Website:     "sample",
 				Environment: "prod",
 				Port:        8420,
 				Token:       "prod-token",
@@ -48,7 +48,7 @@ func TestResolveContextUsesCurrentContextByDefault(t *testing.T) {
 			{
 				Name:        "staging",
 				Server:      "ssh://root@staging.example.com",
-				Website:     "futurelab",
+				Website:     "sample",
 				Environment: "staging",
 			},
 		},
@@ -70,13 +70,13 @@ func TestResolveContextMissingContextListsAvailable(t *testing.T) {
 			{
 				Name:        "staging",
 				Server:      "ssh://root@staging.example.com",
-				Website:     "futurelab",
+				Website:     "sample",
 				Environment: "staging",
 			},
 			{
 				Name:        "prod",
 				Server:      "ssh://root@prod.example.com",
-				Website:     "futurelab",
+				Website:     "sample",
 				Environment: "prod",
 			},
 		},
@@ -102,7 +102,7 @@ func TestResolveContextNoCurrentContextSelected(t *testing.T) {
 			{
 				Name:        "staging",
 				Server:      "ssh://root@staging.example.com",
-				Website:     "futurelab",
+				Website:     "sample",
 				Environment: "staging",
 			},
 		},

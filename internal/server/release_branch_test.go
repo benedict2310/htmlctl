@@ -14,7 +14,7 @@ import (
 func TestReleaseHandlersServiceUnavailable(t *testing.T) {
 	s := &Server{}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/websites/futurelab/environments/staging/releases", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/websites/sample/environments/staging/releases", nil)
 	rec := httptest.NewRecorder()
 	s.handleRelease(rec, req)
 	resp := rec.Result()
@@ -24,7 +24,7 @@ func TestReleaseHandlersServiceUnavailable(t *testing.T) {
 		t.Fatalf("expected GET /releases to return 503, got %d body=%s", resp.StatusCode, string(body))
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/websites/futurelab/environments/staging/releases", nil)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/websites/sample/environments/staging/releases", nil)
 	rec = httptest.NewRecorder()
 	s.handleRelease(rec, req)
 	resp = rec.Result()
@@ -40,11 +40,11 @@ func TestReleaseHistoryEnvironmentNotFoundBranch(t *testing.T) {
 	baseURL := "http://" + srv.Addr()
 	q := dbpkg.NewQueries(srv.db)
 
-	if _, err := q.InsertWebsite(context.Background(), dbpkg.WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"}); err != nil {
+	if _, err := q.InsertWebsite(context.Background(), dbpkg.WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"}); err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}
 
-	resp, err := http.Get(baseURL + "/api/v1/websites/futurelab/environments/staging/releases")
+	resp, err := http.Get(baseURL + "/api/v1/websites/sample/environments/staging/releases")
 	if err != nil {
 		t.Fatalf("GET /releases env not found error = %v", err)
 	}
@@ -75,7 +75,7 @@ func TestReleaseHistoryUnknownActorFallback(t *testing.T) {
 	baseURL := "http://" + srv.Addr()
 	q := dbpkg.NewQueries(srv.db)
 
-	websiteID, err := q.InsertWebsite(context.Background(), dbpkg.WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := q.InsertWebsite(context.Background(), dbpkg.WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}
@@ -98,7 +98,7 @@ func TestReleaseHistoryUnknownActorFallback(t *testing.T) {
 		t.Fatalf("UpdateEnvironmentActiveRelease() error = %v", err)
 	}
 
-	resp, err := http.Get(baseURL + "/api/v1/websites/futurelab/environments/staging/releases")
+	resp, err := http.Get(baseURL + "/api/v1/websites/sample/environments/staging/releases")
 	if err != nil {
 		t.Fatalf("GET /releases error = %v", err)
 	}

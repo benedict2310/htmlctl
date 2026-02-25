@@ -16,7 +16,7 @@ Introduce the DomainBinding resource so that htmlservd can map custom domain nam
 
 ## 2. User Story
 
-As an operator, I want to bind a custom domain (e.g., `futurelab.studio`) to a specific environment (e.g., `prod`) so that Caddy can later be configured to serve that environment's content on that domain with automatic TLS.
+As an operator, I want to bind a custom domain (e.g., `example.com`) to a specific environment (e.g., `prod`) so that Caddy can later be configured to serve that environment's content on that domain with automatic TLS.
 
 ## 3. Scope
 
@@ -71,7 +71,7 @@ As an operator, I want to bind a custom domain (e.g., `futurelab.studio`) to a s
 ### 5.3 Tests to Add
 
 - `internal/model/domain_binding_test.go`
-  - Valid domain names accepted (e.g., `futurelab.studio`, `staging.futurelab.studio`, `my-site.example.com`)
+  - Valid domain names accepted (e.g., `example.com`, `staging.example.com`, `my-site.example.com`)
   - Invalid domain names rejected (empty string, spaces, underscores in labels, trailing dots, IP addresses, too-long labels)
   - Domain normalization (lowercased, trimmed)
 - `internal/store/domain_binding_store_test.go`

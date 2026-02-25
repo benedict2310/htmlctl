@@ -16,22 +16,22 @@ func TestApplyCommandProgressAndRelease(t *testing.T) {
 		handle: func(call int, req recordedRequest) (*http.Response, error) {
 			switch call {
 			case 0:
-				if req.Method != "POST" || req.Path != "/api/v1/websites/futurelab/environments/staging/apply" {
+				if req.Method != "POST" || req.Path != "/api/v1/websites/sample/environments/staging/apply" {
 					t.Fatalf("unexpected apply request: %#v", req)
 				}
 				b, err := bundle.ReadTar(bytes.NewReader(req.Body))
 				if err != nil {
 					t.Fatalf("bundle.ReadTar() error = %v", err)
 				}
-				if b.Manifest.Website != "futurelab" {
+				if b.Manifest.Website != "sample" {
 					t.Fatalf("unexpected manifest website %q", b.Manifest.Website)
 				}
-				return jsonHTTPResponse(200, `{"website":"futurelab","environment":"staging","mode":"full","dryRun":false,"acceptedResources":[{"kind":"Component","name":"header"}],"changes":{"created":1,"updated":0,"deleted":0}}`), nil
+				return jsonHTTPResponse(200, `{"website":"sample","environment":"staging","mode":"full","dryRun":false,"acceptedResources":[{"kind":"Component","name":"header"}],"changes":{"created":1,"updated":0,"deleted":0}}`), nil
 			case 1:
-				if req.Method != "POST" || req.Path != "/api/v1/websites/futurelab/environments/staging/releases" {
+				if req.Method != "POST" || req.Path != "/api/v1/websites/sample/environments/staging/releases" {
 					t.Fatalf("unexpected releases request: %#v", req)
 				}
-				return jsonHTTPResponse(201, `{"website":"futurelab","environment":"staging","releaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAV","status":"active"}`), nil
+				return jsonHTTPResponse(201, `{"website":"sample","environment":"staging","releaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAV","status":"active"}`), nil
 			default:
 				t.Fatalf("unexpected transport call %d", call)
 				return nil, nil
@@ -49,7 +49,7 @@ func TestApplyCommandProgressAndRelease(t *testing.T) {
 		}
 	}
 	for _, marker := range []string{
-		"First deploy for futurelab/staging complete.",
+		"First deploy for sample/staging complete.",
 		"Next: run 'htmlctl domain add <domain> --context staging' to publish it.",
 	} {
 		if !strings.Contains(out, marker) {
@@ -89,9 +89,9 @@ func TestApplyCommandJSONOutputSuppressesProgress(t *testing.T) {
 	tr := &scriptedTransport{
 		handle: func(call int, req recordedRequest) (*http.Response, error) {
 			if call == 0 {
-				return jsonHTTPResponse(200, `{"website":"futurelab","environment":"staging","mode":"full","dryRun":false,"acceptedResources":[{"kind":"Component","name":"header"}],"changes":{"created":1,"updated":0,"deleted":0}}`), nil
+				return jsonHTTPResponse(200, `{"website":"sample","environment":"staging","mode":"full","dryRun":false,"acceptedResources":[{"kind":"Component","name":"header"}],"changes":{"created":1,"updated":0,"deleted":0}}`), nil
 			}
-			return jsonHTTPResponse(201, `{"website":"futurelab","environment":"staging","releaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAV","status":"active"}`), nil
+			return jsonHTTPResponse(201, `{"website":"sample","environment":"staging","releaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAV","status":"active"}`), nil
 		},
 	}
 
@@ -115,10 +115,10 @@ func TestApplyCommandDryRunUsesDiffWithoutUpload(t *testing.T) {
 			if call != 0 {
 				t.Fatalf("unexpected transport call %d: %#v", call, req)
 			}
-			if req.Method != "GET" || req.Path != "/api/v1/websites/futurelab/environments/staging/manifest" {
+			if req.Method != "GET" || req.Path != "/api/v1/websites/sample/environments/staging/manifest" {
 				t.Fatalf("unexpected dry-run request: %#v", req)
 			}
-			return jsonHTTPResponse(200, `{"website":"futurelab","environment":"staging","files":[]}`), nil
+			return jsonHTTPResponse(200, `{"website":"sample","environment":"staging","files":[]}`), nil
 		},
 	}
 
@@ -181,9 +181,9 @@ func TestApplyCommandDoesNotPrintFirstDeployHintWhenPreviousReleaseExists(t *tes
 	tr := &scriptedTransport{
 		handle: func(call int, req recordedRequest) (*http.Response, error) {
 			if call == 0 {
-				return jsonHTTPResponse(200, `{"website":"futurelab","environment":"staging","mode":"full","dryRun":false,"acceptedResources":[{"kind":"Component","name":"header"}],"changes":{"created":1,"updated":0,"deleted":0}}`), nil
+				return jsonHTTPResponse(200, `{"website":"sample","environment":"staging","mode":"full","dryRun":false,"acceptedResources":[{"kind":"Component","name":"header"}],"changes":{"created":1,"updated":0,"deleted":0}}`), nil
 			}
-			return jsonHTTPResponse(201, `{"website":"futurelab","environment":"staging","releaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAV","previousReleaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAA","status":"active"}`), nil
+			return jsonHTTPResponse(201, `{"website":"sample","environment":"staging","releaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAV","previousReleaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAA","status":"active"}`), nil
 		},
 	}
 
@@ -204,7 +204,7 @@ func TestApplyCommandDryRunJSONOutput(t *testing.T) {
 			if call != 0 {
 				t.Fatalf("unexpected transport call %d: %#v", call, req)
 			}
-			return jsonHTTPResponse(200, `{"website":"futurelab","environment":"staging","files":[]}`), nil
+			return jsonHTTPResponse(200, `{"website":"sample","environment":"staging","files":[]}`), nil
 		},
 	}
 

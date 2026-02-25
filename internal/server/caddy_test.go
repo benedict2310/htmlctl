@@ -14,7 +14,7 @@ func TestGenerateCaddyConfigFromDomainBindings(t *testing.T) {
 	ctx := context.Background()
 
 	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{
-		Name:               "futurelab",
+		Name:               "sample",
 		DefaultStyleBundle: "default",
 		BaseTemplate:       "default",
 	})
@@ -30,13 +30,13 @@ func TestGenerateCaddyConfigFromDomainBindings(t *testing.T) {
 		t.Fatalf("InsertEnvironment(prod) error = %v", err)
 	}
 	if _, err := q.InsertDomainBinding(ctx, dbpkg.DomainBindingRow{
-		Domain:        "staging.futurelab.studio",
+		Domain:        "staging.example.com",
 		EnvironmentID: stagingID,
 	}); err != nil {
 		t.Fatalf("InsertDomainBinding(staging) error = %v", err)
 	}
 	if _, err := q.InsertDomainBinding(ctx, dbpkg.DomainBindingRow{
-		Domain:        "futurelab.studio",
+		Domain:        "example.com",
 		EnvironmentID: prodID,
 	}); err != nil {
 		t.Fatalf("InsertDomainBinding(prod) error = %v", err)
@@ -46,15 +46,15 @@ func TestGenerateCaddyConfigFromDomainBindings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generateCaddyConfig() error = %v", err)
 	}
-	first := strings.Index(cfg, "futurelab.studio {")
-	second := strings.Index(cfg, "staging.futurelab.studio {")
+	first := strings.Index(cfg, "example.com {")
+	second := strings.Index(cfg, "staging.example.com {")
 	if first == -1 || second == -1 || first > second {
 		t.Fatalf("expected sorted domain blocks, got:\n%s", cfg)
 	}
-	if !strings.Contains(cfg, "/websites/futurelab/envs/prod/current") {
+	if !strings.Contains(cfg, "/websites/sample/envs/prod/current") {
 		t.Fatalf("expected prod root path in config, got:\n%s", cfg)
 	}
-	if !strings.Contains(cfg, "/websites/futurelab/envs/staging/current") {
+	if !strings.Contains(cfg, "/websites/sample/envs/staging/current") {
 		t.Fatalf("expected staging root path in config, got:\n%s", cfg)
 	}
 }
@@ -68,7 +68,7 @@ func TestGenerateCaddyConfigIncludesTelemetryProxyWhenEnabled(t *testing.T) {
 	ctx := context.Background()
 
 	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{
-		Name:               "futurelab",
+		Name:               "sample",
 		DefaultStyleBundle: "default",
 		BaseTemplate:       "default",
 	})
@@ -80,7 +80,7 @@ func TestGenerateCaddyConfigIncludesTelemetryProxyWhenEnabled(t *testing.T) {
 		t.Fatalf("InsertEnvironment(staging) error = %v", err)
 	}
 	if _, err := q.InsertDomainBinding(ctx, dbpkg.DomainBindingRow{
-		Domain:        "futurelab.studio",
+		Domain:        "example.com",
 		EnvironmentID: envID,
 	}); err != nil {
 		t.Fatalf("InsertDomainBinding() error = %v", err)
@@ -106,7 +106,7 @@ func TestGenerateCaddyConfigOmitsTelemetryProxyWhenDisabled(t *testing.T) {
 	ctx := context.Background()
 
 	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{
-		Name:               "futurelab",
+		Name:               "sample",
 		DefaultStyleBundle: "default",
 		BaseTemplate:       "default",
 	})
@@ -118,7 +118,7 @@ func TestGenerateCaddyConfigOmitsTelemetryProxyWhenDisabled(t *testing.T) {
 		t.Fatalf("InsertEnvironment(staging) error = %v", err)
 	}
 	if _, err := q.InsertDomainBinding(ctx, dbpkg.DomainBindingRow{
-		Domain:        "futurelab.studio",
+		Domain:        "example.com",
 		EnvironmentID: envID,
 	}); err != nil {
 		t.Fatalf("InsertDomainBinding() error = %v", err)

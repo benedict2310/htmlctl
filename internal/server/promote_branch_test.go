@@ -10,7 +10,7 @@ import (
 
 func TestPromoteHandlerServiceUnavailableAndNotFound(t *testing.T) {
 	s := &Server{}
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/websites/futurelab/promote", bytes.NewBufferString(`{"from":"staging","to":"prod"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/websites/sample/promote", bytes.NewBufferString(`{"from":"staging","to":"prod"}`))
 	rec := httptest.NewRecorder()
 	s.handlePromote(rec, req)
 	resp := rec.Result()

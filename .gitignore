@@ -15,3 +15,12 @@ dist/
 tmp/
 .tmp/
 .artifacts/
+
+# Agent-local directories (kept out of repo going forward)
+.claude/
+.codex/
+
+# Local demo helper scripts/docs (not part of repo)
+scripts/demo-*.sh
+scripts/record-demo.sh
+docs/guides/showcase-demo.md

@@ -24,7 +24,7 @@ As an operator, I want htmlservd to automatically generate Caddy configuration f
 
 - Go template for Caddy site blocks (Caddyfile format)
 - Config generator that reads all DomainBinding records and produces a complete Caddyfile
-- Each domain binding produces a site block with `file_server` serving from the environment's `current/` symlink path (e.g., `/var/lib/htmlservd/websites/futurelab/envs/prod/current`)
+- Each domain binding produces a site block with `file_server` serving from the environment's `current/` symlink path (e.g., `/var/lib/htmlservd/websites/sample/envs/prod/current`)
 - Support multiple domains per environment (multiple site blocks pointing to same root)
 - Automatic TLS via Caddy's built-in ACME (default behavior when domain is a public hostname)
 - Output written to a configurable file path (e.g., `/etc/caddy/Caddyfile` or `/etc/caddy/conf.d/htmlservd.Caddyfile`)
@@ -132,19 +132,19 @@ As an operator, I want htmlservd to automatically generate Caddy configuration f
 ## Appendix: Example Generated Caddyfile
 
 Given domain bindings:
-- `futurelab.studio` -> website `futurelab`, environment `prod`
-- `staging.futurelab.studio` -> website `futurelab`, environment `staging`
+- `example.com` -> website `sample`, environment `prod`
+- `staging.example.com` -> website `sample`, environment `staging`
 
 Generated output:
 
 ```
-futurelab.studio {
-	root * /var/lib/htmlservd/websites/futurelab/envs/prod/current
+example.com {
+	root * /var/lib/htmlservd/websites/sample/envs/prod/current
 	file_server
 }
 
-staging.futurelab.studio {
-	root * /var/lib/htmlservd/websites/futurelab/envs/staging/current
+staging.example.com {
+	root * /var/lib/htmlservd/websites/sample/envs/staging/current
 	file_server
 }
 ```

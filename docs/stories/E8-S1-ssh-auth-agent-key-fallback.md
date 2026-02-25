@@ -77,7 +77,7 @@ As an `htmlctl` user with multiple SSH keys loaded in my agent, I want auth to a
 
 ### Manual Tests
 
-- [x] Verified on Hetzner staging (2026-02-24): agent held wrong key, `~/.ssh/id_ed25519` held correct key, `htmlctl apply` succeeded without `SSH_AUTH_SOCK=""`.
+- [x] Verified on a staging VPS (2026-02-24): agent held wrong key, `~/.ssh/id_ed25519` held correct key, `htmlctl apply` succeeded without `SSH_AUTH_SOCK=""`.
 - [x] Workaround (`SSH_AUTH_SOCK=""`) still works as before.
 
 ## 8. Performance / Reliability Considerations

@@ -122,7 +122,7 @@ As an AI agent editing website components, I want clear validation errors when m
 ### Manual Tests
 
 - [ ] Create a deliberately broken component (multi-root) and verify the error message is clear enough for an agent to fix the issue
-- [ ] Validate all components in the sample futurelab site to ensure they all pass
+- [ ] Validate all components in the sample site to ensure they all pass
 
 ## 8. Performance / Reliability Considerations
 

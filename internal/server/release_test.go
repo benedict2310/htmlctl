@@ -18,7 +18,7 @@ func TestReleaseEndpointBuildsAndActivatesRelease(t *testing.T) {
 
 	applySampleSite(t, baseURL)
 
-	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/websites/futurelab/environments/staging/releases", nil)
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/websites/sample/environments/staging/releases", nil)
 	if err != nil {
 		t.Fatalf("new release request: %v", err)
 	}
@@ -40,13 +40,13 @@ func TestReleaseEndpointBuildsAndActivatesRelease(t *testing.T) {
 		t.Fatalf("unexpected response: %#v", out)
 	}
 
-	releaseDir := filepath.Join(srv.dataPaths.WebsitesRoot, "futurelab", "envs", "staging", "releases", out.ReleaseID)
+	releaseDir := filepath.Join(srv.dataPaths.WebsitesRoot, "sample", "envs", "staging", "releases", out.ReleaseID)
 	for _, rel := range []string{"index.html", "styles/tokens.css", "styles/default.css", "assets/logo.svg", ".manifest.json", ".build-log.txt", ".output-hashes.json"} {
 		if _, err := os.Stat(filepath.Join(releaseDir, filepath.FromSlash(rel))); err != nil {
 			t.Fatalf("expected release output file %s: %v", rel, err)
 		}
 	}
-	currentTarget, err := os.Readlink(filepath.Join(srv.dataPaths.WebsitesRoot, "futurelab", "envs", "staging", "current"))
+	currentTarget, err := os.Readlink(filepath.Join(srv.dataPaths.WebsitesRoot, "sample", "envs", "staging", "current"))
 	if err != nil {
 		t.Fatalf("read current symlink: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestReleaseEndpointBuildsAndActivatesRelease(t *testing.T) {
 	}
 
 	q := dbpkg.NewQueries(srv.db)
-	websiteRow, err := q.GetWebsiteByName(context.Background(), "futurelab")
+	websiteRow, err := q.GetWebsiteByName(context.Background(), "sample")
 	if err != nil {
 		t.Fatalf("GetWebsiteByName() error = %v", err)
 	}
@@ -90,19 +90,19 @@ func TestReleaseEndpointFailureRecordsFailedStatus(t *testing.T) {
 		"apiVersion": "htmlctl.dev/v1",
 		"kind":       "Bundle",
 		"mode":       "partial",
-		"website":    "futurelab",
+		"website":    "sample",
 		"resources": []map[string]any{
 			{"kind": "Page", "name": "index", "file": "pages/index.page.yaml", "hash": "sha256:" + sha256Hex(page)},
 			{"kind": "StyleBundle", "name": "default", "files": []map[string]any{{"file": "styles/tokens.css", "hash": "sha256:" + sha256Hex(tokensCSS)}, {"file": "styles/default.css", "hash": "sha256:" + sha256Hex(defaultCSS)}}},
 		},
 	})
-	resp := postBundle(t, baseURL+"/api/v1/websites/futurelab/environments/staging/apply", body)
+	resp := postBundle(t, baseURL+"/api/v1/websites/sample/environments/staging/apply", body)
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected apply to succeed, got %d", resp.StatusCode)
 	}
 
-	resp, err := http.Post(baseURL+"/api/v1/websites/futurelab/environments/staging/releases", "application/json", nil)
+	resp, err := http.Post(baseURL+"/api/v1/websites/sample/environments/staging/releases", "application/json", nil)
 	if err != nil {
 		t.Fatalf("POST /releases error = %v", err)
 	}
@@ -113,7 +113,7 @@ func TestReleaseEndpointFailureRecordsFailedStatus(t *testing.T) {
 	}
 
 	q := dbpkg.NewQueries(srv.db)
-	websiteRow, err := q.GetWebsiteByName(context.Background(), "futurelab")
+	websiteRow, err := q.GetWebsiteByName(context.Background(), "sample")
 	if err != nil {
 		t.Fatalf("GetWebsiteByName() error = %v", err)
 	}
@@ -129,7 +129,7 @@ func TestReleaseEndpointFailureRecordsFailedStatus(t *testing.T) {
 		t.Fatalf("expected latest release status failed, got %#v", releases)
 	}
 
-	listResp, err := http.Get(baseURL + "/api/v1/websites/futurelab/environments/staging/releases")
+	listResp, err := http.Get(baseURL + "/api/v1/websites/sample/environments/staging/releases")
 	if err != nil {
 		t.Fatalf("GET /releases error = %v", err)
 	}
@@ -151,7 +151,7 @@ func TestReleaseEndpointMethodNotAllowed(t *testing.T) {
 	srv := startTestServer(t)
 	baseURL := "http://" + srv.Addr()
 
-	req, err := http.NewRequest(http.MethodDelete, baseURL+"/api/v1/websites/futurelab/environments/staging/releases", nil)
+	req, err := http.NewRequest(http.MethodDelete, baseURL+"/api/v1/websites/sample/environments/staging/releases", nil)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -184,7 +184,7 @@ func applySampleSite(t *testing.T, baseURL string) {
 		"apiVersion": "htmlctl.dev/v1",
 		"kind":       "Bundle",
 		"mode":       "partial",
-		"website":    "futurelab",
+		"website":    "sample",
 		"resources": []map[string]any{
 			{"kind": "Component", "name": "header", "file": "components/header.html", "hash": "sha256:" + sha256Hex(component)},
 			{"kind": "Page", "name": "index", "file": "pages/index.page.yaml", "hash": "sha256:" + sha256Hex(page)},
@@ -192,7 +192,7 @@ func applySampleSite(t *testing.T, baseURL string) {
 			{"kind": "Asset", "name": "assets/logo.svg", "file": "assets/logo.svg", "hash": "sha256:" + sha256Hex(asset), "contentType": "image/svg+xml"},
 		},
 	})
-	resp := postBundle(t, baseURL+"/api/v1/websites/futurelab/environments/staging/apply", body)
+	resp := postBundle(t, baseURL+"/api/v1/websites/sample/environments/staging/apply", body)
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected apply success, got %d", resp.StatusCode)

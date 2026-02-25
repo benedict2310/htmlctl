@@ -10,15 +10,15 @@ import (
 func TestBuildTarFromDirProducesValidBundle(t *testing.T) {
 	siteDir := writeSiteFixture(t)
 
-	archive, manifest, err := BuildTarFromDir(siteDir, "futurelab")
+	archive, manifest, err := BuildTarFromDir(siteDir, "sample")
 	if err != nil {
 		t.Fatalf("BuildTarFromDir() error = %v", err)
 	}
 	if manifest.Mode != ApplyModeFull {
 		t.Fatalf("expected full mode, got %q", manifest.Mode)
 	}
-	if manifest.Website != "futurelab" {
-		t.Fatalf("expected futurelab website, got %q", manifest.Website)
+	if manifest.Website != "sample" {
+		t.Fatalf("expected sample website, got %q", manifest.Website)
 	}
 	if len(manifest.Resources) != 6 {
 		t.Fatalf("expected 6 resources, got %d", len(manifest.Resources))
@@ -64,7 +64,7 @@ func TestBuildTarFromDirMissingWebsiteYAMLFails(t *testing.T) {
 		t.Fatalf("write default.css: %v", err)
 	}
 
-	_, _, err := BuildTarFromDir(siteDir, "futurelab")
+	_, _, err := BuildTarFromDir(siteDir, "sample")
 	if err == nil {
 		t.Fatalf("expected missing website.yaml error")
 	}
@@ -113,7 +113,7 @@ func writeSiteFixture(t *testing.T) string {
 		"website.yaml": `apiVersion: htmlctl.dev/v1
 kind: Website
 metadata:
-  name: futurelab
+  name: sample
 spec:
   defaultStyleBundle: default
   baseTemplate: default

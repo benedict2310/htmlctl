@@ -9,7 +9,7 @@ import (
 func TestLogsCommandYAMLOutput(t *testing.T) {
 	tr := &scriptedTransport{
 		handle: func(call int, req recordedRequest) (*http.Response, error) {
-			if req.Path != "/api/v1/websites/futurelab/environments/staging/logs" {
+			if req.Path != "/api/v1/websites/sample/environments/staging/logs" {
 				t.Fatalf("unexpected request path %s", req.Path)
 			}
 			if req.Query != "limit=1" {
@@ -33,7 +33,7 @@ func TestLogsCommandYAMLOutput(t *testing.T) {
 		},
 	}
 
-	out, _, err := runCommandWithTransport(t, []string{"logs", "website/futurelab", "--limit", "1", "--output", "yaml"}, tr)
+	out, _, err := runCommandWithTransport(t, []string{"logs", "website/sample", "--limit", "1", "--output", "yaml"}, tr)
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}

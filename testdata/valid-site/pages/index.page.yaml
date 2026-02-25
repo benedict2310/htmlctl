@@ -4,7 +4,7 @@ metadata:
   name: index
 spec:
   route: /
-  title: "Futurelab"
+  title: "Sample"
   description: "Landing page"
   layout:
     - include: header

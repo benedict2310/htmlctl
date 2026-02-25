@@ -17,24 +17,24 @@ func TestDomainAddCommand(t *testing.T) {
 				t.Fatalf("unexpected request: %#v", req)
 			}
 			body := string(req.Body)
-			if !strings.Contains(body, `"domain":"futurelab.studio"`) {
+			if !strings.Contains(body, `"domain":"example.com"`) {
 				t.Fatalf("missing domain in request body: %s", body)
 			}
-			if !strings.Contains(body, `"website":"futurelab"`) {
+			if !strings.Contains(body, `"website":"sample"`) {
 				t.Fatalf("missing website in request body: %s", body)
 			}
 			if !strings.Contains(body, `"environment":"staging"`) {
 				t.Fatalf("missing environment in request body: %s", body)
 			}
-			return jsonHTTPResponse(201, `{"id":1,"domain":"futurelab.studio","website":"futurelab","environment":"staging","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}`), nil
+			return jsonHTTPResponse(201, `{"id":1,"domain":"example.com","website":"sample","environment":"staging","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}`), nil
 		},
 	}
 
-	out, _, err := runCommandWithTransport(t, []string{"domain", "add", "futurelab.studio"}, tr)
+	out, _, err := runCommandWithTransport(t, []string{"domain", "add", "example.com"}, tr)
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if !strings.Contains(out, "Domain binding created") || !strings.Contains(out, "futurelab.studio") {
+	if !strings.Contains(out, "Domain binding created") || !strings.Contains(out, "example.com") {
 		t.Fatalf("unexpected output: %s", out)
 	}
 }
@@ -42,14 +42,14 @@ func TestDomainAddCommand(t *testing.T) {
 func TestDomainAddJSONOutput(t *testing.T) {
 	tr := &scriptedTransport{
 		handle: func(call int, req recordedRequest) (*http.Response, error) {
-			return jsonHTTPResponse(201, `{"id":1,"domain":"futurelab.studio","website":"futurelab","environment":"staging","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}`), nil
+			return jsonHTTPResponse(201, `{"id":1,"domain":"example.com","website":"sample","environment":"staging","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}`), nil
 		},
 	}
-	out, _, err := runCommandWithTransport(t, []string{"domain", "add", "futurelab.studio", "--output", "json"}, tr)
+	out, _, err := runCommandWithTransport(t, []string{"domain", "add", "example.com", "--output", "json"}, tr)
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if !strings.Contains(out, `"domain": "futurelab.studio"`) {
+	if !strings.Contains(out, `"domain": "example.com"`) {
 		t.Fatalf("unexpected JSON output: %s", out)
 	}
 }
@@ -61,12 +61,12 @@ func TestDomainListAndRemoveCommands(t *testing.T) {
 			call++
 			switch call {
 			case 1:
-				if req.Method != http.MethodGet || req.Path != "/api/v1/domains" || req.Query != "website=futurelab" {
+				if req.Method != http.MethodGet || req.Path != "/api/v1/domains" || req.Query != "website=sample" {
 					t.Fatalf("unexpected list request: %#v", req)
 				}
-				return jsonHTTPResponse(200, `{"domains":[{"id":1,"domain":"futurelab.studio","website":"futurelab","environment":"staging","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}]}`), nil
+				return jsonHTTPResponse(200, `{"domains":[{"id":1,"domain":"example.com","website":"sample","environment":"staging","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}]}`), nil
 			case 2:
-				if req.Method != http.MethodDelete || req.Path != "/api/v1/domains/futurelab.studio" {
+				if req.Method != http.MethodDelete || req.Path != "/api/v1/domains/example.com" {
 					t.Fatalf("unexpected remove request: %#v", req)
 				}
 				return jsonHTTPResponse(204, ``), nil
@@ -81,15 +81,15 @@ func TestDomainListAndRemoveCommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list Execute() error = %v", err)
 	}
-	if !strings.Contains(out, "futurelab.studio") {
+	if !strings.Contains(out, "example.com") {
 		t.Fatalf("unexpected list output: %s", out)
 	}
 
-	out, _, err = runCommandWithTransport(t, []string{"domain", "remove", "futurelab.studio"}, tr)
+	out, _, err = runCommandWithTransport(t, []string{"domain", "remove", "example.com"}, tr)
 	if err != nil {
 		t.Fatalf("remove Execute() error = %v", err)
 	}
-	if !strings.Contains(out, "Domain binding removed: futurelab.studio") {
+	if !strings.Contains(out, "Domain binding removed: example.com") {
 		t.Fatalf("unexpected remove output: %s", out)
 	}
 }
@@ -100,7 +100,7 @@ func TestDomainListJSONOutput(t *testing.T) {
 			if req.Method != http.MethodGet {
 				t.Fatalf("unexpected method %s", req.Method)
 			}
-			return jsonHTTPResponse(200, `{"domains":[{"id":1,"domain":"futurelab.studio","website":"futurelab","environment":"staging","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}]}`), nil
+			return jsonHTTPResponse(200, `{"domains":[{"id":1,"domain":"example.com","website":"sample","environment":"staging","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}]}`), nil
 		},
 	}
 	out, _, err := runCommandWithTransport(t, []string{"domain", "list", "--output", "json"}, tr)
@@ -124,7 +124,7 @@ func TestDomainListEmptyAndRemoveJSON(t *testing.T) {
 				}
 				return jsonHTTPResponse(200, `{"domains":[]}`), nil
 			case 2:
-				if req.Method != http.MethodDelete || req.Path != "/api/v1/domains/futurelab.studio" {
+				if req.Method != http.MethodDelete || req.Path != "/api/v1/domains/example.com" {
 					t.Fatalf("unexpected remove request: %#v", req)
 				}
 				return jsonHTTPResponse(204, ``), nil
@@ -143,7 +143,7 @@ func TestDomainListEmptyAndRemoveJSON(t *testing.T) {
 		t.Fatalf("unexpected empty list output: %s", out)
 	}
 
-	out, _, err = runCommandWithTransport(t, []string{"domain", "remove", "futurelab.studio", "--output", "json"}, tr)
+	out, _, err = runCommandWithTransport(t, []string{"domain", "remove", "example.com", "--output", "json"}, tr)
 	if err != nil {
 		t.Fatalf("remove Execute() error = %v", err)
 	}
@@ -185,7 +185,7 @@ func TestDomainVerifyCommandSuccess(t *testing.T) {
 	errOut := &bytes.Buffer{}
 	cmd.SetOut(out)
 	cmd.SetErr(errOut)
-	cmd.SetArgs([]string{"domain", "verify", "futurelab.studio"})
+	cmd.SetArgs([]string{"domain", "verify", "example.com"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("verify Execute() error = %v", err)
 	}
@@ -217,7 +217,7 @@ func TestDomainVerifyCommandFailure(t *testing.T) {
 	errOut := &bytes.Buffer{}
 	cmd.SetOut(out)
 	cmd.SetErr(errOut)
-	cmd.SetArgs([]string{"domain", "verify", "futurelab.studio"})
+	cmd.SetArgs([]string{"domain", "verify", "example.com"})
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatalf("expected verification failure")
@@ -252,7 +252,7 @@ func TestDomainVerifyJSONOutputAndTLSFailure(t *testing.T) {
 	errOut := &bytes.Buffer{}
 	cmd.SetOut(out)
 	cmd.SetErr(errOut)
-	cmd.SetArgs([]string{"domain", "verify", "futurelab.studio", "--output", "json"})
+	cmd.SetArgs([]string{"domain", "verify", "example.com", "--output", "json"})
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatalf("expected verification failure")
@@ -288,7 +288,7 @@ func TestDomainVerifyInvalidDomain(t *testing.T) {
 
 func TestDomainAddInvalidOutputFormat(t *testing.T) {
 	tr := &scriptedTransport{}
-	_, _, err := runCommandWithTransport(t, []string{"domain", "add", "futurelab.studio", "--output", "bogus"}, tr)
+	_, _, err := runCommandWithTransport(t, []string{"domain", "add", "example.com", "--output", "bogus"}, tr)
 	if err == nil {
 		t.Fatalf("expected invalid output format error")
 	}
@@ -311,7 +311,7 @@ func TestDomainVerifyInvalidOutputFormat(t *testing.T) {
 	errOut := &bytes.Buffer{}
 	cmd.SetOut(out)
 	cmd.SetErr(errOut)
-	cmd.SetArgs([]string{"domain", "verify", "futurelab.studio", "--output", "bogus"})
+	cmd.SetArgs([]string{"domain", "verify", "example.com", "--output", "bogus"})
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatalf("expected invalid output format error")

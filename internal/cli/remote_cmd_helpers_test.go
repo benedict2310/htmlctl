@@ -88,7 +88,7 @@ current-context: staging
 contexts:
   - name: staging
     server: ssh://root@staging.example.com
-    website: futurelab
+    website: sample
     environment: staging
     token: test-context-token
 `
@@ -153,7 +153,7 @@ func writeApplySiteFixture(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(root, "website.yaml"), []byte(`apiVersion: htmlctl.dev/v1
 kind: Website
 metadata:
-  name: futurelab
+  name: sample
 spec:
   defaultStyleBundle: default
   baseTemplate: default

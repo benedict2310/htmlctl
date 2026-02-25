@@ -16,7 +16,7 @@ func TestSQLiteLoggerLogAndQuery(t *testing.T) {
 	q := dbpkg.NewQueries(db)
 	ctx := context.Background()
 
-	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{Name: "futurelab", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
 	if err != nil {
 		t.Fatalf("InsertWebsite() error = %v", err)
 	}

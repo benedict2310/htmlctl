@@ -13,11 +13,11 @@ func TestLoadFromPathValidConfig(t *testing.T) {
 contexts:
   - name: staging
     server: ssh://root@staging.example.com
-    website: futurelab
+    website: sample
     environment: staging
   - name: prod
     server: ssh://root@prod.example.com
-    website: futurelab
+    website: sample
     environment: prod
 `
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
@@ -117,7 +117,7 @@ func TestLoadFromPathInvalidContextPort(t *testing.T) {
 contexts:
   - name: staging
     server: ssh://root@staging.example.com
-    website: futurelab
+    website: sample
     environment: staging
     port: 70000
 `
@@ -140,7 +140,7 @@ func TestLoadUsesHTMLCTLConfigEnvVar(t *testing.T) {
 contexts:
   - name: staging
     server: ssh://root@staging.example.com
-    website: futurelab
+    website: sample
     environment: staging
 `
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
@@ -171,7 +171,7 @@ func TestLoadUsesDefaultPathUnderHome(t *testing.T) {
 contexts:
   - name: prod
     server: ssh://root@prod.example.com
-    website: futurelab
+    website: sample
     environment: prod
 `
 	if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
@@ -201,7 +201,7 @@ func TestSaveWritesUpdatedConfig(t *testing.T) {
 			{
 				Name:        "staging",
 				Server:      "ssh://root@staging.example.com",
-				Website:     "futurelab",
+				Website:     "sample",
 				Environment: "staging",
 			},
 		},

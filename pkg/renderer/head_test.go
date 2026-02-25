@@ -9,7 +9,7 @@ import (
 
 func TestRenderHeadMetaOrderAndFields(t *testing.T) {
 	out, err := renderHeadMeta(&model.PageHead{
-		CanonicalURL: "https://futurelab.studio/ora",
+		CanonicalURL: "https://example.com/ora",
 		Meta: map[string]string{
 			"robots":   "index,follow",
 			"author":   "Benedict",
@@ -17,8 +17,8 @@ func TestRenderHeadMetaOrderAndFields(t *testing.T) {
 		},
 		OpenGraph: &model.OpenGraph{
 			Type:        "website",
-			URL:         "https://futurelab.studio/ora",
-			SiteName:    "Futurelab Studio",
+			URL:         "https://example.com/ora",
+			SiteName:    "Sample Studio",
 			Locale:      "en_US",
 			Title:       "Ora for macOS",
 			Description: "Local-first voice assistant",
@@ -26,7 +26,7 @@ func TestRenderHeadMetaOrderAndFields(t *testing.T) {
 		},
 		Twitter: &model.TwitterCard{
 			Card:        "summary_large_image",
-			URL:         "https://futurelab.studio/ora",
+			URL:         "https://example.com/ora",
 			Title:       "Ora for macOS",
 			Description: "Local-first voice assistant",
 			Image:       "/assets/ora/og-image.jpg",
@@ -37,7 +37,7 @@ func TestRenderHeadMetaOrderAndFields(t *testing.T) {
 				Payload: map[string]any{
 					"@context": "https://schema.org",
 					"@type":    "WebSite",
-					"name":     "Futurelab Studio",
+					"name":     "Sample Studio",
 				},
 			},
 			{
@@ -56,23 +56,23 @@ func TestRenderHeadMetaOrderAndFields(t *testing.T) {
 
 	html := string(out)
 	needles := []string{
-		`<link rel="canonical" href="https://futurelab.studio/ora">`,
+		`<link rel="canonical" href="https://example.com/ora">`,
 		`<meta name="author" content="Benedict">`,
 		`<meta name="keywords" content="Ora, macOS voice assistant">`,
 		`<meta name="robots" content="index,follow">`,
 		`<meta property="og:type" content="website">`,
-		`<meta property="og:url" content="https://futurelab.studio/ora">`,
-		`<meta property="og:site_name" content="Futurelab Studio">`,
+		`<meta property="og:url" content="https://example.com/ora">`,
+		`<meta property="og:site_name" content="Sample Studio">`,
 		`<meta property="og:locale" content="en_US">`,
 		`<meta property="og:title" content="Ora for macOS">`,
 		`<meta property="og:description" content="Local-first voice assistant">`,
 		`<meta property="og:image" content="/assets/ora/og-image.jpg">`,
 		`<meta property="twitter:card" content="summary_large_image">`,
-		`<meta property="twitter:url" content="https://futurelab.studio/ora">`,
+		`<meta property="twitter:url" content="https://example.com/ora">`,
 		`<meta property="twitter:title" content="Ora for macOS">`,
 		`<meta property="twitter:description" content="Local-first voice assistant">`,
 		`<meta property="twitter:image" content="/assets/ora/og-image.jpg">`,
-		`<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Futurelab Studio"}</script>`,
+		`<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Sample Studio"}</script>`,
 		`<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Ora"}</script>`,
 	}
 

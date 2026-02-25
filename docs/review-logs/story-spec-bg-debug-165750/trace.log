@@ -1,7 +1,7 @@
 + set -uo pipefail
-+ ROOT=/Users/bene/Dev-Source-NoBackup/htmlctl
++ ROOT=/home/user/project/htmlctl
 + RUN_DIR=docs/review-logs/story-spec-bg-debug-165750
-+ cd /Users/bene/Dev-Source-NoBackup/htmlctl
++ cd /home/user/project/htmlctl
 + PROMPT='Review this implementation story for overlooked issues. Do not edit files. Focus on: (1) cross-story dependency mismatches, (2) contradictory scope/AC/test plan statements, (3) missing acceptance criteria for critical behavior, (4) ambiguous API/CLI contracts likely to cause implementation bugs. Output: status (Ready/Needs Work) + up to 5 concrete findings with severity P1/P2 and exact fix suggestions.'
 ++ date -u +%Y-%m-%dT%H:%M:%SZ
 + echo 'start 2026-02-15T16:57:50Z'

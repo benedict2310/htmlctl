@@ -9,7 +9,7 @@ import (
 
 func TestRollbackHandlerServiceUnavailableAndNotFound(t *testing.T) {
 	s := &Server{}
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/websites/futurelab/environments/staging/rollback", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/websites/sample/environments/staging/rollback", nil)
 	rec := httptest.NewRecorder()
 	s.handleRollback(rec, req)
 	resp := rec.Result()

@@ -9,7 +9,7 @@ import (
 
 func TestValidateAllComponentsCollectsAllErrors(t *testing.T) {
 	site := &model.Site{
-		Website: model.Website{Metadata: model.Metadata{Name: "futurelab"}},
+		Website: model.Website{Metadata: model.Metadata{Name: "sample"}},
 		Pages: map[string]model.Page{
 			"index": {
 				Metadata: model.Metadata{Name: "index"},
@@ -44,7 +44,7 @@ func TestValidateAllComponentsCollectsAllErrors(t *testing.T) {
 
 func TestValidateAllComponentsOnlyRequiresAnchorIDForUsedComponents(t *testing.T) {
 	site := &model.Site{
-		Website: model.Website{Metadata: model.Metadata{Name: "futurelab"}},
+		Website: model.Website{Metadata: model.Metadata{Name: "sample"}},
 		Pages: map[string]model.Page{
 			"index": {
 				Metadata: model.Metadata{Name: "index"},

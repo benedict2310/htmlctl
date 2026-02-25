@@ -14,7 +14,7 @@ func TestWebsitesEnvironmentsStatusAndReleasesEndpoints(t *testing.T) {
 	baseURL := "http://" + srv.Addr()
 
 	applySampleSite(t, baseURL)
-	releaseResp, err := http.Post(baseURL+"/api/v1/websites/futurelab/environments/staging/releases", "application/json", nil)
+	releaseResp, err := http.Post(baseURL+"/api/v1/websites/sample/environments/staging/releases", "application/json", nil)
 	if err != nil {
 		t.Fatalf("POST /releases error = %v", err)
 	}
@@ -29,7 +29,7 @@ func TestWebsitesEnvironmentsStatusAndReleasesEndpoints(t *testing.T) {
 	}
 
 	q := dbpkg.NewQueries(srv.db)
-	websiteRow, err := q.GetWebsiteByName(t.Context(), "futurelab")
+	websiteRow, err := q.GetWebsiteByName(t.Context(), "sample")
 	if err != nil {
 		t.Fatalf("GetWebsiteByName() error = %v", err)
 	}
@@ -55,11 +55,11 @@ func TestWebsitesEnvironmentsStatusAndReleasesEndpoints(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&websites); err != nil {
 		t.Fatalf("decode websites response: %v", err)
 	}
-	if len(websites.Websites) != 1 || websites.Websites[0].Name != "futurelab" {
+	if len(websites.Websites) != 1 || websites.Websites[0].Name != "sample" {
 		t.Fatalf("unexpected websites payload: %#v", websites)
 	}
 
-	resp, err = http.Get(baseURL + "/api/v1/websites/futurelab/environments")
+	resp, err = http.Get(baseURL + "/api/v1/websites/sample/environments")
 	if err != nil {
 		t.Fatalf("GET /environments error = %v", err)
 	}
@@ -78,7 +78,7 @@ func TestWebsitesEnvironmentsStatusAndReleasesEndpoints(t *testing.T) {
 		t.Fatalf("unexpected active release: %#v", envs.Environments[0].ActiveReleaseID)
 	}
 
-	resp, err = http.Get(baseURL + "/api/v1/websites/futurelab/environments/staging/status")
+	resp, err = http.Get(baseURL + "/api/v1/websites/sample/environments/staging/status")
 	if err != nil {
 		t.Fatalf("GET /status error = %v", err)
 	}
@@ -103,7 +103,7 @@ func TestWebsitesEnvironmentsStatusAndReleasesEndpoints(t *testing.T) {
 		t.Fatalf("expected non-script asset count 1, got %#v", status.ResourceCounts)
 	}
 
-	resp, err = http.Get(baseURL + "/api/v1/websites/futurelab/environments/staging/releases")
+	resp, err = http.Get(baseURL + "/api/v1/websites/sample/environments/staging/releases")
 	if err != nil {
 		t.Fatalf("GET /releases error = %v", err)
 	}
@@ -122,7 +122,7 @@ func TestWebsitesEnvironmentsStatusAndReleasesEndpoints(t *testing.T) {
 		t.Fatalf("unexpected releases payload: %#v", releases.Releases)
 	}
 
-	resp, err = http.Get(baseURL + "/api/v1/websites/futurelab/environments/staging/manifest")
+	resp, err = http.Get(baseURL + "/api/v1/websites/sample/environments/staging/manifest")
 	if err != nil {
 		t.Fatalf("GET /manifest error = %v", err)
 	}
@@ -134,7 +134,7 @@ func TestWebsitesEnvironmentsStatusAndReleasesEndpoints(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&manifest); err != nil {
 		t.Fatalf("decode manifest response: %v", err)
 	}
-	if manifest.Website != "futurelab" || manifest.Environment != "staging" {
+	if manifest.Website != "sample" || manifest.Environment != "staging" {
 		t.Fatalf("unexpected manifest metadata: %#v", manifest)
 	}
 	if len(manifest.Files) != 6 {

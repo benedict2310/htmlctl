@@ -17,7 +17,7 @@ func TestReadTarValidBundle(t *testing.T) {
 		"apiVersion":"htmlctl.dev/v1",
 		"kind":"Bundle",
 		"mode":"partial",
-		"website":"futurelab",
+		"website":"sample",
 		"resources":[
 			{"kind":"Component","name":"header","file":"components/header.html","hash":"sha256:%s"}
 		]
@@ -51,7 +51,7 @@ func TestReadTarHashMismatch(t *testing.T) {
 		"apiVersion":"htmlctl.dev/v1",
 		"kind":"Bundle",
 		"mode":"partial",
-		"website":"futurelab",
+		"website":"sample",
 		"resources":[
 			{"kind":"Component","name":"header","file":"components/header.html","hash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
 		]

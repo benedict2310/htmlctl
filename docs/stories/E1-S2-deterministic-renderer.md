@@ -120,7 +120,7 @@ As an AI agent managing a website, I want to render a site directory into static
 
 ### Manual Tests
 
-- [ ] Render the sample futurelab site and open the output in a browser to verify it displays correctly
+- [ ] Render the sample site and open the output in a browser to verify it displays correctly
 - [ ] Verify that running render on macOS and Linux produces identical output (if cross-platform environment available)
 
 ## 8. Performance / Reliability Considerations

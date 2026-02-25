@@ -117,9 +117,9 @@ As an operator or AI agent, I want to run `htmlctl get`, `status`, `apply`, and 
 ### Manual Tests
 
 - [ ] Run `htmlctl apply -f ./site --context staging` against a running htmlservd and verify a release is created
-- [ ] Run `htmlctl status website/futurelab --context staging` and verify output matches server state
+- [ ] Run `htmlctl status website/sample --context staging` and verify output matches server state
 - [ ] Run `htmlctl get websites --context staging` and verify table output is readable
-- [ ] Run `htmlctl logs website/futurelab --context staging` and verify audit entries appear
+- [ ] Run `htmlctl logs website/sample --context staging` and verify audit entries appear
 - [ ] Run `htmlctl get websites --context staging --output json` and verify valid JSON output
 - [ ] Test with a large site directory (100+ files) to verify bundle performance
 

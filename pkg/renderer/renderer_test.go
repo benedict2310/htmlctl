@@ -65,7 +65,7 @@ spec:
 	if !strings.Contains(rootHTML, "<!DOCTYPE html>") || !strings.Contains(rootHTML, "<main>") {
 		t.Fatalf("unexpected root html structure")
 	}
-	if !strings.Contains(rootHTML, "<title>Futurelab</title>") {
+	if !strings.Contains(rootHTML, "<title>Sample</title>") {
 		t.Fatalf("expected title tag in output html")
 	}
 	if !strings.Contains(rootHTML, `meta name="description" content="Landing page"`) {
@@ -159,7 +159,7 @@ func TestRenderEscapesMaliciousPageMetadata(t *testing.T) {
 
 func TestRenderOutputsServerRenderedHeadMetadata(t *testing.T) {
 	site := &model.Site{
-		Website: model.Website{Metadata: model.Metadata{Name: "futurelab"}},
+		Website: model.Website{Metadata: model.Metadata{Name: "sample"}},
 		Pages: map[string]model.Page{
 			"ora": {
 				Metadata: model.Metadata{Name: "ora"},
@@ -169,14 +169,14 @@ func TestRenderOutputsServerRenderedHeadMetadata(t *testing.T) {
 					Description: "Local-first voice assistant",
 					Layout:      []model.PageLayoutItem{{Include: "hero"}},
 					Head: &model.PageHead{
-						CanonicalURL: "https://futurelab.studio/ora",
+						CanonicalURL: "https://example.com/ora",
 						Meta: map[string]string{
 							"keywords":         "Ora, macOS voice assistant",
 							"application-name": "Ora",
 						},
 						OpenGraph: &model.OpenGraph{
 							Type:        "website",
-							URL:         "https://futurelab.studio/ora",
+							URL:         "https://example.com/ora",
 							Title:       "Ora for macOS",
 							Description: "Local-first voice assistant",
 						},
@@ -216,7 +216,7 @@ func TestRenderOutputsServerRenderedHeadMetadata(t *testing.T) {
 
 	html := readFile(t, filepath.Join(outDir, "ora", "index.html"))
 	needles := []string{
-		`<link rel="canonical" href="https://futurelab.studio/ora">`,
+		`<link rel="canonical" href="https://example.com/ora">`,
 		`<meta name="application-name" content="Ora">`,
 		`<meta name="keywords" content="Ora, macOS voice assistant">`,
 		`<meta property="og:type" content="website">`,

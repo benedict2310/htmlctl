@@ -32,7 +32,6 @@ As an `htmlctl` user with multiple SSH keys loaded in my agent, I want auth to a
 
 - Changing the agent availability check logic (`authMethodFromSSHAgent`).
 - Prompting for key passphrase interactively.
-- Any changes to `ssh_agent.go`.
 
 ## 4. Architecture Context
 
@@ -62,23 +61,24 @@ As an `htmlctl` user with multiple SSH keys loaded in my agent, I want auth to a
 
 ## 6. Acceptance Criteria
 
-- [ ] AC-1: When `SSH_AUTH_SOCK` is set and the agent contains a key not in the server's `authorized_keys`, but `HTMLCTL_SSH_KEY_PATH` points to the correct key, `htmlctl apply` succeeds without any manual env-var workaround.
-- [ ] AC-2: When `SSH_AUTH_SOCK` is unset and `HTMLCTL_SSH_KEY_PATH` is set, behaviour is unchanged (key-file-only auth).
-- [ ] AC-3: When `SSH_AUTH_SOCK` is set and `HTMLCTL_SSH_KEY_PATH` is unset/unresolvable, behaviour is unchanged (agent-only auth).
-- [ ] AC-4: The resulting `authMethods` slice is agent-first, key-file-second (agent key takes precedence when it works).
-- [ ] AC-5: Unit tests pass under `go test -race ./internal/transport/...`.
+- [x] AC-1: When `SSH_AUTH_SOCK` is set and the agent contains a key not in the server's `authorized_keys`, but `HTMLCTL_SSH_KEY_PATH` points to the correct key, `htmlctl apply` succeeds without any manual env-var workaround.
+- [x] AC-2: When `SSH_AUTH_SOCK` is unset and `HTMLCTL_SSH_KEY_PATH` is set, behaviour is unchanged (key-file-only auth).
+- [x] AC-3: When `SSH_AUTH_SOCK` is set and `HTMLCTL_SSH_KEY_PATH` is unset/unresolvable, behaviour is unchanged (agent-only auth).
+- [x] AC-4: The resulting `authMethods` slice is agent-first, key-file-second (agent key takes precedence when it works).
+- [x] AC-5: Unit tests pass under `go test -race ./internal/transport/...`.
 
 ## 7. Verification Plan
 
 ### Automated Tests
 
-- [ ] Unit test: `TestNewSSHTransportAuthMethodAssembly` covering all four cases in AC-1–4.
-- [ ] Existing transport tests continue to pass with race detector.
+- [x] Integration test: `TestSSHTransportAgentWrongKeyFileCorrectKey` (AC-1: agent wrong key + correct key file → success).
+- [x] Integration test: `TestSSHTransportAgentOnlyWhenNoKeyFileConfigured` (AC-3: agent correct key, no key file → agent-only success).
+- [x] Existing transport tests continue to pass with race detector.
 
 ### Manual Tests
 
-- [ ] Reproduce the bug locally: start Docker container, load a different ed25519 key into the agent, set `HTMLCTL_SSH_KEY_PATH` to the correct key, run `htmlctl apply` — verify it succeeds.
-- [ ] Verify the workaround (`SSH_AUTH_SOCK=""`) still works as before.
+- [x] Verified on Hetzner staging (2026-02-24): agent held wrong key, `~/.ssh/id_ed25519` held correct key, `htmlctl apply` succeeded without `SSH_AUTH_SOCK=""`.
+- [x] Workaround (`SSH_AUTH_SOCK=""`) still works as before.
 
 ## 8. Performance / Reliability Considerations
 

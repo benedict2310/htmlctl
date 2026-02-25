@@ -21,10 +21,16 @@ Host hetzner
 
 ## 1. Build htmlservd for linux/arm64
 
-From your local `htmlctl` repo root:
+From your local `htmlctl` repo root (run this after every `git pull` to avoid using a stale binary):
 
 ```bash
 GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o htmlservd-linux-arm64 ./cmd/htmlservd
+```
+
+Also rebuild the local `htmlctl` client if you use it from `bin/`:
+
+```bash
+go build -o bin/htmlctl ./cmd/htmlctl
 ```
 
 ## 2. Upload/install binary on Hetzner

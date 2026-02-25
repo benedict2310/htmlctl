@@ -9,18 +9,29 @@ Publish pages, components, and styles to a site managed by `htmlctl` / `htmlserv
 
 ## Deployment Model
 
-The server is the source of truth. `htmlservd` stores all desired state in SQLite and maintains a full release history with rollback support. No git repository is required for day-to-day content management.
+The server is the **source of truth**. `htmlservd` stores all desired state in SQLite and maintains a full, immutable release history. Rollback is a symlink switch — under a second. No git repository is required for day-to-day content management.
 
-Two workflows cover all scenarios:
+```
+  htmlctl (CLI)
+       │
+       │  SSH tunnel · Bearer auth
+       ▼
+  htmlservd (daemon)
+  ├── SQLite (desired state, release history, domains, audit log)
+  ├── Filesystem (immutable release artifacts, content-addressed blobs)
+  └── Caddy (Caddyfile managed by htmlservd · automatic TLS via ACME)
+```
+
+## Workflow Decision
 
 | Change type | Workflow |
 |-------------|----------|
-| Agent content update (copy, cards, small edits to existing components) | Apply directly to staging → verify → promote to prod |
+| Content update (copy, cards, links, small edits to existing components) | Apply directly to staging → verify → promote to prod |
 | Structural change (new page, layout redesign, style overhaul, new component) | Test locally with Docker → apply to staging → promote to prod |
 
 ## Prerequisites
 
-A context must be configured in `~/.htmlctl/config.yaml` (or `HTMLCTL_CONFIG`):
+A context must exist in `~/.htmlctl/config.yaml` (or `HTMLCTL_CONFIG`):
 
 ```yaml
 apiVersion: htmlctl.dev/v1
@@ -30,107 +41,147 @@ contexts:
     server: ssh://user@yourserver
     website: mysite
     environment: staging
+    port: 9400
     token: "<api-token>"
   - name: prod
     server: ssh://user@yourserver
     website: mysite
     environment: prod
+    port: 9400
     token: "<api-token>"
 ```
 
-The SSH key must be loaded (`ssh-add`) or available at `HTMLCTL_SSH_KEY_PATH`.
-If the Docker test container is recreated, regenerate `known_hosts` to avoid host-key mismatch errors.
+SSH auth order: SSH agent socket (`SSH_AUTH_SOCK`) → key file fallback (`HTMLCTL_SSH_KEY_PATH`, then `~/.ssh/id_ed25519|id_rsa|id_ecdsa`).
 
-## Workflow A — Agent Content Update
+## Workflow A — Content Update (direct to staging)
 
 Use for targeted changes: updating copy, adding a project card, editing a single component.
 
-1. Write or edit the file(s) locally.
-2. Apply the changed file(s) directly to staging:
-   ```bash
-   htmlctl apply -f components/projects.html --context staging
-   ```
-   The server merges the change into the current desired state, re-renders, and creates a new release — without touching unchanged resources.
-3. Verify the change on the staging URL.
-4. Promote to prod (copies the exact release artifact, no rebuild):
-   ```bash
-   htmlctl promote website/<name> --from staging --to prod
-   ```
+```bash
+# 1. Preview what will change
+htmlctl diff -f site/ --context staging
 
-## Workflow B — Structural Change
+# 2. Apply changed file(s)
+htmlctl apply -f components/projects.html --context staging
+#   or the full site:
+htmlctl apply -f site/ --context staging
+
+# 3. Verify on staging URL
+htmlctl status website/mysite --context staging
+htmlctl logs website/mysite --context staging
+
+# 4. Promote exact artifact to prod (no rebuild, byte-for-byte identical)
+htmlctl promote website/mysite --from staging --to prod
+
+# 5. Verify prod
+htmlctl status website/mysite --context prod
+```
+
+> **Note:** The first `apply` bootstraps the environment. Subsequent deploys can use `promote` to copy the staging artifact to prod without rebuilding.
+
+## Workflow B — Structural Change (Docker local first)
 
 Use for new pages, layout changes, style overhauls, or any change touching many files at once.
 
-1. Start a local Docker server for fast, safe iteration:
-   ```bash
-   API_TOKEN="$(htmlctl context token generate)"
-   mkdir -p .tmp/htmlctl-publish/{data,caddy}
+### Start local Docker server
 
-   docker rm -f htmlservd-local >/dev/null 2>&1 || true
-   docker run -d \
-     --name htmlservd-local \
-     -p 23222:22 -p 19420:9400 -p 18080:80 \
-     -e SSH_PUBLIC_KEY="$(cat ~/.ssh/id_ed25519.pub)" \
-     -e HTMLSERVD_API_TOKEN="$API_TOKEN" \
-     -e HTMLSERVD_CADDY_BOOTSTRAP_MODE=preview \
-     -e HTMLSERVD_PREVIEW_WEBSITE=<website-name> \
-     -e HTMLSERVD_PREVIEW_ENV=staging \
-     -e HTMLSERVD_CADDY_AUTO_HTTPS=false \
-     -e HTMLSERVD_TELEMETRY_ENABLED=true \
-     -v "$PWD/.tmp/htmlctl-publish/data:/var/lib/htmlservd" \
-     -v "$PWD/.tmp/htmlctl-publish/caddy:/etc/caddy" \
-     htmlservd-ssh:local
-
-   ssh-keyscan -p 23222 -H 127.0.0.1 > .tmp/known_hosts
-   ```
-   Health check: `curl -sf http://127.0.0.1:19420/healthz`
-
-2. Create a local context entry pointing at the Docker instance.
-
-3. Apply the full site and verify on a bound hostname:
-   ```bash
-   htmlctl apply -f site/ --context local-docker
-   htmlctl domain add 127.0.0.1.nip.io --context local-docker
-   ```
-   Open `http://127.0.0.1.nip.io:18080` (prefer hostname over raw `127.0.0.1` when validating telemetry attribution).
-
-   > **Note:** Caddy uses virtual hosting — `curl http://127.0.0.1:18080/` returns an empty body because `Host: 127.0.0.1` matches no vhost. Always use the bound hostname for verification:
-   > ```bash
-   > curl -sf -H "Host: 127.0.0.1.nip.io" http://127.0.0.1:18080/ | grep "<title>"
-   > # or open the nip.io URL directly in a browser
-   > ```
-
-4. Iterate locally until satisfied, then apply to the real staging environment:
-   ```bash
-   htmlctl apply -f site/ --context staging
-   ```
-
-5. Verify on the staging URL, then promote to prod:
-   ```bash
-   htmlctl promote website/<name> --from staging --to prod
-   ```
-
-6. Stop the local Docker instance:
-   ```bash
-   docker rm -f htmlservd-local
-   ```
-
-## Resource Schemas
-
-See `references/resource-schemas.md` for YAML schemas and full examples for all resource kinds: Website, Page (including SEO metadata), Component, and StyleBundle.
-
-## Command Reference
-
-See `references/commands.md` for all htmlctl commands: apply, diff, status, promote, rollback, domain, and context management.
-
-## Rollback
-
-To undo a production deploy:
 ```bash
-htmlctl rollout undo website/<name> --context prod
+API_TOKEN="$(htmlctl context token generate)"
+mkdir -p .tmp/htmlctl-publish/{data,caddy}
+docker rm -f htmlservd-local >/dev/null 2>&1 || true
+
+docker run -d \
+  --name htmlservd-local \
+  -p 23222:22 -p 19420:9400 -p 18080:80 \
+  -e SSH_PUBLIC_KEY="$(cat ~/.ssh/id_ed25519.pub)" \
+  -e HTMLSERVD_API_TOKEN="$API_TOKEN" \
+  -e HTMLSERVD_CADDY_BOOTSTRAP_MODE=preview \
+  -e HTMLSERVD_PREVIEW_WEBSITE=mysite \
+  -e HTMLSERVD_PREVIEW_ENV=staging \
+  -e HTMLSERVD_CADDY_AUTO_HTTPS=false \
+  -e HTMLSERVD_TELEMETRY_ENABLED=true \
+  -v "$PWD/.tmp/htmlctl-publish/data:/var/lib/htmlservd" \
+  -v "$PWD/.tmp/htmlctl-publish/caddy:/etc/caddy" \
+  htmlservd-ssh:local
+
+# Trust the container's host key
+ssh-keyscan -p 23222 -H 127.0.0.1 > .tmp/htmlctl-publish/known_hosts
+
+# Health check
+curl -sf http://127.0.0.1:19420/healthz
 ```
 
-To view release history before rolling back:
-```bash
-htmlctl rollout history website/<name> --context prod
+### Add a local-docker context entry
+
+```yaml
+# Add to ~/.htmlctl/config.yaml
+- name: local-docker
+  server: ssh://htmlservd@127.0.0.1:23222
+  website: mysite
+  environment: staging
+  port: 9400
+  token: "<API_TOKEN>"
 ```
+
+Set `HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/htmlctl-publish/known_hosts"` when running htmlctl.
+
+### Iterate locally
+
+```bash
+htmlctl apply -f site/ --context local-docker
+htmlctl domain add 127.0.0.1.nip.io --context local-docker
+```
+
+Open `http://127.0.0.1.nip.io:18080/` — use the hostname, not the raw IP (Caddy uses virtual hosting; raw `127.0.0.1` matches no vhost and returns empty body).
+
+```bash
+# Verify
+htmlctl status website/mysite --context local-docker
+curl -sf -H "Host: 127.0.0.1.nip.io" http://127.0.0.1:18080/ | grep "<title>"
+```
+
+### Ship to staging and prod
+
+```bash
+htmlctl apply -f site/ --context staging
+htmlctl status website/mysite --context staging
+htmlctl promote website/mysite --from staging --to prod
+```
+
+### Cleanup
+
+```bash
+docker rm -f htmlservd-local
+```
+
+## Safety Checklist
+
+Before any apply:
+- `htmlctl diff -f site/ --context staging` — review changes
+- `htmlctl apply -f site/ --context staging --dry-run` — for risky changes
+- `htmlctl config current-context` — confirm you're on the right context
+
+After apply:
+- `htmlctl status website/mysite --context staging`
+- `htmlctl logs website/mysite --context staging`
+- Check the site URL
+
+Before promote:
+- Verify staging behavior end-to-end
+- `htmlctl rollout history website/mysite --context staging` — confirm active release
+
+Rollback:
+```bash
+htmlctl rollout undo website/mysite --context prod
+```
+
+## Reference Files
+
+| File | Contents |
+|------|----------|
+| `references/commands.md` | Full command reference with all flags |
+| `references/resource-schemas.md` | YAML schemas for all resource kinds |
+| `references/deployment-workflows.md` | Docker local, VPS native, VPS Docker runbooks |
+| `references/env-vars.md` | All htmlctl and htmlservd environment variables |
+| `references/api.md` | Direct HTTP API reference and telemetry |
+| `references/troubleshooting.md` | Failure modes, fixes, and operational safety |

@@ -3,36 +3,67 @@
 ## Context Management
 
 ```bash
-# Show current context
+# Show all configured contexts
 htmlctl context list
+
+# Show the active context name
+htmlctl config current-context
+
+# Show full config (all contexts, current)
+htmlctl config view
 
 # Switch active context
 htmlctl context use <name>
 
-# Generate a random API token (use for HTMLSERVD_API_TOKEN)
+# Generate a random 32-byte hex API token (use for HTMLSERVD_API_TOKEN)
 htmlctl context token generate
 
-# Set a token on an existing context
+# Set token on an existing context
 htmlctl context set <name> --token <token>
 ```
 
-Config file: `~/.htmlctl/config.yaml` (or `HTMLCTL_CONFIG` env var).
+Config file: `~/.htmlctl/config.yaml` (override with `HTMLCTL_CONFIG` env var).
+
+Context fields:
+
+| Field | Description |
+|-------|-------------|
+| `name` | Context identifier used in `--context` |
+| `server` | `ssh://user@host` or `ssh://user@host:port` |
+| `website` | Website name (matches `metadata.name` in `website.yaml`) |
+| `environment` | Environment name (`staging`, `prod`, etc.) |
+| `port` | Port `htmlservd` listens on (default `9400`) |
+| `token` | Shared bearer token for `/api/v1/*` auth |
 
 ---
 
 ## Local Operations
 
 ```bash
-# Render site to a local output directory
+# Render site to a local output directory (deterministic, no server required)
 htmlctl render -f ./site -o ./dist
 
 # Serve a rendered dist directory locally
 htmlctl serve ./dist --port 8080
 ```
 
+Rendered output: `dist/<route>/index.html` for each page.
+
 ---
 
-## Apply (push desired state to server)
+## Diff
+
+Show what would change between local files and the current server desired state:
+
+```bash
+htmlctl diff -f site/ --context staging
+```
+
+---
+
+## Apply
+
+Push desired state to the server. The server validates, renders, and creates an immutable release.
 
 ```bash
 # Apply full site directory
@@ -40,19 +71,13 @@ htmlctl apply -f site/ --context staging
 
 # Apply a single changed file (server merges into current desired state)
 htmlctl apply -f components/hero.html --context staging
+htmlctl apply -f styles/default.css --context staging
 
-# Dry run — show what would change without applying
+# Dry run — validate and show what would change, no release created
 htmlctl apply -f site/ --context staging --dry-run
 ```
 
----
-
-## Diff
-
-```bash
-# Show difference between local files and current server state
-htmlctl diff -f site/ --context staging
-```
+On first deploy, `apply` bootstraps the environment. The output includes a hint pointing to the next domain-binding command.
 
 ---
 
@@ -65,6 +90,35 @@ htmlctl status website/<name> --context prod
 
 ---
 
+## Get
+
+Inspect server state for specific resources:
+
+```bash
+# List all releases for a website/environment
+htmlctl get releases --context staging
+
+# Get website resource
+htmlctl get website <name> --context staging
+
+# Get specific page
+htmlctl get page <name> --context staging
+```
+
+---
+
+## Logs
+
+```bash
+# View recent deploy log for a website/environment
+htmlctl logs website/<name> --context prod
+
+# Limit output lines
+htmlctl logs website/<name> --context prod --limit 50
+```
+
+---
+
 ## Promote
 
 Copy the exact staging release artifact to prod — no rebuild, byte-for-byte identical:
@@ -72,6 +126,8 @@ Copy the exact staging release artifact to prod — no rebuild, byte-for-byte id
 ```bash
 htmlctl promote website/<name> --from staging --to prod
 ```
+
+> **Prerequisite:** The target environment must already exist (bootstrapped via a prior `apply`). If the prod environment does not exist yet, run `htmlctl apply -f site/ --context prod` once to bootstrap it, then use `promote` for all subsequent deploys.
 
 ---
 
@@ -81,16 +137,8 @@ htmlctl promote website/<name> --from staging --to prod
 # View release history
 htmlctl rollout history website/<name> --context prod
 
-# Undo last deploy (activates previous release)
+# Undo last deploy (activates previous release — symlink switch, < 1 second)
 htmlctl rollout undo website/<name> --context prod
-```
-
----
-
-## Logs
-
-```bash
-htmlctl logs website/<name> --context prod
 ```
 
 ---
@@ -98,41 +146,22 @@ htmlctl logs website/<name> --context prod
 ## Domains
 
 ```bash
-# Add a domain binding
+# Add a domain binding (triggers Caddy config regeneration + reload + ACME cert)
 htmlctl domain add example.com --context prod
 htmlctl domain add staging.example.com --context staging
 
-# Verify DNS is pointing at the server
+# List domain bindings for the active context's environment
+htmlctl domain list --context prod
+
+# Verify DNS resolution and TLS certificate validity
 htmlctl domain verify example.com --context prod
+
+# Remove a domain binding
+htmlctl domain remove example.com --context prod
 ```
 
----
+`domain verify` checks:
+- DNS: A/AAAA record resolves to server IP
+- TLS: valid certificate served on port 443
 
-## Environment Variables
-
-| Variable | Purpose |
-|----------|---------|
-| `HTMLCTL_CONFIG` | Path to config file (default: `~/.htmlctl/config.yaml`) |
-| `HTMLCTL_SSH_KNOWN_HOSTS_PATH` | Path to known_hosts for SSH host-key verification |
-| `HTMLCTL_SSH_KEY_PATH` | Path to private key (fallback when SSH agent unavailable) |
-
----
-
-## Server Environment Variables (htmlservd)
-
-| Variable | Purpose |
-|----------|---------|
-| `HTMLSERVD_API_TOKEN` | Shared API token (required when `--require-auth` is set) |
-| `HTMLSERVD_CADDY_BOOTSTRAP_MODE` | `preview` for local Docker testing |
-| `HTMLSERVD_PREVIEW_WEBSITE` | Website name to auto-create in preview mode |
-| `HTMLSERVD_PREVIEW_ENV` | Environment name to auto-create in preview mode |
-| `HTMLSERVD_CADDY_AUTO_HTTPS` | Set `false` for local Docker (no TLS needed) |
-| `HTMLSERVD_TELEMETRY_ENABLED` | Enable `/collect/v1/events` routing in preview bootstrap mode |
-| `SSH_PUBLIC_KEY` | Public key injected into the container's `authorized_keys` |
-
-When telemetry testing locally, bind a hostname and browse that host instead of raw IP:
-
-```bash
-htmlctl domain add 127.0.0.1.nip.io --context local-docker
-open http://127.0.0.1.nip.io:18080/
-```
+Both must pass for `verify` to succeed. In local/no-TLS environments, TLS failure is expected.

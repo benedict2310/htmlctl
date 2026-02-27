@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -21,6 +22,7 @@ import (
 	"github.com/benedict2310/htmlctl/internal/bundle"
 	dbpkg "github.com/benedict2310/htmlctl/internal/db"
 	"github.com/benedict2310/htmlctl/internal/names"
+	"github.com/benedict2310/htmlctl/internal/ogimage"
 	"github.com/benedict2310/htmlctl/pkg/loader"
 	"github.com/benedict2310/htmlctl/pkg/model"
 	"github.com/benedict2310/htmlctl/pkg/renderer"
@@ -49,6 +51,9 @@ type Builder struct {
 	logger       *slog.Logger
 	nowFn        func() time.Time
 	idFn         func(time.Time) (string, error)
+	generateFn   func(ogimage.Card) ([]byte, error)
+	linkFileFn   func(oldname, newname string) error
+	copyFileFn   func(sourcePath, targetPath string) error
 }
 
 const (
@@ -76,6 +81,9 @@ func NewBuilder(db *sql.DB, blobs *blob.Store, websitesRoot string, logger *slog
 		logger:       logger,
 		nowFn:        time.Now,
 		idFn:         NewReleaseID,
+		generateFn:   ogimage.Generate,
+		linkFileFn:   os.Link,
+		copyFileFn:   copyFile,
 	}, nil
 }
 
@@ -147,6 +155,7 @@ func (b *Builder) Build(ctx context.Context, websiteName, envName string) (out B
 	finalReleaseDir := filepath.Join(releasesRoot, releaseID)
 	buildRoot := filepath.Join(envDir, "build")
 	sourceDir := filepath.Join(buildRoot, releaseID)
+	ogProbeDir := filepath.Join(buildRoot, releaseID+".ogprobe")
 
 	if err := os.MkdirAll(releasesRoot, 0o755); err != nil {
 		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, fmt.Errorf("create releases directory %s: %w", releasesRoot, err))
@@ -169,6 +178,7 @@ func (b *Builder) Build(ctx context.Context, websiteName, envName string) (out B
 	switchedCurrent := false
 	defer func() {
 		_ = os.RemoveAll(sourceDir)
+		_ = os.RemoveAll(ogProbeDir)
 		if err != nil {
 			_ = os.RemoveAll(tmpReleaseDir)
 			if switchedCurrent {
@@ -192,6 +202,16 @@ func (b *Builder) Build(ctx context.Context, websiteName, envName string) (out B
 	if err != nil {
 		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, fmt.Errorf("load source site: %w", err))
 	}
+	log.Addf("ensuring og image blobs")
+	ogPageHashes, err := b.ensureOGBlobs(ctx, site, log)
+	if err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
+	}
+	ogReadyPageHashes, err := b.preflightOGMaterialization(ctx, ogPageHashes, ogProbeDir, log)
+	if err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
+	}
+	b.injectOGImageMetadata(site, ogReadyPageHashes)
 
 	log.Addf("rendering static output")
 	if err := renderer.Render(site, tmpReleaseDir); err != nil {
@@ -202,6 +222,9 @@ func (b *Builder) Build(ctx context.Context, websiteName, envName string) (out B
 		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
 	}
 	if err := b.copyOriginalAssets(ctx, snapshot.Assets, tmpReleaseDir); err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
+	}
+	if err := b.materializeOGImages(ctx, tmpReleaseDir, ogReadyPageHashes, log); err != nil {
 		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
 	}
 
@@ -551,6 +574,168 @@ func (b *Builder) readBlob(ctx context.Context, contentHash string) ([]byte, err
 	return content, nil
 }
 
+func (b *Builder) ensureOGBlobs(ctx context.Context, site *model.Site, log *buildLog) (map[string]string, error) {
+	pageHashes := make(map[string]string, len(site.Pages))
+	for _, pageName := range sortedPageNames(site.Pages) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		page := site.Pages[pageName]
+		card := ogCardForPage(site, page)
+		key := ogimage.CacheKey(card)
+		hashHex := hex.EncodeToString(key[:])
+		blobPath := b.blobs.Path(hashHex)
+
+		if _, err := os.Stat(blobPath); err == nil {
+			pageHashes[pageName] = hashHex
+			continue
+		} else if err != nil && !os.IsNotExist(err) {
+			log.Addf("warning: og image generation failed page=%s: stat cache blob: %v", pageName, err)
+			continue
+		}
+
+		pngBytes, err := b.generateFn(card)
+		if err != nil {
+			log.Addf("warning: og image generation failed page=%s: %v", pageName, err)
+			continue
+		}
+		if _, err := b.blobs.Put(ctx, hashHex, pngBytes); err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return nil, err
+			}
+			log.Addf("warning: og image generation failed page=%s: put blob: %v", pageName, err)
+			continue
+		}
+		pageHashes[pageName] = hashHex
+	}
+	return pageHashes, nil
+}
+
+func (b *Builder) preflightOGMaterialization(ctx context.Context, pageHashes map[string]string, probeDir string, log *buildLog) (map[string]string, error) {
+	ready := make(map[string]string, len(pageHashes))
+	for _, pageName := range sortedStringKeys(pageHashes) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		hashHex := pageHashes[pageName]
+		sourcePath := b.blobs.Path(hashHex)
+		targetPath := filepath.Join(probeDir, "og", pageName+".png")
+		if err := b.materializeOGBlob(sourcePath, targetPath); err != nil {
+			log.Addf("warning: og image materialization failed page=%s: %v", pageName, err)
+			continue
+		}
+		ready[pageName] = hashHex
+		_ = os.Remove(targetPath)
+	}
+	_ = os.RemoveAll(probeDir)
+	return ready, nil
+}
+
+func (b *Builder) materializeOGImages(ctx context.Context, releaseDir string, pageHashes map[string]string, log *buildLog) error {
+	if len(pageHashes) == 0 {
+		return nil
+	}
+	ogDir := filepath.Join(releaseDir, "og")
+	if err := os.MkdirAll(ogDir, 0o755); err != nil {
+		log.Addf("warning: og image materialization failed: create og directory: %v", err)
+		return nil
+	}
+	for _, pageName := range sortedStringKeys(pageHashes) {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		hashHex := pageHashes[pageName]
+		sourcePath := b.blobs.Path(hashHex)
+		targetPath := filepath.Join(ogDir, pageName+".png")
+		if err := b.materializeOGBlob(sourcePath, targetPath); err != nil {
+			log.Addf("warning: og image materialization failed page=%s: %v", pageName, err)
+			continue
+		}
+	}
+	return nil
+}
+
+func (b *Builder) injectOGImageMetadata(site *model.Site, pageHashes map[string]string) {
+	for _, pageName := range sortedStringKeys(pageHashes) {
+		page := site.Pages[pageName]
+		ogImageURL, ok := canonicalOGImageURL(page.Spec.Head, pageName)
+		if !ok {
+			continue
+		}
+		if page.Spec.Head.OpenGraph == nil {
+			page.Spec.Head.OpenGraph = &model.OpenGraph{}
+		}
+		if strings.TrimSpace(page.Spec.Head.OpenGraph.Image) == "" {
+			page.Spec.Head.OpenGraph.Image = ogImageURL
+		}
+		if page.Spec.Head.Twitter == nil {
+			page.Spec.Head.Twitter = &model.TwitterCard{}
+		}
+		if strings.TrimSpace(page.Spec.Head.Twitter.Image) == "" {
+			page.Spec.Head.Twitter.Image = ogImageURL
+		}
+		site.Pages[pageName] = page
+	}
+}
+
+func ogCardForPage(site *model.Site, page model.Page) ogimage.Card {
+	title := strings.TrimSpace(page.Spec.Title)
+	description := strings.TrimSpace(page.Spec.Description)
+	siteName := strings.TrimSpace(site.Website.Metadata.Name)
+	if page.Spec.Head != nil && page.Spec.Head.OpenGraph != nil {
+		if v := strings.TrimSpace(page.Spec.Head.OpenGraph.Title); v != "" {
+			title = v
+		}
+		if v := strings.TrimSpace(page.Spec.Head.OpenGraph.Description); v != "" {
+			description = v
+		}
+		if v := strings.TrimSpace(page.Spec.Head.OpenGraph.SiteName); v != "" {
+			siteName = v
+		}
+	}
+	return ogimage.Card{
+		Title:       title,
+		Description: description,
+		SiteName:    siteName,
+	}
+}
+
+func canonicalOGImageURL(head *model.PageHead, pageName string) (string, bool) {
+	if head == nil {
+		return "", false
+	}
+	rawCanonical := strings.TrimSpace(head.CanonicalURL)
+	if rawCanonical == "" {
+		return "", false
+	}
+	parsed, err := url.Parse(rawCanonical)
+	if err != nil || !parsed.IsAbs() {
+		return "", false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", false
+	}
+	parsed.Path = path.Join("/", "og", pageName+".png")
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed.String(), true
+}
+
+func (b *Builder) materializeOGBlob(sourcePath, targetPath string) error {
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		return fmt.Errorf("create target directory %s: %w", filepath.Dir(targetPath), err)
+	}
+	linkErr := b.linkFileFn(sourcePath, targetPath)
+	if linkErr == nil {
+		return nil
+	}
+	copyErr := b.copyFileFn(sourcePath, targetPath)
+	if copyErr == nil {
+		return nil
+	}
+	return fmt.Errorf("link blob %s -> %s: %v; copy fallback failed: %w", sourcePath, targetPath, linkErr, copyErr)
+}
+
 func (b *Builder) copyOriginalStyles(sourceDir, releaseDir string) error {
 	for _, name := range []string{styleTokensFile, styleDefaultFile} {
 		src := filepath.Join(sourceDir, "styles", name)
@@ -647,6 +832,24 @@ func sanitizeResourceName(name string) (string, error) {
 		return "", err
 	}
 	return name, nil
+}
+
+func sortedPageNames(pages map[string]model.Page) []string {
+	names := make([]string, 0, len(pages))
+	for name := range pages {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func sortedStringKeys(values map[string]string) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func parsePageHeadJSON(pageName, raw string) (*model.PageHead, error) {

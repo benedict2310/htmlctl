@@ -120,3 +120,5 @@ by guarding the field with `sync.RWMutex`. All 428 tests pass clean under `-race
 | # | Story | File |
 |---|-------|------|
 | 8.1 | SSH auth: fall back to key file when agent key is rejected | [E8-S1](stories/E8-S1-ssh-auth-agent-key-fallback.md) |
+| 8.2 | Automatic OG image generation (Implemented) | [E8-S2](stories/E8-S2-og-image-generation.md) |
+| 8.3 | Promote metadata host warnings | [E8-S3](stories/E8-S3-promote-metadata-host-warnings.md) |

@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"os"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/benedict2310/htmlctl/internal/blob"
 	dbpkg "github.com/benedict2310/htmlctl/internal/db"
+	"github.com/benedict2310/htmlctl/internal/ogimage"
 )
 
 func TestBuilderBuildSuccess(t *testing.T) {
@@ -46,7 +48,7 @@ func TestBuilderBuildSuccess(t *testing.T) {
 	}
 
 	releaseDir := filepath.Join(dataDir, "websites", "sample", "envs", "staging", "releases", res.ReleaseID)
-	for _, rel := range []string{"index.html", "styles/tokens.css", "styles/default.css", "assets/logo.svg", ".manifest.json", ".build-log.txt", ".output-hashes.json"} {
+	for _, rel := range []string{"index.html", "styles/tokens.css", "styles/default.css", "assets/logo.svg", "og/index.png", ".manifest.json", ".build-log.txt", ".output-hashes.json"} {
 		if _, err := os.Stat(filepath.Join(releaseDir, filepath.FromSlash(rel))); err != nil {
 			t.Fatalf("expected release file %s to exist: %v", rel, err)
 		}
@@ -59,7 +61,9 @@ func TestBuilderBuildSuccess(t *testing.T) {
 	for _, needle := range []string{
 		`<link rel="canonical" href="https://example.com/">`,
 		`<meta property="og:title" content="Sample Home">`,
+		`<meta property="og:image" content="https://example.com/og/index.png">`,
 		`<meta property="twitter:card" content="summary_large_image">`,
+		`<meta property="twitter:image" content="https://example.com/og/index.png">`,
 		`<script type="application/ld+json">`,
 	} {
 		if !strings.Contains(indexText, needle) {
@@ -192,6 +196,334 @@ func TestBuilderBuildRejectsInvalidStoredResourceNames(t *testing.T) {
 	}
 }
 
+func TestBuildOGImageGenerated(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openReleaseTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+	queries := dbpkg.NewQueries(db)
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+	seedReleaseState(t, ctx, queries, blobStore)
+
+	builder, err := NewBuilder(db, blobStore, filepath.Join(dataDir, "websites"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatalf("NewBuilder() error = %v", err)
+	}
+	res, err := builder.Build(ctx, "sample", "staging")
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+
+	releaseDir := filepath.Join(dataDir, "websites", "sample", "envs", "staging", "releases", res.ReleaseID)
+	if _, err := os.Stat(filepath.Join(releaseDir, "og", "index.png")); err != nil {
+		t.Fatalf("expected generated og image: %v", err)
+	}
+	indexHTML, err := os.ReadFile(filepath.Join(releaseDir, "index.html"))
+	if err != nil {
+		t.Fatalf("read index.html: %v", err)
+	}
+	text := string(indexHTML)
+	if !strings.Contains(text, `property="og:image" content="https://example.com/og/index.png"`) {
+		t.Fatalf("expected auto-injected og:image tag")
+	}
+	if !strings.Contains(text, `property="twitter:image" content="https://example.com/og/index.png"`) {
+		t.Fatalf("expected auto-injected twitter:image tag")
+	}
+}
+
+func TestBuildOGImageCacheHit(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openReleaseTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+	queries := dbpkg.NewQueries(db)
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+	seedReleaseState(t, ctx, queries, blobStore)
+
+	builder, err := NewBuilder(db, blobStore, filepath.Join(dataDir, "websites"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatalf("NewBuilder() error = %v", err)
+	}
+
+	generateCalls := 0
+	builder.generateFn = func(card ogimage.Card) ([]byte, error) {
+		generateCalls++
+		return ogimage.Generate(card)
+	}
+
+	first, err := builder.Build(ctx, "sample", "staging")
+	if err != nil {
+		t.Fatalf("Build(first) error = %v", err)
+	}
+	second, err := builder.Build(ctx, "sample", "staging")
+	if err != nil {
+		t.Fatalf("Build(second) error = %v", err)
+	}
+	if generateCalls != 1 {
+		t.Fatalf("expected one Generate call across two builds (cache hit on second), got %d", generateCalls)
+	}
+	for _, releaseID := range []string{first.ReleaseID, second.ReleaseID} {
+		releaseDir := filepath.Join(dataDir, "websites", "sample", "envs", "staging", "releases", releaseID)
+		if _, err := os.Stat(filepath.Join(releaseDir, "og", "index.png")); err != nil {
+			t.Fatalf("expected og image for release %s: %v", releaseID, err)
+		}
+	}
+}
+
+func TestBuildOGImageNoInjectionWithoutAbsoluteCanonical(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openReleaseTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+	queries := dbpkg.NewQueries(db)
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+	seedReleaseState(t, ctx, queries, blobStore)
+	setPageHeadJSON(t, db, `{"canonicalURL":"/","openGraph":{"title":"Sample Home"},"twitter":{"card":"summary_large_image"}}`)
+
+	builder, err := NewBuilder(db, blobStore, filepath.Join(dataDir, "websites"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatalf("NewBuilder() error = %v", err)
+	}
+	res, err := builder.Build(ctx, "sample", "staging")
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+
+	releaseDir := filepath.Join(dataDir, "websites", "sample", "envs", "staging", "releases", res.ReleaseID)
+	if _, err := os.Stat(filepath.Join(releaseDir, "og", "index.png")); err != nil {
+		t.Fatalf("expected og image file to still be materialized: %v", err)
+	}
+	indexText := readReleaseFileString(t, releaseDir, "index.html")
+	if strings.Contains(indexText, "property=\"og:image\"") {
+		t.Fatalf("did not expect og:image injection for relative canonical URL")
+	}
+	if strings.Contains(indexText, "property=\"twitter:image\"") {
+		t.Fatalf("did not expect twitter:image injection for relative canonical URL")
+	}
+}
+
+func TestBuildOGImagePreservesExplicitOpenGraphImage(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openReleaseTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+	queries := dbpkg.NewQueries(db)
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+	seedReleaseState(t, ctx, queries, blobStore)
+	setPageHeadJSON(t, db, `{"canonicalURL":"https://example.com/","openGraph":{"title":"Sample Home","image":"https://cdn.example.com/manual-og.png"},"twitter":{"card":"summary_large_image"}}`)
+
+	builder, err := NewBuilder(db, blobStore, filepath.Join(dataDir, "websites"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatalf("NewBuilder() error = %v", err)
+	}
+	res, err := builder.Build(ctx, "sample", "staging")
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+
+	releaseDir := filepath.Join(dataDir, "websites", "sample", "envs", "staging", "releases", res.ReleaseID)
+	indexText := readReleaseFileString(t, releaseDir, "index.html")
+	if !strings.Contains(indexText, `property="og:image" content="https://cdn.example.com/manual-og.png"`) {
+		t.Fatalf("expected explicit openGraph.image to be preserved")
+	}
+	if !strings.Contains(indexText, `property="twitter:image" content="https://example.com/og/index.png"`) {
+		t.Fatalf("expected twitter.image to be auto-injected")
+	}
+}
+
+func TestBuildOGImagePreservesExplicitTwitterImage(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openReleaseTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+	queries := dbpkg.NewQueries(db)
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+	seedReleaseState(t, ctx, queries, blobStore)
+	setPageHeadJSON(t, db, `{"canonicalURL":"https://example.com/","openGraph":{"title":"Sample Home"},"twitter":{"card":"summary_large_image","image":"https://cdn.example.com/manual-twitter.png"}}`)
+
+	builder, err := NewBuilder(db, blobStore, filepath.Join(dataDir, "websites"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatalf("NewBuilder() error = %v", err)
+	}
+	res, err := builder.Build(ctx, "sample", "staging")
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+
+	releaseDir := filepath.Join(dataDir, "websites", "sample", "envs", "staging", "releases", res.ReleaseID)
+	indexText := readReleaseFileString(t, releaseDir, "index.html")
+	if !strings.Contains(indexText, `property="og:image" content="https://example.com/og/index.png"`) {
+		t.Fatalf("expected og:image to be auto-injected")
+	}
+	if !strings.Contains(indexText, `property="twitter:image" content="https://cdn.example.com/manual-twitter.png"`) {
+		t.Fatalf("expected explicit twitter.image to be preserved")
+	}
+}
+
+func TestBuildOGImageWarnsAndContinuesOnGenerationError(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openReleaseTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+	queries := dbpkg.NewQueries(db)
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+	seedReleaseState(t, ctx, queries, blobStore)
+
+	builder, err := NewBuilder(db, blobStore, filepath.Join(dataDir, "websites"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatalf("NewBuilder() error = %v", err)
+	}
+	builder.generateFn = func(card ogimage.Card) ([]byte, error) {
+		return nil, errors.New("forced generation failure")
+	}
+
+	res, err := builder.Build(ctx, "sample", "staging")
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if !strings.Contains(res.BuildLog, "warning: og image generation failed page=index") {
+		t.Fatalf("expected warning in build log, got:\n%s", res.BuildLog)
+	}
+
+	releaseDir := filepath.Join(dataDir, "websites", "sample", "envs", "staging", "releases", res.ReleaseID)
+	if _, err := os.Stat(filepath.Join(releaseDir, "og", "index.png")); !os.IsNotExist(err) {
+		t.Fatalf("expected og image to be absent on generation failure, err=%v", err)
+	}
+	indexText := readReleaseFileString(t, releaseDir, "index.html")
+	if strings.Contains(indexText, "property=\"og:image\"") || strings.Contains(indexText, "property=\"twitter:image\"") {
+		t.Fatalf("expected no auto-injected image tags when generation fails")
+	}
+}
+
+func TestBuildOGImageWarnsAndContinuesOnPutError(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openReleaseTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+	queries := dbpkg.NewQueries(db)
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+	seedReleaseState(t, ctx, queries, blobStore)
+
+	if err := os.Chmod(blobStore.Root(), 0o555); err != nil {
+		t.Fatalf("Chmod(blob root) error = %v", err)
+	}
+	defer func() { _ = os.Chmod(blobStore.Root(), 0o755) }()
+
+	builder, err := NewBuilder(db, blobStore, filepath.Join(dataDir, "websites"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatalf("NewBuilder() error = %v", err)
+	}
+
+	res, err := builder.Build(ctx, "sample", "staging")
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if !strings.Contains(res.BuildLog, "warning: og image generation failed page=index: put blob") {
+		t.Fatalf("expected put warning in build log, got:\n%s", res.BuildLog)
+	}
+
+	releaseDir := filepath.Join(dataDir, "websites", "sample", "envs", "staging", "releases", res.ReleaseID)
+	if _, err := os.Stat(filepath.Join(releaseDir, "og", "index.png")); !os.IsNotExist(err) {
+		t.Fatalf("expected og image to be absent on put failure, err=%v", err)
+	}
+	indexText := readReleaseFileString(t, releaseDir, "index.html")
+	if strings.Contains(indexText, "property=\"og:image\"") || strings.Contains(indexText, "property=\"twitter:image\"") {
+		t.Fatalf("expected no auto-injected image tags on put failure")
+	}
+}
+
+func TestBuildOGImageFallsBackToCopyWhenHardlinkFails(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openReleaseTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+	queries := dbpkg.NewQueries(db)
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+	seedReleaseState(t, ctx, queries, blobStore)
+
+	builder, err := NewBuilder(db, blobStore, filepath.Join(dataDir, "websites"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatalf("NewBuilder() error = %v", err)
+	}
+	builder.linkFileFn = func(oldname, newname string) error {
+		return errors.New("forced link failure")
+	}
+	res, err := builder.Build(ctx, "sample", "staging")
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+
+	releaseDir := filepath.Join(dataDir, "websites", "sample", "envs", "staging", "releases", res.ReleaseID)
+	if _, err := os.Stat(filepath.Join(releaseDir, "og", "index.png")); err != nil {
+		t.Fatalf("expected og image with copy fallback: %v", err)
+	}
+	if strings.Contains(res.BuildLog, "warning: og image materialization failed") {
+		t.Fatalf("did not expect materialization warning when copy fallback succeeds:\n%s", res.BuildLog)
+	}
+}
+
+func TestBuildOGImageWarnsAndContinuesOnMaterializeFailure(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openReleaseTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+	queries := dbpkg.NewQueries(db)
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+	seedReleaseState(t, ctx, queries, blobStore)
+
+	builder, err := NewBuilder(db, blobStore, filepath.Join(dataDir, "websites"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatalf("NewBuilder() error = %v", err)
+	}
+	builder.linkFileFn = func(oldname, newname string) error {
+		return errors.New("forced link failure")
+	}
+	builder.copyFileFn = func(sourcePath, targetPath string) error {
+		return errors.New("forced copy failure")
+	}
+	res, err := builder.Build(ctx, "sample", "staging")
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if !strings.Contains(res.BuildLog, "warning: og image materialization failed page=index") {
+		t.Fatalf("expected materialization warning in build log, got:\n%s", res.BuildLog)
+	}
+
+	releaseDir := filepath.Join(dataDir, "websites", "sample", "envs", "staging", "releases", res.ReleaseID)
+	if _, err := os.Stat(filepath.Join(releaseDir, "og", "index.png")); !os.IsNotExist(err) {
+		t.Fatalf("expected og image to be absent on materialization failure, err=%v", err)
+	}
+	indexText := readReleaseFileString(t, releaseDir, "index.html")
+	if strings.Contains(indexText, "property=\"og:image\"") || strings.Contains(indexText, "property=\"twitter:image\"") {
+		t.Fatalf("expected no auto-injected image tags on materialization failure")
+	}
+}
+
+func setPageHeadJSON(t *testing.T, db *sql.DB, headJSON string) {
+	t.Helper()
+	if _, err := db.Exec(`UPDATE pages SET head_json = ? WHERE name = ?`, headJSON, "index"); err != nil {
+		t.Fatalf("UPDATE pages head_json error = %v", err)
+	}
+}
+
+func readReleaseFileString(t *testing.T, releaseDir, relPath string) string {
+	t.Helper()
+	content, err := os.ReadFile(filepath.Join(releaseDir, filepath.FromSlash(relPath)))
+	if err != nil {
+		t.Fatalf("read %s: %v", relPath, err)
+	}
+	return string(content)
+}
+
 func openReleaseTestDB(t *testing.T, path string) *sql.DB {
 	t.Helper()
 	db, err := dbpkg.Open(dbpkg.DefaultOptions(path))
@@ -217,13 +549,13 @@ func seedReleaseState(t *testing.T, ctx context.Context, q *dbpkg.Queries, blobs
 	}
 
 	component := []byte("<section id=\"header\">Header</section>\n")
-	pageYAML := []byte("apiVersion: htmlctl.dev/v1\nkind: Page\nmetadata:\n  name: index\nspec:\n  route: /\n  title: Home\n  description: Home\n  layout:\n    - include: header\n")
 	tokens := []byte(":root { --brand: blue; }\n")
 	defaults := []byte("body { margin: 0; }\n")
 	asset := []byte("<svg></svg>")
 
 	componentHash := writeBlob(t, ctx, blobs, component)
-	pageHash := writeBlob(t, ctx, blobs, pageYAML)
+	pageSum := sha256.Sum256([]byte("sample:index:/"))
+	pageHash := "sha256:" + hex.EncodeToString(pageSum[:])
 	tokensHash := writeBlob(t, ctx, blobs, tokens)
 	defaultsHash := writeBlob(t, ctx, blobs, defaults)
 	assetHash := writeBlob(t, ctx, blobs, asset)

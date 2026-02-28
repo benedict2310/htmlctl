@@ -508,6 +508,124 @@ func TestBuildOGImageWarnsAndContinuesOnMaterializeFailure(t *testing.T) {
 	}
 }
 
+func TestBuildOGImageInfoLoggedWhenInjectionSkipped(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openReleaseTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+	queries := dbpkg.NewQueries(db)
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+	seedReleaseState(t, ctx, queries, blobStore)
+	// Page has explicit openGraph.image and twitter.image — both should be preserved with info log.
+	setPageHeadJSON(t, db, `{"canonicalURL":"https://example.com/","openGraph":{"title":"Sample","image":"https://cdn.example.com/og.png"},"twitter":{"card":"summary_large_image","image":"https://cdn.example.com/tw.png"}}`)
+
+	builder, err := NewBuilder(db, blobStore, filepath.Join(dataDir, "websites"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatalf("NewBuilder() error = %v", err)
+	}
+	res, err := builder.Build(ctx, "sample", "staging")
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+
+	if !strings.Contains(res.BuildLog, `info: page=index og card not injected into openGraph.image`) {
+		t.Fatalf("expected info log for openGraph.image skip, got:\n%s", res.BuildLog)
+	}
+	if !strings.Contains(res.BuildLog, `info: page=index og card not injected into twitter.image`) {
+		t.Fatalf("expected info log for twitter.image skip, got:\n%s", res.BuildLog)
+	}
+
+	// OG file must still be materialized in the release (card is generated, just not linked).
+	releaseDir := filepath.Join(dataDir, "websites", "sample", "envs", "staging", "releases", res.ReleaseID)
+	if _, err := os.Stat(filepath.Join(releaseDir, "og", "index.png")); err != nil {
+		t.Fatalf("expected og/index.png to be materialized even when injection is skipped: %v", err)
+	}
+
+	// Explicit images must still appear in rendered output.
+	indexText := readReleaseFileString(t, releaseDir, "index.html")
+	if !strings.Contains(indexText, `content="https://cdn.example.com/og.png"`) {
+		t.Fatalf("expected explicit openGraph.image preserved in HTML")
+	}
+	if !strings.Contains(indexText, `content="https://cdn.example.com/tw.png"`) {
+		t.Fatalf("expected explicit twitter.image preserved in HTML")
+	}
+}
+
+func TestBuildOGImageSkipsInjectionForLocalhostCanonicalURL(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openReleaseTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+	queries := dbpkg.NewQueries(db)
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+	seedReleaseState(t, ctx, queries, blobStore)
+	// No explicit image fields — injection would normally auto-populate them.
+	// But canonicalURL is localhost, so the derived OG URL would be localhost too.
+	setPageHeadJSON(t, db, `{"canonicalURL":"http://127.0.0.1:18080/","openGraph":{"title":"Sample Home"},"twitter":{"card":"summary_large_image"}}`)
+
+	builder, err := NewBuilder(db, blobStore, filepath.Join(dataDir, "websites"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatalf("NewBuilder() error = %v", err)
+	}
+	res, err := builder.Build(ctx, "sample", "staging")
+	if err != nil {
+		t.Fatalf("Build() must succeed despite localhost canonicalURL: %v", err)
+	}
+
+	// Warning about localhost canonicalURL must appear in build log.
+	if !strings.Contains(res.BuildLog, "warning: page=index field=canonicalURL contains local host URL") {
+		t.Fatalf("expected localhost warning in build log, got:\n%s", res.BuildLog)
+	}
+
+	// OG file is still materialized (generated + placed) even though URL is not injected.
+	releaseDir := filepath.Join(dataDir, "websites", "sample", "envs", "staging", "releases", res.ReleaseID)
+	if _, err := os.Stat(filepath.Join(releaseDir, "og", "index.png")); err != nil {
+		t.Fatalf("expected og/index.png to be materialized even for localhost canonical: %v", err)
+	}
+
+	// No og:image or twitter:image tags must be injected — the localhost-derived
+	// OG URL must be suppressed. The canonical link tag itself still renders (we
+	// warn about it but do not strip it from the page spec).
+	indexText := readReleaseFileString(t, releaseDir, "index.html")
+	if strings.Contains(indexText, `property="og:image"`) {
+		t.Fatalf("expected no og:image injection for localhost canonical URL, got:\n%s", indexText)
+	}
+	if strings.Contains(indexText, `property="twitter:image"`) {
+		t.Fatalf("expected no twitter:image injection for localhost canonical URL, got:\n%s", indexText)
+	}
+}
+
+func TestBuildWarnLocalHostMetadataURL(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openReleaseTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+	queries := dbpkg.NewQueries(db)
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+	seedReleaseState(t, ctx, queries, blobStore)
+	// Simulate a page left over from local Docker dev with localhost URLs.
+	setPageHeadJSON(t, db, `{"canonicalURL":"http://127.0.0.1:18080/","openGraph":{"url":"http://127.0.0.1:18080/","image":"http://127.0.0.1:18080/assets/og.png"},"twitter":{"card":"summary_large_image","url":"http://127.0.0.1:18080/","image":"http://127.0.0.1:18080/assets/og.png"}}`)
+
+	builder, err := NewBuilder(db, blobStore, filepath.Join(dataDir, "websites"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatalf("NewBuilder() error = %v", err)
+	}
+	res, err := builder.Build(ctx, "sample", "staging")
+	if err != nil {
+		t.Fatalf("Build() must succeed despite localhost URLs, got: %v", err)
+	}
+
+	for _, field := range []string{"canonicalURL", "openGraph.url", "openGraph.image", "twitter.url", "twitter.image"} {
+		needle := "warning: page=index field=" + field + " contains local host URL"
+		if !strings.Contains(res.BuildLog, needle) {
+			t.Fatalf("expected warning for field %s in build log, got:\n%s", field, res.BuildLog)
+		}
+	}
+}
+
 func setPageHeadJSON(t *testing.T, db *sql.DB, headJSON string) {
 	t.Helper()
 	if _, err := db.Exec(`UPDATE pages SET head_json = ? WHERE name = ?`, headJSON, "index"); err != nil {

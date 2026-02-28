@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/url"
 	"os"
 	"path"
@@ -202,6 +203,7 @@ func (b *Builder) Build(ctx context.Context, websiteName, envName string) (out B
 	if err != nil {
 		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, fmt.Errorf("load source site: %w", err))
 	}
+	warnLocalhostMetadataURLs(site, log)
 	log.Addf("ensuring og image blobs")
 	ogPageHashes, err := b.ensureOGBlobs(ctx, site, log)
 	if err != nil {
@@ -211,7 +213,7 @@ func (b *Builder) Build(ctx context.Context, websiteName, envName string) (out B
 	if err != nil {
 		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
 	}
-	b.injectOGImageMetadata(site, ogReadyPageHashes)
+	b.injectOGImageMetadata(site, ogReadyPageHashes, log)
 
 	log.Addf("rendering static output")
 	if err := renderer.Render(site, tmpReleaseDir); err != nil {
@@ -655,11 +657,72 @@ func (b *Builder) materializeOGImages(ctx context.Context, releaseDir string, pa
 	return nil
 }
 
-func (b *Builder) injectOGImageMetadata(site *model.Site, pageHashes map[string]string) {
+// warnLocalhostMetadataURLs scans all page head URL fields for loopback/localhost
+// addresses and logs a warning for each one found. These URLs are valid http(s)
+// URLs so they pass other validation, but referencing localhost in production
+// metadata is always a misconfiguration.
+func warnLocalhostMetadataURLs(site *model.Site, log *buildLog) {
+	type urlField struct{ field, value string }
+	for _, pageName := range sortedPageNames(site.Pages) {
+		page := site.Pages[pageName]
+		if page.Spec.Head == nil {
+			continue
+		}
+		head := page.Spec.Head
+		var fields []urlField
+		if head.CanonicalURL != "" {
+			fields = append(fields, urlField{"canonicalURL", head.CanonicalURL})
+		}
+		if head.OpenGraph != nil {
+			if head.OpenGraph.URL != "" {
+				fields = append(fields, urlField{"openGraph.url", head.OpenGraph.URL})
+			}
+			if head.OpenGraph.Image != "" {
+				fields = append(fields, urlField{"openGraph.image", head.OpenGraph.Image})
+			}
+		}
+		if head.Twitter != nil {
+			if head.Twitter.URL != "" {
+				fields = append(fields, urlField{"twitter.url", head.Twitter.URL})
+			}
+			if head.Twitter.Image != "" {
+				fields = append(fields, urlField{"twitter.image", head.Twitter.Image})
+			}
+		}
+		for _, f := range fields {
+			if isLocalhostURL(f.value) {
+				log.Addf("warning: page=%s field=%s contains local host URL %q — update to production URL before promoting", pageName, f.field, f.value)
+			}
+		}
+	}
+}
+
+// isLocalhostURL reports whether rawURL has a loopback or local-only host.
+func isLocalhostURL(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil || !u.IsAbs() {
+		return false
+	}
+	h := u.Hostname()
+	if h == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(h)
+	return ip != nil && ip.IsLoopback()
+}
+
+func (b *Builder) injectOGImageMetadata(site *model.Site, pageHashes map[string]string, log *buildLog) {
 	for _, pageName := range sortedStringKeys(pageHashes) {
 		page := site.Pages[pageName]
 		ogImageURL, ok := canonicalOGImageURL(page.Spec.Head, pageName)
 		if !ok {
+			continue
+		}
+		// Guard: if the derived OG URL resolves to a local host (i.e. canonicalURL
+		// points to localhost), skip injection entirely. Injecting a localhost URL
+		// into production metadata would silently break sharing. warnLocalhostMetadataURLs
+		// already emits a warning for the canonicalURL itself, so no second warning here.
+		if isLocalhostURL(ogImageURL) {
 			continue
 		}
 		if page.Spec.Head.OpenGraph == nil {
@@ -667,12 +730,16 @@ func (b *Builder) injectOGImageMetadata(site *model.Site, pageHashes map[string]
 		}
 		if strings.TrimSpace(page.Spec.Head.OpenGraph.Image) == "" {
 			page.Spec.Head.OpenGraph.Image = ogImageURL
+		} else {
+			log.Addf("info: page=%s og card not injected into openGraph.image (already set to %q)", pageName, page.Spec.Head.OpenGraph.Image)
 		}
 		if page.Spec.Head.Twitter == nil {
 			page.Spec.Head.Twitter = &model.TwitterCard{}
 		}
 		if strings.TrimSpace(page.Spec.Head.Twitter.Image) == "" {
 			page.Spec.Head.Twitter.Image = ogImageURL
+		} else {
+			log.Addf("info: page=%s og card not injected into twitter.image (already set to %q)", pageName, page.Spec.Head.Twitter.Image)
 		}
 		site.Pages[pageName] = page
 	}

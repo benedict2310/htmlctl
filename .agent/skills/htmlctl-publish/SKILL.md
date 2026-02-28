@@ -22,12 +22,49 @@ The server is the **source of truth**. `htmlservd` stores all desired state in S
   └── Caddy (Caddyfile managed by htmlservd · automatic TLS via ACME)
 ```
 
+## Component Constraints
+
+**Read this before writing any component HTML.** The validator enforces these at apply time:
+
+- **No `<script>` tags** inside components — JS belongs in `scripts/site.js` (injected at end of `<body>` on every page).
+- **Exactly one root element** per component file.
+- **Root tag must be one of:** `section`, `header`, `footer`, `main`, `nav`, `article`, `div`.
+- **No inline event handlers** (`onclick`, `onload`, etc.) — rejected at validation time.
+- If the component is anchor-navigable, root element **must** have `id="<componentName>"`.
+
+See `references/resource-schemas.md` for the full schema.
+
+## OG Image Generation (automatic)
+
+The server auto-generates a 1200×630 social preview PNG for every page at build time and serves it at `/og/<pagename>.png`.
+
+**Auto-injection rules:**
+- `openGraph.image` and `twitter.image` are populated independently — only when each field is **empty** in the page YAML.
+- Auto-injection only runs when `spec.head.canonicalURL` is an absolute `http(s)://` URL. Relative or missing canonicals are left unchanged.
+- Generated image URL format: `<scheme>://<host>/og/<pagename>.png` (derived from the canonical URL's scheme + host).
+
+**Card content** (what's rendered on the PNG):
+| Field | Source |
+|-------|--------|
+| Title | `openGraph.title` → `spec.title` |
+| Description | `openGraph.description` → `spec.description` |
+| Site name | `openGraph.siteName` → website `metadata.name` |
+
+**To opt out / use a manual image:** Set an explicit `openGraph.image` or `twitter.image` in the page YAML. Auto-injection skips any field that already has a value.
+
+**Cache:** Cards are cached by content hash. Re-applying with unchanged metadata is a cache hit — fast, no re-render. The cache is invalidated when title, description, or site name changes.
+
+**Triggering OG generation:** `htmlctl apply` always creates a new release build, even when there are no content changes. To backfill OG images after a server upgrade, just re-apply and then promote.
+
+**Staging URL caveat:** OG image URLs are derived from `canonicalURL`. If your staging pages use a staging canonical (`https://staging.example.com/`), promote will carry those URLs to prod. Ensure `canonicalURL` reflects the prod domain before promoting.
+
 ## Workflow Decision
 
 | Change type | Workflow |
 |-------------|----------|
 | Content update (copy, cards, links, small edits to existing components) | Apply directly to staging → verify → promote to prod |
-| Structural change (new page, layout redesign, style overhaul, new component) | Test locally with Docker → apply to staging → promote to prod |
+| New standalone subpage (new component + new page, no changes to shared components) | Apply directly to staging → verify → promote to prod |
+| Structural change to shared components, layout redesign, style overhaul | Test locally with Docker → apply to staging → promote to prod |
 
 ## Prerequisites
 
@@ -157,13 +194,13 @@ docker rm -f htmlservd-local
 ## Safety Checklist
 
 Before any apply:
-- `htmlctl diff -f site/ --context staging` — review changes
+- `htmlctl diff -f site/ --context staging` — review changes (**exit code 1 = changes detected, not an error; exit code 0 = no changes**)
 - `htmlctl apply -f site/ --context staging --dry-run` — for risky changes
 - `htmlctl config current-context` — confirm you're on the right context
 
 After apply:
 - `htmlctl status website/mysite --context staging`
-- `htmlctl logs website/mysite --context staging`
+- `htmlctl logs website/mysite --context staging` — check for `warning: og image generation failed` lines; these indicate pages whose OG PNG was skipped (build still succeeds)
 - Check the site URL
 
 Before promote:

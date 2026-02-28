@@ -78,12 +78,12 @@ spec:
       siteName: My Site
       title: My Site
       description: Short description
-      image: https://mysite.com/assets/og-image.png
+      image: https://mysite.com/assets/og-image.png   # omit to get auto-generated OG card
     twitter:
       card: summary_large_image
       title: My Site
       description: Short description
-      image: https://mysite.com/assets/og-image.png
+      image: https://mysite.com/assets/og-image.png   # omit to get auto-generated OG card
     jsonLD:
       - id: website
         payload:
@@ -102,6 +102,14 @@ spec:
 - Open Graph and Twitter fields render in fixed field order
 - JSON-LD blocks render in manifest order, wrapped in `<script type="application/ld+json">`
 - URL fields in `spec.head` accept only `http(s)://` or relative paths
+
+### OG image auto-generation
+
+At build time the server generates a 1200×630 PNG card for every page and places it in the release at `og/<pagename>.png`. The `openGraph.image` and `twitter.image` fields are then auto-populated **only when each field is absent** and `canonicalURL` is an absolute `http(s)://` URL. Explicitly set fields are never overwritten.
+
+- OG generation failures are per-page warnings — the build still succeeds.
+- The release always contains `/og/<pagename>.png` regardless of whether injection occurred.
+- To use a custom image instead of the generated card, set `openGraph.image` / `twitter.image` explicitly.
 
 ### Head metadata render order
 

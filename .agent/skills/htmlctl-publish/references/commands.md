@@ -63,7 +63,7 @@ htmlctl diff -f site/ --context staging
 
 ## Apply
 
-Push desired state to the server. The server validates, renders, and creates an immutable release.
+Push desired state to the server. The server validates, renders, and creates an immutable release. **`apply` always creates a new release**, even when the content is unchanged — useful for triggering a server-side feature (e.g. OG image generation) without editing any files.
 
 ```bash
 # Apply full site directory
@@ -92,17 +92,20 @@ htmlctl status website/<name> --context prod
 
 ## Get
 
-Inspect server state for specific resources:
+Inspect server state for specific resources.
+
+**Supported resource types:** `websites`, `environments`, `releases` only.
+`pages`, `components`, `styles`, and `assets` are not queryable via `get` — use `htmlctl diff` to compare local vs server state, or `htmlctl status` for summary counts.
 
 ```bash
 # List all releases for a website/environment
 htmlctl get releases --context staging
 
-# Get website resource
-htmlctl get website <name> --context staging
+# List all websites on the server
+htmlctl get websites --context staging
 
-# Get specific page
-htmlctl get page <name> --context staging
+# List all environments
+htmlctl get environments --context staging
 ```
 
 ---

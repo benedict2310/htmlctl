@@ -49,7 +49,7 @@ docs/
 docker/                  Dockerfile and entrypoint scripts for htmlservd container
 scripts/                 Utility scripts
 testdata/                Fixtures used by tests
-.claude/skills/          Contributor automation (preflight, project map)
+.agent/skills/           Contributor automation and shared skills (htmlctl-publish, etc.)
 ```
 
 ## Build & Test Commands
@@ -84,8 +84,8 @@ docker run --rm -it -v "$PWD":/work -w /work golang:1.24 bash -lc \
 Notes:
 - **Always run `go test -race ./...`** before merging any changes to `internal/server/` — the race detector caught a real production concurrency bug (see `docs/review-logs/E6-post-epic-audit-2026-02-23.log`).
 - For manual SSH-tunnel end-to-end testing (`htmlctl` → SSH → `htmlservd`), prefer host execution; containers require SSH agent forwarding, `known_hosts`, and a reachable SSH server.
-- Preflight check: `.claude/skills/implement-story/scripts/preflight.sh <story-file> --quiet --no-color`
-- Project map: `.claude/skills/implement-story/scripts/project-map.sh --summary --no-color`
+- Preflight check: `.agent/skills/implement-story/scripts/preflight.sh <story-file> --quiet --no-color`
+- Project map: `.agent/skills/implement-story/scripts/project-map.sh --summary --no-color`
 
 ## Coding Style & Conventions
 

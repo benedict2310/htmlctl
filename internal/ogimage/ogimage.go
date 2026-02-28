@@ -23,7 +23,7 @@ const (
 
 	// templateVersion is included in every cache key.
 	// Bump this whenever Generate's visual output changes (layout, fonts, colors, or canvas size).
-	templateVersion     = "og-v1:"
+	templateVersion     = "og-v2:"
 	titleMaxLines       = 3
 	descriptionMaxLines = 3
 )
@@ -35,16 +35,16 @@ type Card struct {
 }
 
 var (
-	//go:embed fonts/JetBrainsMono-Bold.ttf
-	jetBrainsMonoBoldTTF []byte
+	//go:embed fonts/Inter-SemiBold.ttf
+	interSemiBoldTTF []byte
 	//go:embed fonts/Inter-Regular.ttf
 	interRegularTTF []byte
 
 	fontLoadOnce sync.Once
 	fontLoadErr  error
 
-	jetBrainsMonoBoldFont *opentype.Font
-	interRegularFont      *opentype.Font
+	interSemiBoldFont *opentype.Font
+	interRegularFont  *opentype.Font
 )
 
 func Generate(c Card) ([]byte, error) {
@@ -53,17 +53,19 @@ func Generate(c Card) ([]byte, error) {
 	}
 	card := normalizeCard(c)
 
+	// Design palette: matches futurelab.studio design system tokens.
+	// --ora-dark: #0b0e14, --ora-midnight: #1b2031, --ora-teal: #6d9ea3, --ora-silver: #e0e5e9
 	img := image.NewRGBA(image.Rect(0, 0, Width, Height))
-	fillRect(img, img.Bounds(), color.RGBA{R: 13, G: 20, B: 33, A: 255})
-	fillRect(img, image.Rect(0, 0, 24, Height), color.RGBA{R: 39, G: 94, B: 254, A: 255})
-	fillRect(img, image.Rect(0, Height-70, Width, Height), color.RGBA{R: 18, G: 30, B: 48, A: 255})
+	fillRect(img, img.Bounds(), color.RGBA{R: 11, G: 14, B: 20, A: 255})              // --ora-dark
+	fillRect(img, image.Rect(0, 0, 24, Height), color.RGBA{R: 109, G: 158, B: 163, A: 255}) // --ora-teal accent stripe
+	fillRect(img, image.Rect(0, Height-70, Width, Height), color.RGBA{R: 27, G: 32, B: 49, A: 255}) // --ora-midnight footer
 
 	siteFace, err := newFace(interRegularFont, 32)
 	if err != nil {
 		return nil, fmt.Errorf("create site name font face: %w", err)
 	}
 	defer closeFace(siteFace)
-	titleFace, err := newFace(jetBrainsMonoBoldFont, 66)
+	titleFace, err := newFace(interSemiBoldFont, 66)
 	if err != nil {
 		return nil, fmt.Errorf("create title font face: %w", err)
 	}
@@ -74,10 +76,10 @@ func Generate(c Card) ([]byte, error) {
 	}
 	defer closeFace(descriptionFace)
 
-	_ = drawWrappedText(img, siteFace, card.SiteName, 78, 94, Width-156, 40, 1, color.RGBA{R: 148, G: 173, B: 255, A: 255})
-	nextY := drawWrappedText(img, titleFace, card.Title, 78, 188, Width-156, 76, titleMaxLines, color.RGBA{R: 245, G: 249, B: 255, A: 255})
-	nextY += 34
-	_ = drawWrappedText(img, descriptionFace, card.Description, 78, nextY, Width-156, 46, descriptionMaxLines, color.RGBA{R: 200, G: 212, B: 236, A: 255})
+	_ = drawWrappedText(img, siteFace, card.SiteName, 78, 94, Width-156, 40, 1, color.RGBA{R: 109, G: 158, B: 163, A: 255})  // --ora-teal
+	nextY := drawWrappedText(img, titleFace, card.Title, 78, 188, Width-156, 80, titleMaxLines, color.RGBA{R: 224, G: 229, B: 233, A: 255}) // --ora-silver
+	nextY += 32
+	_ = drawWrappedText(img, descriptionFace, card.Description, 78, nextY, Width-156, 46, descriptionMaxLines, color.RGBA{R: 176, G: 192, B: 208, A: 255}) // muted silver
 
 	var out bytes.Buffer
 	if err := png.Encode(&out, img); err != nil {
@@ -94,9 +96,9 @@ func CacheKey(c Card) [32]byte {
 
 func ensureFontsLoaded() error {
 	fontLoadOnce.Do(func() {
-		jetBrainsMonoBoldFont, fontLoadErr = opentype.Parse(jetBrainsMonoBoldTTF)
+		interSemiBoldFont, fontLoadErr = opentype.Parse(interSemiBoldTTF)
 		if fontLoadErr != nil {
-			fontLoadErr = fmt.Errorf("parse JetBrainsMono-Bold.ttf: %w", fontLoadErr)
+			fontLoadErr = fmt.Errorf("parse Inter-SemiBold.ttf: %w", fontLoadErr)
 			return
 		}
 		interRegularFont, fontLoadErr = opentype.Parse(interRegularTTF)

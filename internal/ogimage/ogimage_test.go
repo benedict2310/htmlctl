@@ -74,7 +74,7 @@ func TestEmbeddedFontSubsetSizeGuard(t *testing.T) {
 		data []byte
 	}{
 		{name: "Inter-Regular.ttf", data: interRegularTTF},
-		{name: "JetBrainsMono-Bold.ttf", data: jetBrainsMonoBoldTTF},
+		{name: "Inter-SemiBold.ttf", data: interSemiBoldTTF},
 	} {
 		if len(tc.data) > maxFontBytes {
 			t.Fatalf("font %s too large: got %d bytes, max %d", tc.name, len(tc.data), maxFontBytes)

@@ -47,9 +47,31 @@ func TestGenerateCacheKey(t *testing.T) {
 		SiteName:    "C",
 	}
 	got := CacheKey(card)
-	want := sha256.Sum256([]byte(templateVersion + "A" + "\x00" + "B" + "\x00" + "C"))
+	want := sha256.Sum256([]byte(templateVersion + "A" + "\x00" + "B" + "\x00" + "C" + "\x00" + ""))
 	if got != want {
 		t.Fatalf("CacheKey() mismatch: got %x want %x", got, want)
+	}
+}
+
+func TestGenerateCacheKeyAccentIncluded(t *testing.T) {
+	base := Card{Title: "T", Description: "D", SiteName: "S"}
+	withAccent := Card{Title: "T", Description: "D", SiteName: "S", AccentColor: "#6d9ea3"}
+	if CacheKey(base) == CacheKey(withAccent) {
+		t.Fatal("expected different cache keys for cards with and without AccentColor")
+	}
+}
+
+func TestGenerateUsesAccentColor(t *testing.T) {
+	neutral, err := Generate(Card{Title: "T", Description: "D", SiteName: "S"})
+	if err != nil {
+		t.Fatalf("Generate(neutral) error = %v", err)
+	}
+	teal, err := Generate(Card{Title: "T", Description: "D", SiteName: "S", AccentColor: "#6d9ea3"})
+	if err != nil {
+		t.Fatalf("Generate(teal) error = %v", err)
+	}
+	if bytes.Equal(neutral, teal) {
+		t.Fatal("expected different PNG output for different AccentColor values")
 	}
 }
 

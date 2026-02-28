@@ -15,6 +15,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -760,11 +761,27 @@ func ogCardForPage(site *model.Site, page model.Page) ogimage.Card {
 			siteName = v
 		}
 	}
+	// Read accent color from the site's design tokens.
+	// Sites define --og-accent: #hexcolor in tokens.css to brand their OG cards.
+	accentColor := parseCSSVarColor(site.Styles.TokensCSS, "--og-accent")
 	return ogimage.Card{
 		Title:       title,
 		Description: description,
 		SiteName:    siteName,
+		AccentColor: accentColor,
 	}
+}
+
+// parseCSSVarColor returns the first #rgb or #rrggbb hex value assigned to varName
+// in the given CSS text, or the empty string if not found.
+// The search is boundary-aware: varName must be preceded by whitespace, '{', or ';'
+// to avoid partial matches against longer property names.
+func parseCSSVarColor(css, varName string) string {
+	re := regexp.MustCompile(`(?:^|[\s{;])` + regexp.QuoteMeta(varName) + `\s*:\s*(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3})`)
+	if m := re.FindStringSubmatch(css); len(m) >= 2 {
+		return strings.ToLower(m[1])
+	}
+	return ""
 }
 
 func canonicalOGImageURL(head *model.PageHead, pageName string) (string, bool) {

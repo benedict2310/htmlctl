@@ -706,3 +706,69 @@ func writeBlob(t *testing.T, ctx context.Context, store *blob.Store, content []b
 	}
 	return "sha256:" + hashHex
 }
+
+func TestParseCSSVarColor(t *testing.T) {
+	tests := []struct {
+		name    string
+		css     string
+		varName string
+		want    string
+	}{
+		{
+			name:    "six-digit hex",
+			css:     ":root { --og-accent: #6d9ea3; }",
+			varName: "--og-accent",
+			want:    "#6d9ea3",
+		},
+		{
+			name:    "three-digit hex",
+			css:     ":root { --og-accent: #abc; }",
+			varName: "--og-accent",
+			want:    "#abc",
+		},
+		{
+			name:    "uppercase normalized to lowercase",
+			css:     ":root { --og-accent: #6D9EA3; }",
+			varName: "--og-accent",
+			want:    "#6d9ea3",
+		},
+		{
+			name:    "variable not present",
+			css:     ":root { --brand: #ff0000; }",
+			varName: "--og-accent",
+			want:    "",
+		},
+		{
+			name:    "non-hex value ignored",
+			css:     ":root { --og-accent: blue; }",
+			varName: "--og-accent",
+			want:    "",
+		},
+		{
+			name:    "no partial match on longer name",
+			css:     ":root { --og-accent-light: #aabbcc; }",
+			varName: "--og-accent",
+			want:    "",
+		},
+		{
+			name:    "multiple properties, correct one returned",
+			css:     ":root { --other: #111111; --og-accent: #6d9ea3; --more: #222222; }",
+			varName: "--og-accent",
+			want:    "#6d9ea3",
+		},
+		{
+			name:    "multiline tokens file",
+			css:     ":root {\n  --ora-teal: #6d9ea3;\n  --og-accent: #6d9ea3;\n}",
+			varName: "--og-accent",
+			want:    "#6d9ea3",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := parseCSSVarColor(tc.css, tc.varName)
+			if got != tc.want {
+				t.Fatalf("parseCSSVarColor() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

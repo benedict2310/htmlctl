@@ -727,10 +727,12 @@ func (b *Builder) materializeOGBlob(sourcePath, targetPath string) error {
 	}
 	linkErr := b.linkFileFn(sourcePath, targetPath)
 	if linkErr == nil {
+		_ = os.Chmod(targetPath, 0o644)
 		return nil
 	}
 	copyErr := b.copyFileFn(sourcePath, targetPath)
 	if copyErr == nil {
+		_ = os.Chmod(targetPath, 0o644)
 		return nil
 	}
 	return fmt.Errorf("link blob %s -> %s: %v; copy fallback failed: %w", sourcePath, targetPath, linkErr, copyErr)

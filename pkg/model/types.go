@@ -6,8 +6,19 @@ type Metadata struct {
 }
 
 type WebsiteSpec struct {
-	DefaultStyleBundle string `yaml:"defaultStyleBundle"`
-	BaseTemplate       string `yaml:"baseTemplate"`
+	DefaultStyleBundle string       `yaml:"defaultStyleBundle"`
+	BaseTemplate       string       `yaml:"baseTemplate"`
+	Head               *WebsiteHead `yaml:"head,omitempty" json:"head,omitempty"`
+}
+
+type WebsiteIcons struct {
+	SVG        string `yaml:"svg,omitempty" json:"svg,omitempty"`
+	ICO        string `yaml:"ico,omitempty" json:"ico,omitempty"`
+	AppleTouch string `yaml:"appleTouch,omitempty" json:"appleTouch,omitempty"`
+}
+
+type WebsiteHead struct {
+	Icons *WebsiteIcons `yaml:"icons,omitempty" json:"icons,omitempty"`
 }
 
 type Website struct {
@@ -88,6 +99,11 @@ type Asset struct {
 	Path string
 }
 
+type BrandingAsset struct {
+	Slot       string
+	SourcePath string
+}
+
 type Site struct {
 	RootDir    string
 	Website    Website
@@ -96,4 +112,5 @@ type Site struct {
 	Styles     StyleBundle
 	ScriptPath string
 	Assets     []Asset
+	Branding   map[string]BrandingAsset
 }

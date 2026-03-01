@@ -157,3 +157,57 @@ func TestWebsitesEnvironmentsStatusAndReleasesEndpoints(t *testing.T) {
 		}
 	}
 }
+
+func TestManifestIncludesWebsiteAndBrandingFiles(t *testing.T) {
+	srv := startTestServer(t)
+	baseURL := "http://" + srv.Addr()
+
+	applySampleSite(t, baseURL)
+
+	q := dbpkg.NewQueries(srv.db)
+	websiteRow, err := q.GetWebsiteByName(t.Context(), "sample")
+	if err != nil {
+		t.Fatalf("GetWebsiteByName() error = %v", err)
+	}
+	if err := q.UpdateWebsiteSpec(t.Context(), dbpkg.WebsiteRow{
+		ID:                 websiteRow.ID,
+		DefaultStyleBundle: websiteRow.DefaultStyleBundle,
+		BaseTemplate:       websiteRow.BaseTemplate,
+		HeadJSON:           `{"icons":{"svg":"branding/favicon.svg"}}`,
+		ContentHash:        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+	}); err != nil {
+		t.Fatalf("UpdateWebsiteSpec() error = %v", err)
+	}
+	if err := q.UpsertWebsiteIcon(t.Context(), dbpkg.WebsiteIconRow{
+		WebsiteID:   websiteRow.ID,
+		Slot:        "svg",
+		SourcePath:  "branding/favicon.svg",
+		ContentType: "image/svg+xml",
+		SizeBytes:   12,
+		ContentHash: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+	}); err != nil {
+		t.Fatalf("UpsertWebsiteIcon() error = %v", err)
+	}
+
+	resp, err := http.Get(baseURL + "/api/v1/websites/sample/environments/staging/manifest")
+	if err != nil {
+		t.Fatalf("GET /manifest error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected manifest status 200, got %d", resp.StatusCode)
+	}
+	var manifest desiredStateManifestResponse
+	if err := json.NewDecoder(resp.Body).Decode(&manifest); err != nil {
+		t.Fatalf("decode manifest response: %v", err)
+	}
+	paths := map[string]bool{}
+	for _, file := range manifest.Files {
+		paths[file.Path] = true
+	}
+	for _, want := range []string{"website.yaml", "branding/favicon.svg"} {
+		if !paths[want] {
+			t.Fatalf("missing expected manifest path %q in %#v", want, manifest.Files)
+		}
+	}
+}

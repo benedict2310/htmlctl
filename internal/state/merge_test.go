@@ -281,6 +281,230 @@ spec:
 	}
 }
 
+func TestApplyPersistsWebsiteHeadAndIcons(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openStateTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+	applier, err := NewApplier(db, blobStore)
+	if err != nil {
+		t.Fatalf("NewApplier() error = %v", err)
+	}
+
+	websiteYAML := []byte(`apiVersion: htmlctl.dev/v1
+kind: Website
+metadata:
+  name: sample
+spec:
+  defaultStyleBundle: default
+  baseTemplate: default
+  head:
+    icons:
+      svg: branding/favicon.svg
+`)
+	iconBytes := []byte("<svg></svg>\n")
+	manifest := bundle.Manifest{
+		Mode:    bundle.ApplyModePartial,
+		Website: "sample",
+		Resources: []bundle.Resource{
+			{Kind: "Website", Name: "sample", File: "website.yaml", Hash: "sha256:" + sha256Hex(websiteYAML)},
+			{Kind: "WebsiteIcon", Name: "website-icon-svg", File: "branding/favicon.svg", Hash: "sha256:" + sha256Hex(iconBytes), ContentType: "image/svg+xml"},
+		},
+	}
+	b := bundle.Bundle{
+		Manifest: manifest,
+		Files: map[string][]byte{
+			"website.yaml":         websiteYAML,
+			"branding/favicon.svg": iconBytes,
+		},
+	}
+
+	if _, err := applier.Apply(ctx, "sample", "staging", b, false); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+
+	q := dbpkg.NewQueries(db)
+	website, err := q.GetWebsiteByName(ctx, "sample")
+	if err != nil {
+		t.Fatalf("GetWebsiteByName() error = %v", err)
+	}
+	if website.ContentHash != "sha256:"+sha256Hex(websiteYAML) {
+		t.Fatalf("unexpected website content hash: %q", website.ContentHash)
+	}
+	if !strings.Contains(website.HeadJSON, `"svg":"branding/favicon.svg"`) {
+		t.Fatalf("unexpected website head_json: %q", website.HeadJSON)
+	}
+	icons, err := q.ListWebsiteIconsByWebsite(ctx, website.ID)
+	if err != nil {
+		t.Fatalf("ListWebsiteIconsByWebsite() error = %v", err)
+	}
+	if len(icons) != 1 || icons[0].Slot != "svg" || icons[0].SourcePath != "branding/favicon.svg" {
+		t.Fatalf("unexpected website icons: %#v", icons)
+	}
+}
+
+func TestApplyPreservesWebsiteAndIconsForOldManifest(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openStateTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+	applier, err := NewApplier(db, blobStore)
+	if err != nil {
+		t.Fatalf("NewApplier() error = %v", err)
+	}
+
+	q := dbpkg.NewQueries(db)
+	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{
+		Name:               "sample",
+		DefaultStyleBundle: "default",
+		BaseTemplate:       "default",
+		HeadJSON:           `{"icons":{"svg":"branding/favicon.svg"}}`,
+		ContentHash:        "sha256:website",
+	})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	if _, err := q.InsertEnvironment(ctx, dbpkg.EnvironmentRow{WebsiteID: websiteID, Name: "staging"}); err != nil {
+		t.Fatalf("InsertEnvironment() error = %v", err)
+	}
+	if err := q.UpsertWebsiteIcon(ctx, dbpkg.WebsiteIconRow{
+		WebsiteID:   websiteID,
+		Slot:        "svg",
+		SourcePath:  "branding/favicon.svg",
+		ContentType: "image/svg+xml",
+		SizeBytes:   11,
+		ContentHash: "sha256:icon",
+	}); err != nil {
+		t.Fatalf("UpsertWebsiteIcon() error = %v", err)
+	}
+
+	pageYAML := []byte(`apiVersion: htmlctl.dev/v1
+kind: Page
+metadata:
+  name: index
+spec:
+  route: /
+  title: Home
+  description: Home
+  layout: []
+`)
+	manifest := bundle.Manifest{
+		Mode:    bundle.ApplyModePartial,
+		Website: "sample",
+		Resources: []bundle.Resource{
+			{Kind: "Page", Name: "index", File: "pages/index.page.yaml", Hash: "sha256:" + sha256Hex(pageYAML)},
+		},
+	}
+	b := bundle.Bundle{
+		Manifest: manifest,
+		Files: map[string][]byte{
+			"pages/index.page.yaml": pageYAML,
+		},
+	}
+	if _, err := applier.Apply(ctx, "sample", "staging", b, false); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+
+	website, err := q.GetWebsiteByName(ctx, "sample")
+	if err != nil {
+		t.Fatalf("GetWebsiteByName() error = %v", err)
+	}
+	if website.HeadJSON != `{"icons":{"svg":"branding/favicon.svg"}}` || website.ContentHash != "sha256:website" {
+		t.Fatalf("unexpected website row after old manifest apply: %#v", website)
+	}
+	icons, err := q.ListWebsiteIconsByWebsite(ctx, websiteID)
+	if err != nil {
+		t.Fatalf("ListWebsiteIconsByWebsite() error = %v", err)
+	}
+	if len(icons) != 1 || icons[0].Slot != "svg" {
+		t.Fatalf("expected preserved website icon state, got %#v", icons)
+	}
+}
+
+func TestFullApplyRemovesStaleWebsiteIconsWhenPresent(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openStateTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+	applier, err := NewApplier(db, blobStore)
+	if err != nil {
+		t.Fatalf("NewApplier() error = %v", err)
+	}
+
+	websiteYAML := []byte(`apiVersion: htmlctl.dev/v1
+kind: Website
+metadata:
+  name: sample
+spec:
+  defaultStyleBundle: default
+  baseTemplate: default
+  head:
+    icons:
+      svg: branding/favicon.svg
+`)
+	svg := []byte("<svg></svg>\n")
+	ico := []byte("ico\n")
+	initial := bundle.Bundle{
+		Manifest: bundle.Manifest{
+			Mode:    bundle.ApplyModePartial,
+			Website: "sample",
+			Resources: []bundle.Resource{
+				{Kind: "Website", Name: "sample", File: "website.yaml", Hash: "sha256:" + sha256Hex(websiteYAML)},
+				{Kind: "WebsiteIcon", Name: "website-icon-svg", File: "branding/favicon.svg", Hash: "sha256:" + sha256Hex(svg), ContentType: "image/svg+xml"},
+				{Kind: "WebsiteIcon", Name: "website-icon-ico", File: "branding/favicon.ico", Hash: "sha256:" + sha256Hex(ico), ContentType: "image/x-icon"},
+			},
+		},
+		Files: map[string][]byte{
+			"website.yaml":         websiteYAML,
+			"branding/favicon.svg": svg,
+			"branding/favicon.ico": ico,
+		},
+	}
+	if _, err := applier.Apply(ctx, "sample", "staging", initial, false); err != nil {
+		t.Fatalf("initial Apply() error = %v", err)
+	}
+
+	full := bundle.Bundle{
+		Manifest: bundle.Manifest{
+			Mode:    bundle.ApplyModeFull,
+			Website: "sample",
+			Resources: []bundle.Resource{
+				{Kind: "Website", Name: "sample", File: "website.yaml", Hash: "sha256:" + sha256Hex(websiteYAML)},
+				{Kind: "WebsiteIcon", Name: "website-icon-svg", File: "branding/favicon.svg", Hash: "sha256:" + sha256Hex(svg), ContentType: "image/svg+xml"},
+			},
+		},
+		Files: map[string][]byte{
+			"website.yaml":         websiteYAML,
+			"branding/favicon.svg": svg,
+		},
+	}
+	if _, err := applier.Apply(ctx, "sample", "staging", full, false); err != nil {
+		t.Fatalf("full Apply() error = %v", err)
+	}
+
+	q := dbpkg.NewQueries(db)
+	website, err := q.GetWebsiteByName(ctx, "sample")
+	if err != nil {
+		t.Fatalf("GetWebsiteByName() error = %v", err)
+	}
+	icons, err := q.ListWebsiteIconsByWebsite(ctx, website.ID)
+	if err != nil {
+		t.Fatalf("ListWebsiteIconsByWebsite() error = %v", err)
+	}
+	if len(icons) != 1 || icons[0].Slot != "svg" {
+		t.Fatalf("expected stale icon removal, got %#v", icons)
+	}
+}
+
 func openStateTestDB(t *testing.T, path string) *sql.DB {
 	t.Helper()
 	db, err := dbpkg.Open(dbpkg.DefaultOptions(path))

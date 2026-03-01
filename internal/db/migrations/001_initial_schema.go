@@ -128,5 +128,10 @@ func All() []Migration {
 			Name:    "telemetry_events",
 			UpSQL:   telemetryEventsSchemaSQL,
 		},
+		{
+			Version: 5,
+			Name:    "website_head_and_icons",
+			UpSQL:   websiteHeadAndIconsMigrationSQL,
+		},
 	}
 }

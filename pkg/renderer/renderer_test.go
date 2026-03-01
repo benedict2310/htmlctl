@@ -230,6 +230,78 @@ func TestRenderOutputsServerRenderedHeadMetadata(t *testing.T) {
 	}
 }
 
+func TestRenderOutputsWebsiteFavicons(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "branding"), 0o755); err != nil {
+		t.Fatalf("mkdir branding: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "branding", "favicon.svg"), []byte("<svg></svg>\n"), 0o644); err != nil {
+		t.Fatalf("write favicon.svg: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "branding", "favicon.ico"), []byte("ico\n"), 0o644); err != nil {
+		t.Fatalf("write favicon.ico: %v", err)
+	}
+
+	site := &model.Site{
+		RootDir: root,
+		Website: model.Website{
+			Metadata: model.Metadata{Name: "sample"},
+			Spec: model.WebsiteSpec{
+				Head: &model.WebsiteHead{
+					Icons: &model.WebsiteIcons{
+						SVG: "branding/favicon.svg",
+						ICO: "branding/favicon.ico",
+					},
+				},
+			},
+		},
+		Pages: map[string]model.Page{
+			"index": {
+				Metadata: model.Metadata{Name: "index"},
+				Spec: model.PageSpec{
+					Route:       "/",
+					Title:       "Home",
+					Description: "Home",
+					Layout:      []model.PageLayoutItem{{Include: "hero"}},
+				},
+			},
+		},
+		Components: map[string]model.Component{
+			"hero": {Name: "hero", HTML: "<section id=\"hero\">Home</section>\n"},
+		},
+		Styles: model.StyleBundle{
+			Name:       "default",
+			TokensCSS:  ":root{}",
+			DefaultCSS: "body{}",
+		},
+		Branding: map[string]model.BrandingAsset{
+			"svg": {Slot: "svg", SourcePath: "branding/favicon.svg"},
+			"ico": {Slot: "ico", SourcePath: "branding/favicon.ico"},
+		},
+	}
+
+	outDir := t.TempDir()
+	if err := Render(site, outDir); err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(outDir, "favicon.svg")); err != nil {
+		t.Fatalf("expected favicon.svg in output: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(outDir, "favicon.ico")); err != nil {
+		t.Fatalf("expected favicon.ico in output: %v", err)
+	}
+	html := readFile(t, filepath.Join(outDir, "index.html"))
+	for _, needle := range []string{
+		`<link rel="icon" type="image/svg&#43;xml" href="/favicon.svg">`,
+		`<link rel="icon" href="/favicon.ico">`,
+	} {
+		if !strings.Contains(html, needle) {
+			t.Fatalf("expected rendered html to contain %q", needle)
+		}
+	}
+}
+
 func TestRenderDeterministicAcrossRuns(t *testing.T) {
 	site, err := loader.LoadSite(filepath.Join("..", "..", "testdata", "valid-site"))
 	if err != nil {

@@ -113,6 +113,10 @@ func (a *Applier) Apply(ctx context.Context, websiteName, envName string, b bund
 	if err != nil {
 		return out, fmt.Errorf("list current assets: %w", err)
 	}
+	websiteIcons, err := q.ListWebsiteIconsByWebsite(ctx, website.ID)
+	if err != nil {
+		return out, fmt.Errorf("list current website icons: %w", err)
+	}
 
 	pageByName := map[string]dbpkg.PageRow{}
 	for _, row := range pages {
@@ -130,11 +134,94 @@ func (a *Applier) Apply(ctx context.Context, websiteName, envName string, b bund
 	for _, row := range assets {
 		assetByFilename[row.Filename] = row
 	}
+	iconBySlot := map[string]dbpkg.WebsiteIconRow{}
+	for _, row := range websiteIcons {
+		iconBySlot[row.Slot] = row
+	}
 
 	keepPages := map[string]struct{}{}
 	keepComponents := map[string]struct{}{}
 	keepStyleBundles := map[string]struct{}{}
 	keepAssets := map[string]struct{}{}
+	keepWebsiteIcons := map[string]struct{}{}
+
+	type websiteIconInput struct {
+		slot        string
+		file        string
+		hash        string
+		contentType string
+		sizeBytes   int64
+	}
+	var websiteDoc *model.Website
+	var websiteResourceHash string
+	iconInputs := map[string]websiteIconInput{}
+
+	for _, res := range b.Manifest.Resources {
+		if res.Deleted {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(res.Kind)) {
+		case "website":
+			if websiteDoc != nil {
+				return out, badRequestf("duplicate website resource")
+			}
+			entry := res.FileEntries()[0]
+			content, ok := b.Files[entry.File]
+			if !ok {
+				return out, badRequestf("website resource references missing file %q", entry.File)
+			}
+			doc, err := parseWebsiteDocument(content)
+			if err != nil {
+				return out, badRequestf("parse website %q: %v", entry.File, err)
+			}
+			if name := strings.TrimSpace(doc.Metadata.Name); name != "" && name != websiteName {
+				return out, badRequestf("website.yaml metadata.name %q does not match request website %q", name, websiteName)
+			}
+			websiteDoc = &doc
+			websiteResourceHash = entry.Hash
+		case "websiteicon":
+			slot, err := websiteIconSlotFromResourceName(res.Name)
+			if err != nil {
+				return out, badRequestf("invalid website icon resource %q: %v", res.Name, err)
+			}
+			entry := res.FileEntries()[0]
+			content, ok := b.Files[entry.File]
+			if !ok {
+				return out, badRequestf("website icon resource %q references missing file %q", res.Name, entry.File)
+			}
+			contentType := strings.TrimSpace(res.ContentType)
+			if contentType == "" {
+				contentType = inferContentType(entry.File)
+			}
+			if contentType == "" {
+				contentType = "application/octet-stream"
+			}
+			iconInputs[slot] = websiteIconInput{
+				slot:        slot,
+				file:        entry.File,
+				hash:        entry.Hash,
+				contentType: contentType,
+				sizeBytes:   int64(len(content)),
+			}
+		}
+	}
+
+	if websiteDoc != nil {
+		requiredIcons := websiteIconPathsFromHead(websiteDoc.Spec.Head)
+		for slot, sourcePath := range requiredIcons {
+			input, ok := iconInputs[slot]
+			if ok {
+				if input.file != sourcePath {
+					return out, badRequestf("website head icon %q expects file %q but manifest provides %q", slot, sourcePath, input.file)
+				}
+				continue
+			}
+			if existing, ok := iconBySlot[slot]; ok && existing.SourcePath == sourcePath {
+				continue
+			}
+			return out, badRequestf("website head icon %q references missing branding file %q", slot, sourcePath)
+		}
+	}
 
 	for _, res := range b.Manifest.Resources {
 		kind := strings.ToLower(strings.TrimSpace(res.Kind))
@@ -181,6 +268,56 @@ func (a *Applier) Apply(ctx context.Context, websiteName, envName string, b bund
 		}
 
 		switch kind {
+		case "website":
+			if websiteDoc == nil {
+				return out, badRequestf("website resource content missing")
+			}
+			headJSON, err := marshalWebsiteHead(websiteDoc.Spec.Head)
+			if err != nil {
+				return out, fmt.Errorf("marshal website head metadata: %w", err)
+			}
+			if website.DefaultStyleBundle != websiteDoc.Spec.DefaultStyleBundle || website.BaseTemplate != websiteDoc.Spec.BaseTemplate || website.HeadJSONOrDefault() != headJSON || website.ContentHash != websiteResourceHash {
+				out.Changes.Updated++
+			}
+			if !dryRun {
+				if err := q.UpdateWebsiteSpec(ctx, dbpkg.WebsiteRow{
+					ID:                 website.ID,
+					DefaultStyleBundle: websiteDoc.Spec.DefaultStyleBundle,
+					BaseTemplate:       websiteDoc.Spec.BaseTemplate,
+					HeadJSON:           headJSON,
+					ContentHash:        websiteResourceHash,
+				}); err != nil {
+					return out, fmt.Errorf("update website %q: %w", websiteName, err)
+				}
+			}
+			out.Accepted = append(out.Accepted, AcceptedResource{Kind: "Website", Name: websiteName, Hash: websiteResourceHash})
+
+		case "websiteicon":
+			slot, err := websiteIconSlotFromResourceName(res.Name)
+			if err != nil {
+				return out, badRequestf("invalid website icon resource %q: %v", res.Name, err)
+			}
+			input := iconInputs[slot]
+			if existing, ok := iconBySlot[slot]; !ok {
+				out.Changes.Created++
+			} else if existing.ContentHash != input.hash || existing.SourcePath != input.file || existing.SizeBytes != input.sizeBytes || existing.ContentType != input.contentType {
+				out.Changes.Updated++
+			}
+			if !dryRun {
+				if err := q.UpsertWebsiteIcon(ctx, dbpkg.WebsiteIconRow{
+					WebsiteID:   website.ID,
+					Slot:        slot,
+					SourcePath:  input.file,
+					ContentType: input.contentType,
+					SizeBytes:   input.sizeBytes,
+					ContentHash: input.hash,
+				}); err != nil {
+					return out, fmt.Errorf("upsert website icon %q: %w", slot, err)
+				}
+			}
+			keepWebsiteIcons[slot] = struct{}{}
+			out.Accepted = append(out.Accepted, AcceptedResource{Kind: "WebsiteIcon", Name: res.Name, Hash: input.hash})
+
 		case "component":
 			ref := entries[0]
 			if existing, ok := componentByName[res.Name]; !ok {
@@ -306,6 +443,7 @@ func (a *Applier) Apply(ctx context.Context, websiteName, envName string, b bund
 	}
 
 	if b.Manifest.Mode == bundle.ApplyModeFull {
+		hasWebsiteIconResources := len(iconInputs) > 0
 		pageNames := sortedKeys(keepPages)
 		componentNames := sortedKeys(keepComponents)
 		styleBundleNames := sortedKeys(keepStyleBundles)
@@ -327,7 +465,14 @@ func (a *Applier) Apply(ctx context.Context, websiteName, envName string, b bund
 		if err != nil {
 			return out, fmt.Errorf("delete stale assets: %w", err)
 		}
-		out.Changes.Deleted += int(deletedPages + deletedComponents + deletedBundles + deletedAssets)
+		deletedIcons := int64(0)
+		if hasWebsiteIconResources {
+			deletedIcons, err = q.DeleteWebsiteIconsNotIn(ctx, website.ID, sortedKeys(keepWebsiteIcons))
+			if err != nil {
+				return out, fmt.Errorf("delete stale website icons: %w", err)
+			}
+		}
+		out.Changes.Deleted += int(deletedPages + deletedComponents + deletedBundles + deletedAssets + deletedIcons)
 	}
 
 	if dryRun {
@@ -424,6 +569,14 @@ func parsePageDocument(content []byte) (model.Page, error) {
 	return page, nil
 }
 
+func parseWebsiteDocument(content []byte) (model.Website, error) {
+	var website model.Website
+	if err := yaml.Unmarshal(content, &website); err != nil {
+		return website, err
+	}
+	return website, nil
+}
+
 func marshalPageHead(head *model.PageHead) (string, error) {
 	if head == nil {
 		return "{}", nil
@@ -433,6 +586,47 @@ func marshalPageHead(head *model.PageHead) (string, error) {
 		return "", err
 	}
 	return string(payload), nil
+}
+
+func marshalWebsiteHead(head *model.WebsiteHead) (string, error) {
+	if head == nil {
+		return "{}", nil
+	}
+	payload, err := json.Marshal(head)
+	if err != nil {
+		return "", err
+	}
+	return string(payload), nil
+}
+
+func websiteIconSlotFromResourceName(name string) (string, error) {
+	switch strings.TrimSpace(name) {
+	case "website-icon-svg":
+		return "svg", nil
+	case "website-icon-ico":
+		return "ico", nil
+	case "website-icon-apple-touch":
+		return "apple_touch", nil
+	default:
+		return "", fmt.Errorf("unsupported website icon resource name %q", name)
+	}
+}
+
+func websiteIconPathsFromHead(head *model.WebsiteHead) map[string]string {
+	if head == nil || head.Icons == nil {
+		return map[string]string{}
+	}
+	paths := map[string]string{}
+	if v := strings.TrimSpace(head.Icons.SVG); v != "" {
+		paths["svg"] = v
+	}
+	if v := strings.TrimSpace(head.Icons.ICO); v != "" {
+		paths["ico"] = v
+	}
+	if v := strings.TrimSpace(head.Icons.AppleTouch); v != "" {
+		paths["apple_touch"] = v
+	}
+	return paths
 }
 
 func normalizeRoute(route string) string {

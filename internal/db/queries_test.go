@@ -39,6 +39,9 @@ func TestQueriesInsertAndFetchCoreRows(t *testing.T) {
 	if website.ID != websiteID {
 		t.Fatalf("unexpected website id: got=%d want=%d", website.ID, websiteID)
 	}
+	if website.HeadJSON != "{}" {
+		t.Fatalf("expected default website head_json {}, got %q", website.HeadJSON)
+	}
 
 	envID, err := q.InsertEnvironment(ctx, EnvironmentRow{WebsiteID: websiteID, Name: "staging"})
 	if err != nil {
@@ -139,6 +142,92 @@ func TestInsertPageDefaultsHeadJSONToObject(t *testing.T) {
 	}
 	if rows[0].HeadJSON != "{}" {
 		t.Fatalf("expected default head_json {}, got %q", rows[0].HeadJSON)
+	}
+}
+
+func TestUpdateWebsiteSpecPersistsHeadJSONAndContentHash(t *testing.T) {
+	q, cleanup := setupDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	if err := q.UpdateWebsiteSpec(ctx, WebsiteRow{
+		ID:                 websiteID,
+		DefaultStyleBundle: "brand",
+		BaseTemplate:       "marketing",
+		HeadJSON:           `{"icons":{"svg":"branding/favicon.svg"}}`,
+		ContentHash:        "sha256:website",
+	}); err != nil {
+		t.Fatalf("UpdateWebsiteSpec() error = %v", err)
+	}
+
+	row, err := q.GetWebsiteByName(ctx, "sample")
+	if err != nil {
+		t.Fatalf("GetWebsiteByName() error = %v", err)
+	}
+	if row.DefaultStyleBundle != "brand" || row.BaseTemplate != "marketing" {
+		t.Fatalf("unexpected website row: %#v", row)
+	}
+	if row.HeadJSON != `{"icons":{"svg":"branding/favicon.svg"}}` {
+		t.Fatalf("unexpected website head_json: %q", row.HeadJSON)
+	}
+	if row.ContentHash != "sha256:website" {
+		t.Fatalf("unexpected website content hash: %q", row.ContentHash)
+	}
+}
+
+func TestWebsiteIconsCRUD(t *testing.T) {
+	q, cleanup := setupDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	if err := q.UpsertWebsiteIcon(ctx, WebsiteIconRow{
+		WebsiteID:   websiteID,
+		Slot:        "svg",
+		SourcePath:  "branding/favicon.svg",
+		ContentType: "image/svg+xml",
+		SizeBytes:   12,
+		ContentHash: "sha256:svg",
+	}); err != nil {
+		t.Fatalf("UpsertWebsiteIcon(svg) error = %v", err)
+	}
+	if err := q.UpsertWebsiteIcon(ctx, WebsiteIconRow{
+		WebsiteID:   websiteID,
+		Slot:        "ico",
+		SourcePath:  "branding/favicon.ico",
+		ContentType: "image/x-icon",
+		SizeBytes:   8,
+		ContentHash: "sha256:ico",
+	}); err != nil {
+		t.Fatalf("UpsertWebsiteIcon(ico) error = %v", err)
+	}
+	rows, err := q.ListWebsiteIconsByWebsite(ctx, websiteID)
+	if err != nil {
+		t.Fatalf("ListWebsiteIconsByWebsite() error = %v", err)
+	}
+	if len(rows) != 2 || rows[0].Slot != "ico" || rows[1].Slot != "svg" {
+		t.Fatalf("unexpected website icon rows: %#v", rows)
+	}
+	deleted, err := q.DeleteWebsiteIconsNotIn(ctx, websiteID, []string{"svg"})
+	if err != nil {
+		t.Fatalf("DeleteWebsiteIconsNotIn() error = %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("expected one deleted website icon row, got %d", deleted)
+	}
+	rows, err = q.ListWebsiteIconsByWebsite(ctx, websiteID)
+	if err != nil {
+		t.Fatalf("ListWebsiteIconsByWebsite(second) error = %v", err)
+	}
+	if len(rows) != 1 || rows[0].Slot != "svg" {
+		t.Fatalf("unexpected website icon rows after delete: %#v", rows)
 	}
 }
 

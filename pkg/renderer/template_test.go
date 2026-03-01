@@ -118,3 +118,27 @@ func TestRenderDefaultTemplateInjectsHeadMetaBeforeStyles(t *testing.T) {
 		t.Fatalf("expected metadata before stylesheet links")
 	}
 }
+
+func TestRenderDefaultTemplateInjectsWebsiteIconsBeforePageMeta(t *testing.T) {
+	output, err := renderDefaultTemplate(pageTemplateData{
+		Title:            "Ora",
+		Description:      "Local-first voice assistant",
+		WebsiteIconsHTML: template.HTML("  <link rel=\"icon\" href=\"/favicon.ico\">\n"),
+		HeadMetaHTML:     template.HTML("  <link rel=\"canonical\" href=\"https://example.com/ora\">\n"),
+		StyleHrefs:       []string{"/styles/tokens-abc.css"},
+	})
+	if err != nil {
+		t.Fatalf("renderDefaultTemplate() error = %v", err)
+	}
+
+	html := string(output)
+	iconIdx := strings.Index(html, `<link rel="icon" href="/favicon.ico">`)
+	canonicalIdx := strings.Index(html, `<link rel="canonical" href="https://example.com/ora">`)
+	styleIdx := strings.Index(html, `/styles/tokens-abc.css`)
+	if iconIdx == -1 || canonicalIdx == -1 || styleIdx == -1 {
+		t.Fatalf("expected website icons, canonical, and styles in output, got: %s", html)
+	}
+	if !(iconIdx < canonicalIdx && canonicalIdx < styleIdx) {
+		t.Fatalf("expected website icons before page metadata before styles, got: %s", html)
+	}
+}

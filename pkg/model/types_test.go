@@ -16,6 +16,11 @@ metadata:
 spec:
   defaultStyleBundle: default
   baseTemplate: default
+  head:
+    icons:
+      svg: branding/favicon.svg
+      ico: branding/favicon.ico
+      appleTouch: branding/apple-touch-icon.png
 `)
 
 	var website Website
@@ -31,6 +36,43 @@ spec:
 	}
 	if website.Spec.BaseTemplate != "default" {
 		t.Fatalf("unexpected base template: %q", website.Spec.BaseTemplate)
+	}
+	if website.Spec.Head == nil || website.Spec.Head.Icons == nil {
+		t.Fatalf("expected website head icons to be parsed")
+	}
+	if website.Spec.Head.Icons.SVG != "branding/favicon.svg" {
+		t.Fatalf("unexpected svg icon path: %q", website.Spec.Head.Icons.SVG)
+	}
+	if website.Spec.Head.Icons.ICO != "branding/favicon.ico" {
+		t.Fatalf("unexpected ico icon path: %q", website.Spec.Head.Icons.ICO)
+	}
+	if website.Spec.Head.Icons.AppleTouch != "branding/apple-touch-icon.png" {
+		t.Fatalf("unexpected apple touch icon path: %q", website.Spec.Head.Icons.AppleTouch)
+	}
+}
+
+func TestWebsiteHeadJSONMarshaling(t *testing.T) {
+	head := &WebsiteHead{
+		Icons: &WebsiteIcons{
+			SVG:        "branding/favicon.svg",
+			ICO:        "branding/favicon.ico",
+			AppleTouch: "branding/apple-touch-icon.png",
+		},
+	}
+
+	b, err := json.Marshal(head)
+	if err != nil {
+		t.Fatalf("marshal website head: %v", err)
+	}
+	got := string(b)
+	for _, want := range []string{
+		`"svg":"branding/favicon.svg"`,
+		`"ico":"branding/favicon.ico"`,
+		`"appleTouch":"branding/apple-touch-icon.png"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in marshaled output, got: %s", want, got)
+		}
 	}
 }
 

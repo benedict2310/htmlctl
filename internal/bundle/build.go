@@ -38,7 +38,46 @@ func BuildTarFromDir(dir string, website string) ([]byte, Manifest, error) {
 
 	files := make(map[string]int64)
 	totalBytes := int64(0)
-	resources := make([]Resource, 0, len(site.Components)+len(site.Pages)+len(site.Assets)+2)
+	resources := make([]Resource, 0, len(site.Components)+len(site.Pages)+len(site.Assets)+len(site.Branding)+3)
+
+	websiteRel := "website.yaml"
+	websiteHash, websiteSize, err := hashFile(site.RootDir, websiteRel)
+	if err != nil {
+		return nil, Manifest{}, err
+	}
+	files[websiteRel] = websiteSize
+	totalBytes += websiteSize
+	if totalBytes > maxBundleSizeBytes {
+		return nil, Manifest{}, fmt.Errorf("bundle exceeds %d bytes; reduce site size or split large assets", maxBundleSizeBytes)
+	}
+	resources = append(resources, Resource{
+		Kind: "Website",
+		Name: website,
+		File: websiteRel,
+		Hash: websiteHash,
+	})
+
+	for _, slot := range sortedBrandingSlots(site.Branding) {
+		asset := site.Branding[slot]
+		rel := filepath.ToSlash(asset.SourcePath)
+		hash, size, err := hashFile(site.RootDir, rel)
+		if err != nil {
+			return nil, Manifest{}, err
+		}
+		files[rel] = size
+		totalBytes += size
+		if totalBytes > maxBundleSizeBytes {
+			return nil, Manifest{}, fmt.Errorf("bundle exceeds %d bytes; reduce site size or split large assets", maxBundleSizeBytes)
+		}
+		resources = append(resources, Resource{
+			Kind:        "WebsiteIcon",
+			Name:        websiteIconResourceName(slot),
+			File:        rel,
+			Hash:        hash,
+			ContentType: contentTypeForPath(rel),
+			Size:        size,
+		})
+	}
 
 	componentNames := sortedComponentNames(site.Components)
 	for _, name := range componentNames {
@@ -250,6 +289,28 @@ func sortedMapKeys(v map[string]int64) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+func sortedBrandingSlots(v map[string]model.BrandingAsset) []string {
+	keys := make([]string, 0, len(v))
+	for k := range v {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func websiteIconResourceName(slot string) string {
+	switch slot {
+	case "svg":
+		return "website-icon-svg"
+	case "ico":
+		return "website-icon-ico"
+	case "apple_touch":
+		return "website-icon-apple-touch"
+	default:
+		return "website-icon-" + strings.ReplaceAll(slot, "_", "-")
+	}
 }
 
 func contentHash(content []byte) string {

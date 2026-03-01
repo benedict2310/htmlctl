@@ -90,7 +90,7 @@ func (r Resource) FileEntries() []FileRef {
 func (r Resource) validate(mode string) error {
 	kind := strings.ToLower(strings.TrimSpace(r.Kind))
 	switch kind {
-	case "component", "page", "stylebundle", "asset", "script":
+	case "component", "page", "stylebundle", "asset", "script", "website", "websiteicon":
 	default:
 		return fmt.Errorf("unsupported resource kind %q", r.Kind)
 	}
@@ -128,7 +128,7 @@ func (r Resource) validate(mode string) error {
 		}
 	}
 	switch kind {
-	case "component", "page", "asset", "script":
+	case "component", "page", "asset", "script", "website", "websiteicon":
 		if len(entries) != 1 {
 			return fmt.Errorf("%s resources must reference exactly one file", kind)
 		}
@@ -136,6 +136,21 @@ func (r Resource) validate(mode string) error {
 	if kind == "asset" || kind == "script" {
 		if strings.TrimSpace(r.Name) != entries[0].File {
 			return fmt.Errorf("%s name must match file path %q", kind, entries[0].File)
+		}
+	}
+	switch kind {
+	case "website":
+		if entries[0].File != "website.yaml" {
+			return fmt.Errorf("website resource file must be website.yaml")
+		}
+	case "websiteicon":
+		validNames := map[string]bool{
+			"website-icon-svg":         true,
+			"website-icon-ico":         true,
+			"website-icon-apple-touch": true,
+		}
+		if !validNames[strings.TrimSpace(r.Name)] {
+			return fmt.Errorf("invalid websiteicon name %q", r.Name)
 		}
 	}
 	return nil

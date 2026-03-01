@@ -140,3 +140,37 @@ func TestRenderHeadMetaJSONLDMarshalError(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestRenderWebsiteIconsDeterministicOrder(t *testing.T) {
+	out, err := renderWebsiteIcons(&model.WebsiteHead{
+		Icons: &model.WebsiteIcons{
+			SVG:        "branding/favicon.svg",
+			ICO:        "branding/favicon.ico",
+			AppleTouch: "branding/apple-touch-icon.png",
+		},
+	}, map[string]model.BrandingAsset{
+		"ico":         {Slot: "ico", SourcePath: "branding/favicon.ico"},
+		"svg":         {Slot: "svg", SourcePath: "branding/favicon.svg"},
+		"apple_touch": {Slot: "apple_touch", SourcePath: "branding/apple-touch-icon.png"},
+	})
+	if err != nil {
+		t.Fatalf("renderWebsiteIcons() error = %v", err)
+	}
+	html := string(out)
+	needles := []string{
+		`<link rel="icon" type="image/svg&#43;xml" href="/favicon.svg">`,
+		`<link rel="icon" href="/favicon.ico">`,
+		`<link rel="apple-touch-icon" href="/apple-touch-icon.png">`,
+	}
+	last := -1
+	for _, needle := range needles {
+		idx := strings.Index(html, needle)
+		if idx == -1 {
+			t.Fatalf("expected website icons html to contain %q", needle)
+		}
+		if idx <= last {
+			t.Fatalf("expected deterministic website icon ordering for %q", needle)
+		}
+		last = idx
+	}
+}

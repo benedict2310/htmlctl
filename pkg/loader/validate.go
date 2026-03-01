@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"unicode/utf8"
 
@@ -28,6 +29,9 @@ func ValidateSite(site *model.Site) error {
 	}
 	if site.Website.Metadata.Name == "" {
 		return fmt.Errorf("website metadata.name is required")
+	}
+	if err := validateWebsiteHead(site); err != nil {
+		return err
 	}
 	if len(site.Pages) == 0 {
 		return fmt.Errorf("at least one page is required")
@@ -63,6 +67,40 @@ func ValidateSite(site *model.Site) error {
 		}
 	}
 
+	return nil
+}
+
+func validateWebsiteHead(site *model.Site) error {
+	head := site.Website.Spec.Head
+	if head == nil || head.Icons == nil {
+		return nil
+	}
+	for slot, pathValue := range websiteIconPaths(head.Icons) {
+		rel, err := normalizeBrandingPath(pathValue)
+		if err != nil {
+			return fmt.Errorf("website head icon %q: %w", slot, err)
+		}
+		asset, ok := site.Branding[slot]
+		if !ok || asset.SourcePath != rel {
+			return fmt.Errorf("website head icon %q references missing branding file %q", slot, rel)
+		}
+		switch slot {
+		case "svg":
+			if strings.ToLower(filepath.Ext(rel)) != ".svg" {
+				return fmt.Errorf("website head icon %q must reference an .svg file", slot)
+			}
+		case "ico":
+			if strings.ToLower(filepath.Ext(rel)) != ".ico" {
+				return fmt.Errorf("website head icon %q must reference an .ico file", slot)
+			}
+		case "apple_touch":
+			if strings.ToLower(filepath.Ext(rel)) != ".png" {
+				return fmt.Errorf("website head icon %q must reference a .png file", slot)
+			}
+		default:
+			return fmt.Errorf("unsupported website head icon slot %q", slot)
+		}
+	}
 	return nil
 }
 

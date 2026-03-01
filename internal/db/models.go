@@ -7,8 +7,17 @@ type WebsiteRow struct {
 	Name               string
 	DefaultStyleBundle string
 	BaseTemplate       string
+	HeadJSON           string
+	ContentHash        string
 	CreatedAt          string
 	UpdatedAt          string
+}
+
+func (r WebsiteRow) HeadJSONOrDefault() string {
+	if strings.TrimSpace(r.HeadJSON) == "" {
+		return "{}"
+	}
+	return r.HeadJSON
 }
 
 type EnvironmentRow struct {
@@ -68,6 +77,18 @@ type AssetRow struct {
 	SizeBytes   int64
 	ContentHash string
 	CreatedAt   string
+}
+
+type WebsiteIconRow struct {
+	ID          int64
+	WebsiteID   int64
+	Slot        string
+	SourcePath  string
+	ContentType string
+	SizeBytes   int64
+	ContentHash string
+	CreatedAt   string
+	UpdatedAt   string
 }
 
 type ReleaseRow struct {

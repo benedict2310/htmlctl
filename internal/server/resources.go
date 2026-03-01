@@ -324,8 +324,19 @@ func (s *Server) handleManifest(w http.ResponseWriter, r *http.Request) {
 		s.writeInternalAPIError(w, r, "list assets failed", err, "website", website, "environment", env)
 		return
 	}
+	websiteIcons, err := q.ListWebsiteIconsByWebsite(r.Context(), websiteRow.ID)
+	if err != nil {
+		s.writeInternalAPIError(w, r, "list website icons failed", err, "website", website, "environment", env)
+		return
+	}
 
 	byPath := map[string]string{}
+	if strings.TrimSpace(websiteRow.ContentHash) != "" {
+		if err := addManifestEntry(byPath, "website.yaml", websiteRow.ContentHash); err != nil {
+			s.writeInternalAPIError(w, r, "build desired-state manifest failed", err, "website", website, "environment", env)
+			return
+		}
+	}
 	for _, row := range pages {
 		entryPath := path.Join("pages", row.Name+".page.yaml")
 		if err := addManifestEntry(byPath, entryPath, row.ContentHash); err != nil {
@@ -355,6 +366,12 @@ func (s *Server) handleManifest(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, row := range assets {
 		if err := addManifestEntry(byPath, row.Filename, row.ContentHash); err != nil {
+			s.writeInternalAPIError(w, r, "build desired-state manifest failed", err, "website", website, "environment", env)
+			return
+		}
+	}
+	for _, row := range websiteIcons {
+		if err := addManifestEntry(byPath, row.SourcePath, row.ContentHash); err != nil {
 			s.writeInternalAPIError(w, r, "build desired-state manifest failed", err, "website", website, "environment", env)
 			return
 		}

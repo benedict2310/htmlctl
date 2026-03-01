@@ -50,6 +50,11 @@ func LoadSite(dirPath string) (*model.Site, error) {
 		return nil, err
 	}
 
+	branding, err := loadBranding(root, website)
+	if err != nil {
+		return nil, err
+	}
+
 	site := &model.Site{
 		RootDir:    root,
 		Website:    website,
@@ -58,6 +63,7 @@ func LoadSite(dirPath string) (*model.Site, error) {
 		Styles:     styles,
 		ScriptPath: scriptPath,
 		Assets:     assets,
+		Branding:   branding,
 	}
 
 	if err := ValidateSite(site); err != nil {
@@ -227,6 +233,64 @@ func loadAssets(root string) ([]model.Asset, error) {
 	})
 
 	return assets, nil
+}
+
+func loadBranding(root string, website model.Website) (map[string]model.BrandingAsset, error) {
+	icons := website.Spec.Head
+	if icons == nil || icons.Icons == nil {
+		return map[string]model.BrandingAsset{}, nil
+	}
+
+	branding := map[string]model.BrandingAsset{}
+	for slot, sourcePath := range websiteIconPaths(icons.Icons) {
+		rel, err := normalizeBrandingPath(sourcePath)
+		if err != nil {
+			return nil, fmt.Errorf("website head icon %q path %q: %w", slot, sourcePath, err)
+		}
+		abs := filepath.Join(root, filepath.FromSlash(rel))
+		if err := mustFile(abs); err != nil {
+			return nil, fmt.Errorf("website head icon %q path %q: %w", slot, rel, err)
+		}
+		branding[slot] = model.BrandingAsset{
+			Slot:       slot,
+			SourcePath: rel,
+		}
+	}
+	return branding, nil
+}
+
+func websiteIconPaths(icons *model.WebsiteIcons) map[string]string {
+	if icons == nil {
+		return map[string]string{}
+	}
+	paths := map[string]string{}
+	if strings.TrimSpace(icons.SVG) != "" {
+		paths["svg"] = strings.TrimSpace(icons.SVG)
+	}
+	if strings.TrimSpace(icons.ICO) != "" {
+		paths["ico"] = strings.TrimSpace(icons.ICO)
+	}
+	if strings.TrimSpace(icons.AppleTouch) != "" {
+		paths["apple_touch"] = strings.TrimSpace(icons.AppleTouch)
+	}
+	return paths
+}
+
+func normalizeBrandingPath(raw string) (string, error) {
+	rel := filepath.ToSlash(filepath.Clean(strings.TrimSpace(raw)))
+	if rel == "." || rel == "" {
+		return "", fmt.Errorf("path is empty")
+	}
+	if strings.HasPrefix(rel, "/") {
+		return "", fmt.Errorf("path must be relative")
+	}
+	if rel == ".." || strings.HasPrefix(rel, "../") || strings.Contains(rel, "/../") {
+		return "", fmt.Errorf("path traversal is not allowed")
+	}
+	if !strings.HasPrefix(rel, "branding/") {
+		return "", fmt.Errorf("path must be under branding/")
+	}
+	return rel, nil
 }
 
 func decodeYAMLFile(path string, out any) error {

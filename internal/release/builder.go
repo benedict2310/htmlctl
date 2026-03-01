@@ -331,6 +331,7 @@ type desiredState struct {
 	Components   []dbpkg.ComponentRow
 	StyleBundles []dbpkg.StyleBundleRow
 	Assets       []dbpkg.AssetRow
+	WebsiteIcons []dbpkg.WebsiteIconRow
 }
 
 type manifestSnapshot struct {
@@ -378,6 +379,16 @@ func (s desiredState) Manifest() manifestSnapshot {
 			"contentHash": row.ContentHash,
 		})
 	}
+	websiteIcons := make([]map[string]any, 0, len(s.WebsiteIcons))
+	for _, row := range s.WebsiteIcons {
+		websiteIcons = append(websiteIcons, map[string]any{
+			"slot":        row.Slot,
+			"sourcePath":  row.SourcePath,
+			"contentType": row.ContentType,
+			"sizeBytes":   row.SizeBytes,
+			"contentHash": row.ContentHash,
+		})
+	}
 	return manifestSnapshot{
 		APIVersion:  "htmlctl.dev/v1",
 		Kind:        "ReleaseSnapshot",
@@ -385,10 +396,17 @@ func (s desiredState) Manifest() manifestSnapshot {
 		Environment: s.Environment.Name,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339Nano),
 		Resources: map[string]any{
+			"website": map[string]any{
+				"defaultStyleBundle": s.Website.DefaultStyleBundle,
+				"baseTemplate":       s.Website.BaseTemplate,
+				"head":               json.RawMessage(s.Website.HeadJSONOrDefault()),
+				"contentHash":        s.Website.ContentHash,
+			},
 			"pages":        pages,
 			"components":   components,
 			"styleBundles": styleBundles,
 			"assets":       assets,
+			"websiteIcons": websiteIcons,
 		},
 	}
 }
@@ -410,6 +428,10 @@ func (b *Builder) loadDesiredState(ctx context.Context, q *dbpkg.Queries, websit
 	if err != nil {
 		return desiredState{}, fmt.Errorf("load assets for release build: %w", err)
 	}
+	websiteIcons, err := q.ListWebsiteIconsByWebsite(ctx, website.ID)
+	if err != nil {
+		return desiredState{}, fmt.Errorf("load website icons for release build: %w", err)
+	}
 	if len(pages) == 0 {
 		return desiredState{}, fmt.Errorf("website %q has no pages to build", website.Name)
 	}
@@ -420,6 +442,7 @@ func (b *Builder) loadDesiredState(ctx context.Context, q *dbpkg.Queries, websit
 		Components:   components,
 		StyleBundles: styleBundles,
 		Assets:       assets,
+		WebsiteIcons: websiteIcons,
 	}, nil
 }
 
@@ -436,6 +459,11 @@ func (b *Builder) materializeSource(ctx context.Context, sourceDir string, state
 			BaseTemplate:       state.Website.BaseTemplate,
 		},
 	}
+	websiteHead, err := parseWebsiteHeadJSON(state.Website.HeadJSON)
+	if err != nil {
+		return err
+	}
+	websiteDoc.Spec.Head = websiteHead
 	websiteBytes, err := yaml.Marshal(websiteDoc)
 	if err != nil {
 		return fmt.Errorf("marshal website yaml: %w", err)
@@ -519,6 +547,19 @@ func (b *Builder) materializeSource(ctx context.Context, sourceDir string, state
 		}
 		if err := writeFile(filepath.Join(sourceDir, filepath.FromSlash(rel)), content); err != nil {
 			return fmt.Errorf("write asset source file %q: %w", row.Filename, err)
+		}
+	}
+	for _, row := range state.WebsiteIcons {
+		rel, err := sanitizeRelPath(row.SourcePath)
+		if err != nil {
+			return fmt.Errorf("invalid website icon source path %q: %w", row.SourcePath, err)
+		}
+		content, err := b.readBlob(ctx, row.ContentHash)
+		if err != nil {
+			return fmt.Errorf("load website icon %q blob: %w", row.SourcePath, err)
+		}
+		if err := writeFile(filepath.Join(sourceDir, filepath.FromSlash(rel)), content); err != nil {
+			return fmt.Errorf("write website icon source file %q: %w", row.SourcePath, err)
 		}
 	}
 
@@ -946,6 +987,18 @@ func parsePageHeadJSON(pageName, raw string) (*model.PageHead, error) {
 	var head model.PageHead
 	if err := json.Unmarshal([]byte(normalized), &head); err != nil {
 		return nil, fmt.Errorf("parse head json for page %q: %w", pageName, err)
+	}
+	return &head, nil
+}
+
+func parseWebsiteHeadJSON(raw string) (*model.WebsiteHead, error) {
+	normalized := dbpkg.WebsiteRow{HeadJSON: raw}.HeadJSONOrDefault()
+	if strings.TrimSpace(normalized) == "{}" {
+		return nil, nil
+	}
+	var head model.WebsiteHead
+	if err := json.Unmarshal([]byte(normalized), &head); err != nil {
+		return nil, fmt.Errorf("parse website head json: %w", err)
 	}
 	return &head, nil
 }

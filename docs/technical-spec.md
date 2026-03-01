@@ -5,6 +5,10 @@
 ```
 site/
   website.yaml
+  branding/
+    favicon.svg
+    favicon.ico
+    apple-touch-icon.png
   pages/
     index.page.yaml
     product.page.yaml
@@ -36,6 +40,28 @@ All resources are stored in sqlite (metadata/manifests/audit), with blobs/releas
 - `metadata.name`: string
 - `spec.defaultStyleBundle`: string
 - `spec.baseTemplate`: string (built-in template name)
+- `spec.head` (optional): website-scoped head metadata
+  - `icons` (optional):
+    - `svg`: path under `branding/` for the SVG favicon source
+    - `ico`: path under `branding/` for the ICO favicon source
+    - `appleTouch`: path under `branding/` for the Apple touch icon source
+
+Example:
+
+```yaml
+apiVersion: htmlctl.dev/v1
+kind: Website
+metadata:
+  name: sample
+spec:
+  defaultStyleBundle: default
+  baseTemplate: default
+  head:
+    icons:
+      svg: branding/favicon.svg
+      ico: branding/favicon.ico
+      appleTouch: branding/apple-touch-icon.png
+```
 
 ### 2.2 Environment
 
@@ -181,12 +207,18 @@ Pages are not full HTML docs; they are layouts that reference components. Render
 - `scripts/site.js` injected at end of body if present
 - Stylesheets injected into `<head>`
 - `spec.head` metadata is rendered directly into `<head>` (no runtime JS injection path)
+- Website icon files from `branding/` are copied verbatim into conventional root paths during release materialization:
+  - `/favicon.svg`
+  - `/favicon.ico`
+  - `/apple-touch-icon.png`
+- Favicon support introduces no generation/transcoding step: htmlctl/htmlservd never resize, convert, or synthesize icon variants
 - Head metadata render order is deterministic:
-  1. canonical link
-  2. `meta[name]` tags sorted by `name`
-  3. Open Graph tags in fixed field order
-  4. Twitter tags in fixed field order
-  5. JSON-LD blocks in manifest order
+  1. website icon links
+  2. canonical link
+  3. `meta[name]` tags sorted by `name`
+  4. Open Graph tags in fixed field order
+  5. Twitter tags in fixed field order
+  6. JSON-LD blocks in manifest order
 
 ### 3.2 Determinism requirements
 

@@ -101,6 +101,78 @@ func TestBuilderBuildSuccess(t *testing.T) {
 	}
 }
 
+func TestBuilderBuildMaterializesWebsiteFavicons(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openReleaseTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+	queries := dbpkg.NewQueries(db)
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+
+	websiteID, _ := seedReleaseState(t, ctx, queries, blobStore)
+	if err := queries.UpdateWebsiteSpec(ctx, dbpkg.WebsiteRow{
+		ID:                 websiteID,
+		DefaultStyleBundle: "default",
+		BaseTemplate:       "default",
+		HeadJSON:           `{"icons":{"svg":"branding/favicon.svg","ico":"branding/favicon.ico"}}`,
+		ContentHash:        "sha256:website",
+	}); err != nil {
+		t.Fatalf("UpdateWebsiteSpec() error = %v", err)
+	}
+	svg := []byte("<svg></svg>\n")
+	ico := []byte("ico\n")
+	if err := queries.UpsertWebsiteIcon(ctx, dbpkg.WebsiteIconRow{
+		WebsiteID:   websiteID,
+		Slot:        "svg",
+		SourcePath:  "branding/favicon.svg",
+		ContentType: "image/svg+xml",
+		SizeBytes:   int64(len(svg)),
+		ContentHash: writeBlob(t, ctx, blobStore, svg),
+	}); err != nil {
+		t.Fatalf("UpsertWebsiteIcon(svg) error = %v", err)
+	}
+	if err := queries.UpsertWebsiteIcon(ctx, dbpkg.WebsiteIconRow{
+		WebsiteID:   websiteID,
+		Slot:        "ico",
+		SourcePath:  "branding/favicon.ico",
+		ContentType: "image/x-icon",
+		SizeBytes:   int64(len(ico)),
+		ContentHash: writeBlob(t, ctx, blobStore, ico),
+	}); err != nil {
+		t.Fatalf("UpsertWebsiteIcon(ico) error = %v", err)
+	}
+
+	builder, err := NewBuilder(db, blobStore, filepath.Join(dataDir, "websites"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatalf("NewBuilder() error = %v", err)
+	}
+	res, err := builder.Build(ctx, "sample", "staging")
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+
+	releaseDir := filepath.Join(dataDir, "websites", "sample", "envs", "staging", "releases", res.ReleaseID)
+	for _, rel := range []string{"favicon.svg", "favicon.ico"} {
+		if _, err := os.Stat(filepath.Join(releaseDir, rel)); err != nil {
+			t.Fatalf("expected favicon file %s to exist: %v", rel, err)
+		}
+	}
+	indexHTML, err := os.ReadFile(filepath.Join(releaseDir, "index.html"))
+	if err != nil {
+		t.Fatalf("read index.html: %v", err)
+	}
+	indexText := string(indexHTML)
+	for _, needle := range []string{
+		`<link rel="icon" type="image/svg&#43;xml" href="/favicon.svg">`,
+		`<link rel="icon" href="/favicon.ico">`,
+	} {
+		if !strings.Contains(indexText, needle) {
+			t.Fatalf("expected index.html to contain %q", needle)
+		}
+	}
+}
+
 func TestBuilderBuildFailureRecordsFailedRelease(t *testing.T) {
 	ctx := context.Background()
 	dataDir := t.TempDir()

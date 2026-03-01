@@ -7,10 +7,11 @@ import (
 )
 
 type pageTemplateData struct {
-	Title        string
-	Description  string
-	HeadMetaHTML template.HTML
-	StyleHrefs   []string
+	Title            string
+	Description      string
+	WebsiteIconsHTML template.HTML
+	HeadMetaHTML     template.HTML
+	StyleHrefs       []string
 	// ContentHTML is trusted component markup; all other fields remain auto-escaped.
 	ContentHTML template.HTML
 	ScriptSrc   string
@@ -23,6 +24,8 @@ const defaultPageTemplate = `<!DOCTYPE html>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{.Title}}</title>
   <meta name="description" content="{{.Description}}">
+{{- if .WebsiteIconsHTML }}
+{{.WebsiteIconsHTML}}{{- end }}
 {{- if .HeadMetaHTML }}
 {{.HeadMetaHTML}}{{- end }}
 {{- range .StyleHrefs }}

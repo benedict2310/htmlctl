@@ -114,6 +114,67 @@ func TestLoadSiteOptionalScriptMissing(t *testing.T) {
 	}
 }
 
+func TestLoadSiteWebsiteBrandingIcons(t *testing.T) {
+	root := t.TempDir()
+	for _, dir := range []string{"pages", "styles", "branding"} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+	}
+	files := map[string]string{
+		"website.yaml": `apiVersion: htmlctl.dev/v1
+kind: Website
+metadata:
+  name: sample
+spec:
+  defaultStyleBundle: default
+  baseTemplate: default
+  head:
+    icons:
+      svg: branding/favicon.svg
+      ico: branding/favicon.ico
+      appleTouch: branding/apple-touch-icon.png
+`,
+		"pages/index.page.yaml": `apiVersion: htmlctl.dev/v1
+kind: Page
+metadata:
+  name: index
+spec:
+  route: /
+  title: Home
+  description: Home
+  layout: []
+`,
+		"styles/tokens.css":             ":root {}\n",
+		"styles/default.css":            "body {}\n",
+		"branding/favicon.svg":          "<svg></svg>\n",
+		"branding/favicon.ico":          "ico\n",
+		"branding/apple-touch-icon.png": "png\n",
+	}
+	for rel, content := range files {
+		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(rel)), []byte(content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+
+	site, err := LoadSite(root)
+	if err != nil {
+		t.Fatalf("LoadSite() error = %v", err)
+	}
+	if len(site.Branding) != 3 {
+		t.Fatalf("expected 3 branding assets, got %#v", site.Branding)
+	}
+	if site.Branding["svg"].SourcePath != "branding/favicon.svg" {
+		t.Fatalf("unexpected svg branding path: %#v", site.Branding["svg"])
+	}
+	if site.Branding["ico"].SourcePath != "branding/favicon.ico" {
+		t.Fatalf("unexpected ico branding path: %#v", site.Branding["ico"])
+	}
+	if site.Branding["apple_touch"].SourcePath != "branding/apple-touch-icon.png" {
+		t.Fatalf("unexpected apple touch branding path: %#v", site.Branding["apple_touch"])
+	}
+}
+
 func copyFixture(t *testing.T, src, dst string) {
 	t.Helper()
 

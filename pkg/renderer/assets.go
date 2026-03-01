@@ -44,6 +44,10 @@ func renderStatics(site *model.Site, outputDir string) (renderedStatics, error) 
 		statics.ScriptSrc = "/" + filepath.ToSlash(scriptRel)
 	}
 
+	if err := renderBranding(site, outputDir); err != nil {
+		return statics, err
+	}
+
 	assets := append([]model.Asset(nil), site.Assets...)
 	sort.Slice(assets, func(i, j int) bool {
 		return assets[i].Path < assets[j].Path
@@ -76,6 +80,27 @@ func renderStatics(site *model.Site, outputDir string) (renderedStatics, error) 
 	return statics, nil
 }
 
+func renderBranding(site *model.Site, outputDir string) error {
+	if site == nil || len(site.Branding) == 0 {
+		return nil
+	}
+	for _, slot := range sortedBrandingSlots(site.Branding) {
+		targetName, ok := brandingPublicFilename(slot)
+		if !ok {
+			continue
+		}
+		src := filepath.Join(site.RootDir, filepath.FromSlash(site.Branding[slot].SourcePath))
+		content, err := os.ReadFile(src)
+		if err != nil {
+			return fmt.Errorf("read branding file %s: %w", src, err)
+		}
+		if err := writeOriginalBytesFile(outputDir, targetName, content); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func writeContentAddressedTextFile(outputDir, relDir, canonicalName, content string) (string, error) {
 	normalized := []byte(normalizeLFString(content))
 	return writeContentAddressedBytesFile(outputDir, relDir, canonicalName, normalized)
@@ -97,4 +122,26 @@ func writeOriginalBytesFile(outputDir, relPath string, content []byte) error {
 		return fmt.Errorf("write original file %s: %w", path, err)
 	}
 	return nil
+}
+
+func brandingPublicFilename(slot string) (string, bool) {
+	switch slot {
+	case "svg":
+		return "favicon.svg", true
+	case "ico":
+		return "favicon.ico", true
+	case "apple_touch":
+		return "apple-touch-icon.png", true
+	default:
+		return "", false
+	}
+}
+
+func sortedBrandingSlots(v map[string]model.BrandingAsset) []string {
+	keys := make([]string, 0, len(v))
+	for k := range v {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

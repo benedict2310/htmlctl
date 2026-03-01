@@ -33,6 +33,10 @@ func Render(site *model.Site, outputDir string) error {
 	}
 
 	pages := sortedPages(site.Pages)
+	websiteIconsHTML, err := renderWebsiteIcons(site.Website.Spec.Head, site.Branding)
+	if err != nil {
+		return fmt.Errorf("render website icons: %w", err)
+	}
 	for _, page := range pages {
 		contentHTML, err := stitchComponents(page.Spec.Layout, site.Components)
 		if err != nil {
@@ -44,12 +48,13 @@ func Render(site *model.Site, outputDir string) error {
 		}
 
 		htmlBytes, err := renderDefaultTemplate(pageTemplateData{
-			Title:        page.Spec.Title,
-			Description:  page.Spec.Description,
-			HeadMetaHTML: headMetaHTML,
-			StyleHrefs:   []string{statics.TokensHref, statics.DefaultHref},
-			ContentHTML:  template.HTML(contentHTML),
-			ScriptSrc:    statics.ScriptSrc,
+			Title:            page.Spec.Title,
+			Description:      page.Spec.Description,
+			WebsiteIconsHTML: websiteIconsHTML,
+			HeadMetaHTML:     headMetaHTML,
+			StyleHrefs:       []string{statics.TokensHref, statics.DefaultHref},
+			ContentHTML:      template.HTML(contentHTML),
+			ScriptSrc:        statics.ScriptSrc,
 		})
 		if err != nil {
 			return fmt.Errorf("render page %q: %w", page.Metadata.Name, err)

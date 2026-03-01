@@ -17,6 +17,7 @@ import (
 	"github.com/benedict2310/htmlctl/internal/bundle"
 	dbpkg "github.com/benedict2310/htmlctl/internal/db"
 	"github.com/benedict2310/htmlctl/internal/names"
+	"github.com/benedict2310/htmlctl/pkg/loader"
 	"github.com/benedict2310/htmlctl/pkg/model"
 	"gopkg.in/yaml.v3"
 )
@@ -276,7 +277,11 @@ func (a *Applier) Apply(ctx context.Context, websiteName, envName string, b bund
 			if err != nil {
 				return out, fmt.Errorf("marshal website head metadata: %w", err)
 			}
-			if website.DefaultStyleBundle != websiteDoc.Spec.DefaultStyleBundle || website.BaseTemplate != websiteDoc.Spec.BaseTemplate || website.HeadJSONOrDefault() != headJSON || website.ContentHash != websiteResourceHash {
+			seoJSON, err := marshalWebsiteSEO(websiteDoc.Spec.SEO)
+			if err != nil {
+				return out, fmt.Errorf("marshal website seo metadata: %w", err)
+			}
+			if website.DefaultStyleBundle != websiteDoc.Spec.DefaultStyleBundle || website.BaseTemplate != websiteDoc.Spec.BaseTemplate || website.HeadJSONOrDefault() != headJSON || website.SEOJSONOrDefault() != seoJSON || website.ContentHash != websiteResourceHash {
 				out.Changes.Updated++
 			}
 			if !dryRun {
@@ -285,6 +290,7 @@ func (a *Applier) Apply(ctx context.Context, websiteName, envName string, b bund
 					DefaultStyleBundle: websiteDoc.Spec.DefaultStyleBundle,
 					BaseTemplate:       websiteDoc.Spec.BaseTemplate,
 					HeadJSON:           headJSON,
+					SEOJSON:            seoJSON,
 					ContentHash:        websiteResourceHash,
 				}); err != nil {
 					return out, fmt.Errorf("update website %q: %w", websiteName, err)
@@ -574,6 +580,9 @@ func parseWebsiteDocument(content []byte) (model.Website, error) {
 	if err := yaml.Unmarshal(content, &website); err != nil {
 		return website, err
 	}
+	if err := loader.NormalizeWebsiteSEO(website.Spec.SEO); err != nil {
+		return website, err
+	}
 	return website, nil
 }
 
@@ -593,6 +602,17 @@ func marshalWebsiteHead(head *model.WebsiteHead) (string, error) {
 		return "{}", nil
 	}
 	payload, err := json.Marshal(head)
+	if err != nil {
+		return "", err
+	}
+	return string(payload), nil
+}
+
+func marshalWebsiteSEO(seo *model.WebsiteSEO) (string, error) {
+	if seo == nil {
+		return "{}", nil
+	}
+	payload, err := json.Marshal(seo)
 	if err != nil {
 		return "", err
 	}

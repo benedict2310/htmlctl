@@ -20,6 +20,13 @@ const (
 	maxHeadJSONLDBlocks       = 5
 	maxHeadJSONLDIDLength     = 128
 	maxHeadJSONLDPayloadBytes = 16 * 1024
+	maxRobotsGroups           = 50
+	maxRobotsUserAgents       = 10
+	maxRobotsUserAgentLen     = 256
+	maxRobotsAllowRules       = 50
+	maxRobotsDisallowRules    = 50
+	maxRobotsRuleLen          = 512
+	maxPublicBaseURLLen       = 2048
 )
 
 // ValidateSite validates cross-resource relationships required for safe parsing.
@@ -31,6 +38,9 @@ func ValidateSite(site *model.Site) error {
 		return fmt.Errorf("website metadata.name is required")
 	}
 	if err := validateWebsiteHead(site); err != nil {
+		return err
+	}
+	if err := NormalizeWebsiteSEO(site.Website.Spec.SEO); err != nil {
 		return err
 	}
 	if len(site.Pages) == 0 {
@@ -68,6 +78,108 @@ func ValidateSite(site *model.Site) error {
 	}
 
 	return nil
+}
+
+// NormalizeWebsiteSEO validates website SEO metadata and stores canonical forms
+// back into the provided struct.
+func NormalizeWebsiteSEO(seo *model.WebsiteSEO) error {
+	if seo == nil {
+		return nil
+	}
+	if value := strings.TrimSpace(seo.PublicBaseURL); value != "" {
+		normalized, err := NormalizePublicBaseURL(value)
+		if err != nil {
+			return fmt.Errorf("website seo publicBaseURL: %w", err)
+		}
+		seo.PublicBaseURL = normalized
+	}
+	if seo.Robots == nil {
+		return nil
+	}
+	if len(seo.Robots.Groups) > maxRobotsGroups {
+		return fmt.Errorf("website seo robots has too many groups: %d > %d", len(seo.Robots.Groups), maxRobotsGroups)
+	}
+	for i := range seo.Robots.Groups {
+		group := &seo.Robots.Groups[i]
+		field := fmt.Sprintf("website seo robots group %d", i)
+		if len(group.UserAgents) == 0 {
+			return fmt.Errorf("%s must include at least one userAgent", field)
+		}
+		if len(group.UserAgents) > maxRobotsUserAgents {
+			return fmt.Errorf("%s has too many userAgents: %d > %d", field, len(group.UserAgents), maxRobotsUserAgents)
+		}
+		if len(group.Allow) > maxRobotsAllowRules {
+			return fmt.Errorf("%s has too many allow rules: %d > %d", field, len(group.Allow), maxRobotsAllowRules)
+		}
+		if len(group.Disallow) > maxRobotsDisallowRules {
+			return fmt.Errorf("%s has too many disallow rules: %d > %d", field, len(group.Disallow), maxRobotsDisallowRules)
+		}
+		for j := range group.UserAgents {
+			value := strings.TrimSpace(group.UserAgents[j])
+			if value == "" {
+				return fmt.Errorf("%s has empty userAgent at index %d", field, j)
+			}
+			if err := validateRobotsLine(field, "userAgent", value, maxRobotsUserAgentLen); err != nil {
+				return err
+			}
+			group.UserAgents[j] = value
+		}
+		for j := range group.Allow {
+			value, err := normalizeRobotsRule(field, "allow", group.Allow[j])
+			if err != nil {
+				return err
+			}
+			group.Allow[j] = value
+		}
+		for j := range group.Disallow {
+			value, err := normalizeRobotsRule(field, "disallow", group.Disallow[j])
+			if err != nil {
+				return err
+			}
+			group.Disallow[j] = value
+		}
+	}
+	return nil
+}
+
+// NormalizePublicBaseURL validates and canonicalizes an operator-declared
+// canonical site URL used by release-generated crawl artifacts.
+func NormalizePublicBaseURL(raw string) (string, error) {
+	value := strings.TrimSpace(raw)
+	if utf8.RuneCountInString(value) > maxPublicBaseURLLen {
+		return "", fmt.Errorf("must be at most %d characters", maxPublicBaseURLLen)
+	}
+	u, err := url.Parse(value)
+	if err != nil {
+		return "", fmt.Errorf("is invalid: %w", err)
+	}
+	if !u.IsAbs() {
+		return "", fmt.Errorf("must be absolute")
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "http", "https":
+	default:
+		return "", fmt.Errorf("has unsupported scheme %q", u.Scheme)
+	}
+	if strings.TrimSpace(u.Host) == "" {
+		return "", fmt.Errorf("must include a host")
+	}
+	if u.RawQuery != "" {
+		return "", fmt.Errorf("must not include a query string")
+	}
+	if u.Fragment != "" {
+		return "", fmt.Errorf("must not include a fragment")
+	}
+	if u.Path == "" {
+		u.Path = "/"
+	}
+	if u.Path != "/" {
+		u.Path = strings.TrimRight(u.Path, "/")
+		if u.Path == "" {
+			u.Path = "/"
+		}
+	}
+	return u.String(), nil
 }
 
 func validateWebsiteHead(site *model.Site) error {
@@ -227,6 +339,30 @@ func validateHeadURLField(pageName, field, raw string, maxLen int) error {
 func validateMaxLen(pageName, field, value string, maxLen int) error {
 	if utf8.RuneCountInString(value) > maxLen {
 		return fmt.Errorf("page %q has %s longer than %d characters", pageName, field, maxLen)
+	}
+	return nil
+}
+
+func normalizeRobotsRule(groupField, kind, raw string) (string, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return "", fmt.Errorf("%s has empty %s rule", groupField, kind)
+	}
+	if err := validateRobotsLine(groupField, kind, value, maxRobotsRuleLen); err != nil {
+		return "", err
+	}
+	if !strings.HasPrefix(value, "/") {
+		return "", fmt.Errorf("%s %s rule %q must start with /", groupField, kind, raw)
+	}
+	return value, nil
+}
+
+func validateRobotsLine(groupField, kind, value string, maxLen int) error {
+	if utf8.RuneCountInString(value) > maxLen {
+		return fmt.Errorf("%s has %s longer than %d characters", groupField, kind, maxLen)
+	}
+	if strings.ContainsAny(value, "\r\n") {
+		return fmt.Errorf("%s %s %q must not contain newlines", groupField, kind, value)
 	}
 	return nil
 }

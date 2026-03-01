@@ -227,6 +227,9 @@ func (b *Builder) Build(ctx context.Context, websiteName, envName string) (out B
 	if err := b.copyOriginalAssets(ctx, snapshot.Assets, tmpReleaseDir); err != nil {
 		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
 	}
+	if err := b.materializeRobotsFile(ctx, site.Website.Spec.SEO, "", tmpReleaseDir); err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
+	}
 	if err := b.materializeOGImages(ctx, tmpReleaseDir, ogReadyPageHashes, log); err != nil {
 		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
 	}
@@ -400,6 +403,7 @@ func (s desiredState) Manifest() manifestSnapshot {
 				"defaultStyleBundle": s.Website.DefaultStyleBundle,
 				"baseTemplate":       s.Website.BaseTemplate,
 				"head":               json.RawMessage(s.Website.HeadJSONOrDefault()),
+				"seo":                json.RawMessage(s.Website.SEOJSONOrDefault()),
 				"contentHash":        s.Website.ContentHash,
 			},
 			"pages":        pages,
@@ -464,6 +468,11 @@ func (b *Builder) materializeSource(ctx context.Context, sourceDir string, state
 		return err
 	}
 	websiteDoc.Spec.Head = websiteHead
+	websiteSEO, err := parseWebsiteSEOJSON(state.Website.SEOJSON)
+	if err != nil {
+		return err
+	}
+	websiteDoc.Spec.SEO = websiteSEO
 	websiteBytes, err := yaml.Marshal(websiteDoc)
 	if err != nil {
 		return fmt.Errorf("marshal website yaml: %w", err)
@@ -1001,4 +1010,16 @@ func parseWebsiteHeadJSON(raw string) (*model.WebsiteHead, error) {
 		return nil, fmt.Errorf("parse website head json: %w", err)
 	}
 	return &head, nil
+}
+
+func parseWebsiteSEOJSON(raw string) (*model.WebsiteSEO, error) {
+	normalized := dbpkg.WebsiteRow{SEOJSON: raw}.SEOJSONOrDefault()
+	if strings.TrimSpace(normalized) == "{}" {
+		return nil, nil
+	}
+	var seo model.WebsiteSEO
+	if err := json.Unmarshal([]byte(normalized), &seo); err != nil {
+		return nil, fmt.Errorf("parse website seo json: %w", err)
+	}
+	return &seo, nil
 }

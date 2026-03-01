@@ -21,6 +21,17 @@ spec:
       svg: branding/favicon.svg
       ico: branding/favicon.ico
       appleTouch: branding/apple-touch-icon.png
+  seo:
+    publicBaseURL: https://example.com/
+    robots:
+      enabled: true
+      groups:
+        - userAgents:
+            - "*"
+          allow:
+            - /
+          disallow:
+            - /drafts/
 `)
 
 	var website Website
@@ -49,6 +60,21 @@ spec:
 	if website.Spec.Head.Icons.AppleTouch != "branding/apple-touch-icon.png" {
 		t.Fatalf("unexpected apple touch icon path: %q", website.Spec.Head.Icons.AppleTouch)
 	}
+	if website.Spec.SEO == nil || website.Spec.SEO.Robots == nil {
+		t.Fatalf("expected website seo robots to be parsed")
+	}
+	if website.Spec.SEO.PublicBaseURL != "https://example.com/" {
+		t.Fatalf("unexpected publicBaseURL: %q", website.Spec.SEO.PublicBaseURL)
+	}
+	if !website.Spec.SEO.Robots.Enabled {
+		t.Fatalf("expected robots enabled to be parsed")
+	}
+	if len(website.Spec.SEO.Robots.Groups) != 1 {
+		t.Fatalf("expected 1 robots group, got %d", len(website.Spec.SEO.Robots.Groups))
+	}
+	if got := website.Spec.SEO.Robots.Groups[0].Disallow; len(got) != 1 || got[0] != "/drafts/" {
+		t.Fatalf("unexpected robots disallow rules: %#v", got)
+	}
 }
 
 func TestWebsiteHeadJSONMarshaling(t *testing.T) {
@@ -69,6 +95,39 @@ func TestWebsiteHeadJSONMarshaling(t *testing.T) {
 		`"svg":"branding/favicon.svg"`,
 		`"ico":"branding/favicon.ico"`,
 		`"appleTouch":"branding/apple-touch-icon.png"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in marshaled output, got: %s", want, got)
+		}
+	}
+}
+
+func TestWebsiteSEOJSONMarshaling(t *testing.T) {
+	seo := &WebsiteSEO{
+		PublicBaseURL: "https://example.com",
+		Robots: &WebsiteRobots{
+			Enabled: true,
+			Groups: []RobotsGroup{
+				{
+					UserAgents: []string{"*", "Googlebot"},
+					Allow:      []string{"/"},
+					Disallow:   []string{"/preview/"},
+				},
+			},
+		},
+	}
+
+	b, err := json.Marshal(seo)
+	if err != nil {
+		t.Fatalf("marshal website seo: %v", err)
+	}
+	got := string(b)
+	for _, want := range []string{
+		`"publicBaseURL":"https://example.com"`,
+		`"enabled":true`,
+		`"userAgents":["*","Googlebot"]`,
+		`"allow":["/"]`,
+		`"disallow":["/preview/"]`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in marshaled output, got: %s", want, got)

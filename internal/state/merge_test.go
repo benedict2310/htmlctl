@@ -304,6 +304,15 @@ spec:
   head:
     icons:
       svg: branding/favicon.svg
+  seo:
+    publicBaseURL: https://example.com/
+    robots:
+      enabled: true
+      groups:
+        - userAgents:
+            - "*"
+          disallow:
+            - /drafts/
 `)
 	iconBytes := []byte("<svg></svg>\n")
 	manifest := bundle.Manifest{
@@ -337,6 +346,12 @@ spec:
 	if !strings.Contains(website.HeadJSON, `"svg":"branding/favicon.svg"`) {
 		t.Fatalf("unexpected website head_json: %q", website.HeadJSON)
 	}
+	if !strings.Contains(website.SEOJSON, `"publicBaseURL":"https://example.com/"`) {
+		t.Fatalf("unexpected website seo_json: %q", website.SEOJSON)
+	}
+	if !strings.Contains(website.SEOJSON, `"disallow":["/drafts/"]`) {
+		t.Fatalf("unexpected website seo_json: %q", website.SEOJSON)
+	}
 	icons, err := q.ListWebsiteIconsByWebsite(ctx, website.ID)
 	if err != nil {
 		t.Fatalf("ListWebsiteIconsByWebsite() error = %v", err)
@@ -365,6 +380,7 @@ func TestApplyPreservesWebsiteAndIconsForOldManifest(t *testing.T) {
 		DefaultStyleBundle: "default",
 		BaseTemplate:       "default",
 		HeadJSON:           `{"icons":{"svg":"branding/favicon.svg"}}`,
+		SEOJSON:            `{"publicBaseURL":"https://example.com","robots":{"enabled":true}}`,
 		ContentHash:        "sha256:website",
 	})
 	if err != nil {
@@ -415,7 +431,7 @@ spec:
 	if err != nil {
 		t.Fatalf("GetWebsiteByName() error = %v", err)
 	}
-	if website.HeadJSON != `{"icons":{"svg":"branding/favicon.svg"}}` || website.ContentHash != "sha256:website" {
+	if website.HeadJSON != `{"icons":{"svg":"branding/favicon.svg"}}` || website.SEOJSON != `{"publicBaseURL":"https://example.com","robots":{"enabled":true}}` || website.ContentHash != "sha256:website" {
 		t.Fatalf("unexpected website row after old manifest apply: %#v", website)
 	}
 	icons, err := q.ListWebsiteIconsByWebsite(ctx, websiteID)
@@ -424,6 +440,68 @@ spec:
 	}
 	if len(icons) != 1 || icons[0].Slot != "svg" {
 		t.Fatalf("expected preserved website icon state, got %#v", icons)
+	}
+}
+
+func TestApplyWebsiteWithoutSEOBlockClearsStoredSEO(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openStateTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+	applier, err := NewApplier(db, blobStore)
+	if err != nil {
+		t.Fatalf("NewApplier() error = %v", err)
+	}
+
+	q := dbpkg.NewQueries(db)
+	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{
+		Name:               "sample",
+		DefaultStyleBundle: "default",
+		BaseTemplate:       "default",
+		SEOJSON:            `{"publicBaseURL":"https://example.com","robots":{"enabled":true}}`,
+		ContentHash:        "sha256:before",
+	})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	if _, err := q.InsertEnvironment(ctx, dbpkg.EnvironmentRow{WebsiteID: websiteID, Name: "staging"}); err != nil {
+		t.Fatalf("InsertEnvironment() error = %v", err)
+	}
+
+	websiteYAML := []byte(`apiVersion: htmlctl.dev/v1
+kind: Website
+metadata:
+  name: sample
+spec:
+  defaultStyleBundle: default
+  baseTemplate: default
+`)
+	b := bundle.Bundle{
+		Manifest: bundle.Manifest{
+			Mode:    bundle.ApplyModePartial,
+			Website: "sample",
+			Resources: []bundle.Resource{
+				{Kind: "Website", Name: "sample", File: "website.yaml", Hash: "sha256:" + sha256Hex(websiteYAML)},
+			},
+		},
+		Files: map[string][]byte{
+			"website.yaml": websiteYAML,
+		},
+	}
+
+	if _, err := applier.Apply(ctx, "sample", "staging", b, false); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+
+	row, err := q.GetWebsiteByName(ctx, "sample")
+	if err != nil {
+		t.Fatalf("GetWebsiteByName() error = %v", err)
+	}
+	if row.SEOJSON != "{}" {
+		t.Fatalf("expected cleared website seo_json, got %q", row.SEOJSON)
 	}
 }
 

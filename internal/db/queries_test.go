@@ -42,6 +42,9 @@ func TestQueriesInsertAndFetchCoreRows(t *testing.T) {
 	if website.HeadJSON != "{}" {
 		t.Fatalf("expected default website head_json {}, got %q", website.HeadJSON)
 	}
+	if website.SEOJSON != "{}" {
+		t.Fatalf("expected default website seo_json {}, got %q", website.SEOJSON)
+	}
 
 	envID, err := q.InsertEnvironment(ctx, EnvironmentRow{WebsiteID: websiteID, Name: "staging"})
 	if err != nil {
@@ -145,7 +148,7 @@ func TestInsertPageDefaultsHeadJSONToObject(t *testing.T) {
 	}
 }
 
-func TestUpdateWebsiteSpecPersistsHeadJSONAndContentHash(t *testing.T) {
+func TestUpdateWebsiteSpecPersistsWebsiteMetadataAndContentHash(t *testing.T) {
 	q, cleanup := setupDB(t)
 	defer cleanup()
 	ctx := context.Background()
@@ -159,6 +162,7 @@ func TestUpdateWebsiteSpecPersistsHeadJSONAndContentHash(t *testing.T) {
 		DefaultStyleBundle: "brand",
 		BaseTemplate:       "marketing",
 		HeadJSON:           `{"icons":{"svg":"branding/favicon.svg"}}`,
+		SEOJSON:            `{"publicBaseURL":"https://example.com","robots":{"enabled":true}}`,
 		ContentHash:        "sha256:website",
 	}); err != nil {
 		t.Fatalf("UpdateWebsiteSpec() error = %v", err)
@@ -173,6 +177,9 @@ func TestUpdateWebsiteSpecPersistsHeadJSONAndContentHash(t *testing.T) {
 	}
 	if row.HeadJSON != `{"icons":{"svg":"branding/favicon.svg"}}` {
 		t.Fatalf("unexpected website head_json: %q", row.HeadJSON)
+	}
+	if row.SEOJSON != `{"publicBaseURL":"https://example.com","robots":{"enabled":true}}` {
+		t.Fatalf("unexpected website seo_json: %q", row.SEOJSON)
 	}
 	if row.ContentHash != "sha256:website" {
 		t.Fatalf("unexpected website content hash: %q", row.ContentHash)

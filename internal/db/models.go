@@ -8,6 +8,7 @@ type WebsiteRow struct {
 	DefaultStyleBundle string
 	BaseTemplate       string
 	HeadJSON           string
+	SEOJSON            string
 	ContentHash        string
 	CreatedAt          string
 	UpdatedAt          string
@@ -18,6 +19,13 @@ func (r WebsiteRow) HeadJSONOrDefault() string {
 		return "{}"
 	}
 	return r.HeadJSON
+}
+
+func (r WebsiteRow) SEOJSONOrDefault() string {
+	if strings.TrimSpace(r.SEOJSON) == "" {
+		return "{}"
+	}
+	return r.SEOJSON
 }
 
 type EnvironmentRow struct {

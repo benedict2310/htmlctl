@@ -9,6 +9,7 @@ type WebsiteSpec struct {
 	DefaultStyleBundle string       `yaml:"defaultStyleBundle"`
 	BaseTemplate       string       `yaml:"baseTemplate"`
 	Head               *WebsiteHead `yaml:"head,omitempty" json:"head,omitempty"`
+	SEO                *WebsiteSEO  `yaml:"seo,omitempty" json:"seo,omitempty"`
 }
 
 type WebsiteIcons struct {
@@ -19,6 +20,22 @@ type WebsiteIcons struct {
 
 type WebsiteHead struct {
 	Icons *WebsiteIcons `yaml:"icons,omitempty" json:"icons,omitempty"`
+}
+
+type WebsiteSEO struct {
+	PublicBaseURL string         `yaml:"publicBaseURL" json:"publicBaseURL,omitempty"`
+	Robots        *WebsiteRobots `yaml:"robots,omitempty" json:"robots,omitempty"`
+}
+
+type WebsiteRobots struct {
+	Enabled bool          `yaml:"enabled" json:"enabled"`
+	Groups  []RobotsGroup `yaml:"groups,omitempty" json:"groups,omitempty"`
+}
+
+type RobotsGroup struct {
+	UserAgents []string `yaml:"userAgents" json:"userAgents"`
+	Allow      []string `yaml:"allow,omitempty" json:"allow,omitempty"`
+	Disallow   []string `yaml:"disallow,omitempty" json:"disallow,omitempty"`
 }
 
 type Website struct {

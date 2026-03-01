@@ -134,6 +134,17 @@ spec:
       svg: branding/favicon.svg
       ico: branding/favicon.ico
       appleTouch: branding/apple-touch-icon.png
+  seo:
+    publicBaseURL: https://example.com/
+    robots:
+      enabled: true
+      groups:
+        - userAgents:
+            - "*"
+          allow:
+            - /
+          disallow:
+            - /drafts/
 `,
 		"pages/index.page.yaml": `apiVersion: htmlctl.dev/v1
 kind: Page
@@ -172,6 +183,15 @@ spec:
 	}
 	if site.Branding["apple_touch"].SourcePath != "branding/apple-touch-icon.png" {
 		t.Fatalf("unexpected apple touch branding path: %#v", site.Branding["apple_touch"])
+	}
+	if site.Website.Spec.SEO == nil || site.Website.Spec.SEO.Robots == nil {
+		t.Fatalf("expected website seo to be loaded")
+	}
+	if got := site.Website.Spec.SEO.PublicBaseURL; got != "https://example.com/" {
+		t.Fatalf("unexpected publicBaseURL: %q", got)
+	}
+	if !site.Website.Spec.SEO.Robots.Enabled {
+		t.Fatalf("expected robots to be enabled")
 	}
 }
 

@@ -293,3 +293,134 @@ func TestValidateSiteEnforcesHeadMetadataLimits(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateSiteNormalizesWebsiteSEO(t *testing.T) {
+	site := &model.Site{
+		Website: model.Website{
+			Metadata: model.Metadata{Name: "sample"},
+			Spec: model.WebsiteSpec{
+				SEO: &model.WebsiteSEO{
+					PublicBaseURL: " https://example.com/docs/ ",
+					Robots: &model.WebsiteRobots{
+						Enabled: true,
+						Groups: []model.RobotsGroup{
+							{
+								UserAgents: []string{" * "},
+								Allow:      []string{" / "},
+								Disallow:   []string{" /drafts/ "},
+							},
+						},
+					},
+				},
+			},
+		},
+		Pages: map[string]model.Page{
+			"index": {
+				Metadata: model.Metadata{Name: "index"},
+				Spec:     model.PageSpec{Route: "/", Layout: []model.PageLayoutItem{}},
+			},
+		},
+		Components: map[string]model.Component{},
+	}
+
+	if err := ValidateSite(site); err != nil {
+		t.Fatalf("ValidateSite() error = %v", err)
+	}
+
+	if got := site.Website.Spec.SEO.PublicBaseURL; got != "https://example.com/docs" {
+		t.Fatalf("unexpected normalized publicBaseURL: %q", got)
+	}
+	group := site.Website.Spec.SEO.Robots.Groups[0]
+	if len(group.UserAgents) != 1 || group.UserAgents[0] != "*" {
+		t.Fatalf("unexpected normalized userAgents: %#v", group.UserAgents)
+	}
+	if len(group.Allow) != 1 || group.Allow[0] != "/" {
+		t.Fatalf("unexpected normalized allow rules: %#v", group.Allow)
+	}
+	if len(group.Disallow) != 1 || group.Disallow[0] != "/drafts/" {
+		t.Fatalf("unexpected normalized disallow rules: %#v", group.Disallow)
+	}
+}
+
+func TestValidateSiteRejectsInvalidWebsiteSEO(t *testing.T) {
+	tests := []struct {
+		name      string
+		seo       *model.WebsiteSEO
+		wantError string
+	}{
+		{
+			name: "relative public base url",
+			seo: &model.WebsiteSEO{
+				PublicBaseURL: "/docs",
+			},
+			wantError: "must be absolute",
+		},
+		{
+			name: "public base url with query",
+			seo: &model.WebsiteSEO{
+				PublicBaseURL: "https://example.com/?q=1",
+			},
+			wantError: "must not include a query string",
+		},
+		{
+			name: "robots group without user agent",
+			seo: &model.WebsiteSEO{
+				Robots: &model.WebsiteRobots{
+					Enabled: true,
+					Groups:  []model.RobotsGroup{{Allow: []string{"/"}}},
+				},
+			},
+			wantError: "must include at least one userAgent",
+		},
+		{
+			name: "robots rule missing leading slash",
+			seo: &model.WebsiteSEO{
+				Robots: &model.WebsiteRobots{
+					Enabled: true,
+					Groups: []model.RobotsGroup{{
+						UserAgents: []string{"*"},
+						Disallow:   []string{"drafts"},
+					}},
+				},
+			},
+			wantError: "must start with /",
+		},
+		{
+			name: "robots user agent with newline",
+			seo: &model.WebsiteSEO{
+				Robots: &model.WebsiteRobots{
+					Groups: []model.RobotsGroup{{
+						UserAgents: []string{"Google\nbot"},
+					}},
+				},
+			},
+			wantError: "must not contain newlines",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			site := &model.Site{
+				Website: model.Website{
+					Metadata: model.Metadata{Name: "sample"},
+					Spec:     model.WebsiteSpec{SEO: tc.seo},
+				},
+				Pages: map[string]model.Page{
+					"index": {
+						Metadata: model.Metadata{Name: "index"},
+						Spec:     model.PageSpec{Route: "/", Layout: []model.PageLayoutItem{}},
+					},
+				},
+				Components: map[string]model.Component{},
+			}
+
+			err := ValidateSite(site)
+			if err == nil {
+				t.Fatalf("expected validation error")
+			}
+			if !strings.Contains(err.Error(), tc.wantError) {
+				t.Fatalf("expected error containing %q, got %v", tc.wantError, err)
+			}
+		})
+	}
+}

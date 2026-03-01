@@ -47,7 +47,7 @@ func NewQueries(db queryer) *Queries {
 }
 
 func (q *Queries) InsertWebsite(ctx context.Context, in WebsiteRow) (int64, error) {
-	res, err := q.db.ExecContext(ctx, `INSERT INTO websites(name, default_style_bundle, base_template, head_json, content_hash) VALUES(?, ?, ?, ?, ?)`, in.Name, in.DefaultStyleBundle, in.BaseTemplate, in.HeadJSONOrDefault(), strings.TrimSpace(in.ContentHash))
+	res, err := q.db.ExecContext(ctx, `INSERT INTO websites(name, default_style_bundle, base_template, head_json, seo_json, content_hash) VALUES(?, ?, ?, ?, ?, ?)`, in.Name, in.DefaultStyleBundle, in.BaseTemplate, in.HeadJSONOrDefault(), in.SEOJSONOrDefault(), strings.TrimSpace(in.ContentHash))
 	if err != nil {
 		return 0, fmt.Errorf("insert website: %w", err)
 	}
@@ -56,8 +56,8 @@ func (q *Queries) InsertWebsite(ctx context.Context, in WebsiteRow) (int64, erro
 
 func (q *Queries) GetWebsiteByName(ctx context.Context, name string) (WebsiteRow, error) {
 	var out WebsiteRow
-	err := q.db.QueryRowContext(ctx, `SELECT id, name, default_style_bundle, base_template, head_json, content_hash, created_at, updated_at FROM websites WHERE name = ?`, name).
-		Scan(&out.ID, &out.Name, &out.DefaultStyleBundle, &out.BaseTemplate, &out.HeadJSON, &out.ContentHash, &out.CreatedAt, &out.UpdatedAt)
+	err := q.db.QueryRowContext(ctx, `SELECT id, name, default_style_bundle, base_template, head_json, seo_json, content_hash, created_at, updated_at FROM websites WHERE name = ?`, name).
+		Scan(&out.ID, &out.Name, &out.DefaultStyleBundle, &out.BaseTemplate, &out.HeadJSON, &out.SEOJSON, &out.ContentHash, &out.CreatedAt, &out.UpdatedAt)
 	if err != nil {
 		return out, fmt.Errorf("get website by name: %w", err)
 	}
@@ -67,9 +67,9 @@ func (q *Queries) GetWebsiteByName(ctx context.Context, name string) (WebsiteRow
 func (q *Queries) UpdateWebsiteSpec(ctx context.Context, in WebsiteRow) error {
 	_, err := q.db.ExecContext(ctx, `
 UPDATE websites
-SET default_style_bundle = ?, base_template = ?, head_json = ?, content_hash = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+SET default_style_bundle = ?, base_template = ?, head_json = ?, seo_json = ?, content_hash = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
 WHERE id = ?
-`, in.DefaultStyleBundle, in.BaseTemplate, in.HeadJSONOrDefault(), strings.TrimSpace(in.ContentHash), in.ID)
+`, in.DefaultStyleBundle, in.BaseTemplate, in.HeadJSONOrDefault(), in.SEOJSONOrDefault(), strings.TrimSpace(in.ContentHash), in.ID)
 	if err != nil {
 		return fmt.Errorf("update website spec: %w", err)
 	}

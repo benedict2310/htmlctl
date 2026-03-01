@@ -53,6 +53,9 @@ func TestBuilderBuildSuccess(t *testing.T) {
 			t.Fatalf("expected release file %s to exist: %v", rel, err)
 		}
 	}
+	if _, err := os.Stat(filepath.Join(releaseDir, "robots.txt")); !os.IsNotExist(err) {
+		t.Fatalf("expected robots.txt to be absent when website seo robots is not enabled, got err=%v", err)
+	}
 	indexHTML, err := os.ReadFile(filepath.Join(releaseDir, "index.html"))
 	if err != nil {
 		t.Fatalf("read index.html: %v", err)
@@ -170,6 +173,66 @@ func TestBuilderBuildMaterializesWebsiteFavicons(t *testing.T) {
 		if !strings.Contains(indexText, needle) {
 			t.Fatalf("expected index.html to contain %q", needle)
 		}
+	}
+}
+
+func TestBuilderBuildMaterializesRobotsTxt(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openReleaseTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+	queries := dbpkg.NewQueries(db)
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+
+	websiteID, _ := seedReleaseState(t, ctx, queries, blobStore)
+	if err := queries.UpdateWebsiteSpec(ctx, dbpkg.WebsiteRow{
+		ID:                 websiteID,
+		DefaultStyleBundle: "default",
+		BaseTemplate:       "default",
+		SEOJSON:            `{"publicBaseURL":"https://example.com","robots":{"enabled":true,"groups":[{"userAgents":["Googlebot","*"],"allow":["/"],"disallow":["/drafts/"]}]}}`,
+		ContentHash:        "sha256:website",
+	}); err != nil {
+		t.Fatalf("UpdateWebsiteSpec() error = %v", err)
+	}
+
+	builder, err := NewBuilder(db, blobStore, filepath.Join(dataDir, "websites"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatalf("NewBuilder() error = %v", err)
+	}
+	res, err := builder.Build(ctx, "sample", "staging")
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+
+	releaseDir := filepath.Join(dataDir, "websites", "sample", "envs", "staging", "releases", res.ReleaseID)
+	robots := readReleaseFileString(t, releaseDir, "robots.txt")
+	want := "User-agent: Googlebot\nUser-agent: *\nAllow: /\nDisallow: /drafts/\n"
+	if robots != want {
+		t.Fatalf("unexpected robots.txt:\n%s", robots)
+	}
+	if strings.Contains(robots, "\r") {
+		t.Fatalf("expected LF-only robots.txt, got %q", robots)
+	}
+	manifest := readReleaseFileString(t, releaseDir, ".manifest.json")
+	var snapshot map[string]any
+	if err := json.Unmarshal([]byte(manifest), &snapshot); err != nil {
+		t.Fatalf("unmarshal release manifest snapshot: %v", err)
+	}
+	resources, ok := snapshot["resources"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected resources object in manifest snapshot, got %#v", snapshot["resources"])
+	}
+	websiteResource, ok := resources["website"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected website object in manifest snapshot, got %#v", resources["website"])
+	}
+	seo, ok := websiteResource["seo"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected seo object in manifest snapshot, got %#v", websiteResource["seo"])
+	}
+	if seo["publicBaseURL"] != "https://example.com" {
+		t.Fatalf("unexpected manifest publicBaseURL: %#v", seo["publicBaseURL"])
 	}
 }
 

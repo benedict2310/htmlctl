@@ -45,6 +45,14 @@ All resources are stored in sqlite (metadata/manifests/audit), with blobs/releas
     - `svg`: path under `branding/` for the SVG favicon source
     - `ico`: path under `branding/` for the ICO favicon source
     - `appleTouch`: path under `branding/` for the Apple touch icon source
+- `spec.seo` (optional): website-scoped crawl metadata
+  - `publicBaseURL`: canonical absolute `http(s)` site URL used by generated crawl artifacts
+  - `robots` (optional):
+    - `enabled`: generate `/robots.txt` when `true`
+    - `groups`: ordered crawler policy groups
+      - `userAgents`: ordered user-agent values
+      - `allow`: ordered path-prefix rules
+      - `disallow`: ordered path-prefix rules
 
 Example:
 
@@ -61,6 +69,18 @@ spec:
       svg: branding/favicon.svg
       ico: branding/favicon.ico
       appleTouch: branding/apple-touch-icon.png
+  seo:
+    publicBaseURL: https://example.com/
+    robots:
+      enabled: true
+      groups:
+        - userAgents:
+            - "*"
+          allow:
+            - /
+          disallow:
+            - /preview/
+            - /drafts/
 ```
 
 ### 2.2 Environment
@@ -211,6 +231,12 @@ Pages are not full HTML docs; they are layouts that reference components. Render
   - `/favicon.svg`
   - `/favicon.ico`
   - `/apple-touch-icon.png`
+- `robots.txt` is generated during release materialization from `website.yaml spec.seo.robots` and written to `/robots.txt` when enabled
+- `robots.txt` generation is deterministic:
+  - default allow-all policy when `enabled: true` and no groups are defined
+  - groups emitted in input order
+  - within each group: `User-agent`, then `Allow`, then `Disallow`, all in input order
+  - LF-only output, no request-time generation
 - Favicon support introduces no generation/transcoding step: htmlctl/htmlservd never resize, convert, or synthesize icon variants
 - Head metadata render order is deterministic:
   1. website icon links

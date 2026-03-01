@@ -13,6 +13,7 @@ Open `http://localhost:8080/`. Check:
 - `dist/index.html` exists
 - Each page has `dist/<route>/index.html`
 - No validator errors (single root tag, no script tags in components, anchor id rules)
+- If `website.yaml` enables favicon, robots, or sitemap, verify `dist/favicon.svg`, `dist/favicon.ico`, `dist/robots.txt`, and `dist/sitemap.xml` as applicable
 
 ---
 
@@ -93,12 +94,26 @@ Open `http://127.0.0.1.nip.io:18080/`.
 
 > Caddy uses virtual hosting. `curl http://127.0.0.1:18080/` returns empty because `Host: 127.0.0.1` matches no vhost. Always use the bound hostname.
 
+If you are testing a newly added website-level server capability, rebuild the local image first:
+
+```bash
+docker build --target htmlservd-ssh -t htmlservd-ssh:local .
+```
+
 ### Verify telemetry
 
 ```bash
 curl -sS \
   -H "Authorization: Bearer ${API_TOKEN}" \
   "http://127.0.0.1:19420/api/v1/websites/sample/environments/staging/telemetry/events?limit=20"
+```
+
+### Verify generated website artifacts
+
+```bash
+curl -sf -H "Host: 127.0.0.1.nip.io" http://127.0.0.1:18080/robots.txt
+curl -sf -H "Host: 127.0.0.1.nip.io" http://127.0.0.1:18080/sitemap.xml
+curl -sf -H "Host: 127.0.0.1.nip.io" http://127.0.0.1:18080/favicon.svg
 ```
 
 ### Run htmlctl inside Docker (key-file auth, no agent required)
@@ -159,6 +174,8 @@ sudo install -m 0755 ./bin/htmlservd /usr/local/bin/htmlservd
 sudo install -m 0755 ./bin/htmlctl   /usr/local/bin/htmlctl
 sudo install -m 0755 /path/to/caddy  /usr/local/bin/caddy
 ```
+
+When server-side release materialization features change, upgrade `htmlservd` before applying a site that depends on them. A new client alone is not enough.
 
 ### 3. Create config
 
@@ -236,6 +253,8 @@ The SSH user must be able to open a tunnel to `127.0.0.1:9400` on the server.
 htmlctl diff -f ./site --context staging
 htmlctl apply -f ./site --context staging
 htmlctl status website/sample --context staging
+curl -sf https://staging.example.com/robots.txt
+curl -sf https://staging.example.com/sitemap.xml
 htmlctl domain add example.com --context prod
 htmlctl promote website/sample --from staging --to prod
 ```

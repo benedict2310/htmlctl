@@ -1,11 +1,11 @@
 ---
 name: htmlctl-publish
-description: Publish content to an htmlctl-managed website. Use when an agent needs to create or update pages, components, styles, or assets on a site managed by htmlctl/htmlservd. Handles both agent-driven content updates (apply directly to staging, then promote to prod) and structural changes (test locally with Docker first). The server holds all desired state; no git repository is required for content management.
+description: Publish content to an htmlctl-managed website. Use when an agent needs to create or update pages, components, styles, assets, website metadata, or branding on a site managed by htmlctl/htmlservd. Handles both agent-driven content updates (apply directly to staging, then promote to prod) and structural changes (test locally with Docker first). The server holds all desired state; no git repository is required for content management.
 ---
 
 # htmlctl Publish
 
-Publish pages, components, and styles to a site managed by `htmlctl` / `htmlservd`.
+Publish pages, components, styles, website metadata, and branding to a site managed by `htmlctl` / `htmlservd`.
 
 ## Deployment Model
 
@@ -58,12 +58,29 @@ The server auto-generates a 1200×630 social preview PNG for every page at build
 
 **Staging URL caveat:** OG image URLs are derived from `canonicalURL`. If your staging pages use a staging canonical (`https://staging.example.com/`), promote will carry those URLs to prod. Ensure `canonicalURL` reflects the prod domain before promoting.
 
+## Website Metadata
+
+Website-scoped metadata lives in `website.yaml`, not in page files or ad hoc assets:
+
+- `spec.head.icons` configures favicon links rendered into every page.
+- favicon source files live under `branding/`, not `assets/`.
+- `spec.seo.publicBaseURL` defines the canonical public crawl origin.
+- `spec.seo.robots.enabled` generates `/robots.txt` during release materialization.
+- `spec.seo.sitemap.enabled` generates `/sitemap.xml` during release materialization and appends a `Sitemap:` line to `robots.txt`.
+
+Important constraints:
+
+- `publicBaseURL` must be the real public production URL, not a staging host.
+- `promote` copies the release artifact byte-for-byte. It does not rebuild `robots.txt`, `sitemap.xml`, favicon output, or OG metadata.
+- if the client supports a website-level feature but the server binary is older, `apply` may still succeed while the expected generated artifact is missing. Upgrade `htmlservd`, then re-apply.
+
 ## Workflow Decision
 
 | Change type | Workflow |
 |-------------|----------|
 | Content update (copy, cards, links, small edits to existing components) | Apply directly to staging → verify → promote to prod |
 | New standalone subpage (new component + new page, no changes to shared components) | Apply directly to staging → verify → promote to prod |
+| Website-level metadata change (`website.yaml`, `branding/`, favicon, robots, sitemap) | Verify server version first → apply to staging → verify generated artifacts → promote to prod |
 | Structural change to shared components, layout redesign, style overhaul | Test locally with Docker → apply to staging → promote to prod |
 
 ## Prerequisites
@@ -106,6 +123,7 @@ htmlctl apply -f site/ --context staging
 # 3. Verify on staging URL
 htmlctl status website/mysite --context staging
 htmlctl logs website/mysite --context staging
+curl -sf https://staging.example.com/ | grep "<title>"
 
 # 4. Promote exact artifact to prod (no rebuild, byte-for-byte identical)
 htmlctl promote website/mysite --from staging --to prod
@@ -115,6 +133,35 @@ htmlctl status website/mysite --context prod
 ```
 
 > **Note:** The first `apply` bootstraps the environment. Subsequent deploys can use `promote` to copy the staging artifact to prod without rebuilding.
+
+## Workflow A2 — Website Metadata Change
+
+Use for changes to `website.yaml` or `branding/`: favicon, `publicBaseURL`, `robots`, `sitemap`, and similar website-scoped state.
+
+```bash
+# 0. Make sure both client and server binaries include the feature you are about to use
+go build -o bin/htmlctl ./cmd/htmlctl
+
+# 1. Preview declarative changes
+htmlctl diff -f site/ --context staging
+
+# 2. Apply to staging
+htmlctl apply -f site/ --context staging
+
+# 3. Verify generated outputs on staging
+htmlctl status website/mysite --context staging
+curl -sf https://staging.example.com/ | grep "<title>"
+curl -sf https://staging.example.com/robots.txt
+curl -sf https://staging.example.com/sitemap.xml
+
+# 4. Promote exact artifact to prod
+htmlctl promote website/mysite --from staging --to prod
+
+# 5. Verify prod
+htmlctl status website/mysite --context prod
+curl -sf https://example.com/robots.txt
+curl -sf https://example.com/sitemap.xml
+```
 
 ## Workflow B — Structural Change (Docker local first)
 
@@ -175,6 +222,8 @@ Open `http://127.0.0.1.nip.io:18080/` — use the hostname, not the raw IP (Cadd
 # Verify
 htmlctl status website/mysite --context local-docker
 curl -sf -H "Host: 127.0.0.1.nip.io" http://127.0.0.1:18080/ | grep "<title>"
+curl -sf -H "Host: 127.0.0.1.nip.io" http://127.0.0.1:18080/robots.txt
+curl -sf -H "Host: 127.0.0.1.nip.io" http://127.0.0.1:18080/sitemap.xml
 ```
 
 ### Ship to staging and prod
@@ -197,11 +246,15 @@ Before any apply:
 - `htmlctl diff -f site/ --context staging` — review changes (**exit code 1 = changes detected, not an error; exit code 0 = no changes**)
 - `htmlctl apply -f site/ --context staging --dry-run` — for risky changes
 - `htmlctl config current-context` — confirm you're on the right context
+- if you are using newly added website-level features, verify the server binary is current enough to materialize them
 
 After apply:
 - `htmlctl status website/mysite --context staging`
 - `htmlctl logs website/mysite --context staging` — check for `warning: og image generation failed` lines; these indicate pages whose OG PNG was skipped (build still succeeds)
 - Check the site URL
+- if `robots` is enabled, verify `/robots.txt`
+- if `sitemap` is enabled, verify `/sitemap.xml`
+- if favicon is configured, verify the root icon files and page `<head>` output
 
 Before promote:
 - Verify staging behavior end-to-end

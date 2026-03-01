@@ -27,6 +27,8 @@
 | Validation error: script tag in component | `<script>` inside a component file | Move JS to `scripts/site.js` |
 | Validation error: event handler attribute | `onclick`, `onload`, etc. in component | Remove inline handlers; use `site.js` instead |
 | `apply -f` fails on individual file | Wrong path or file outside site dir | Provide correct relative path; `apply -f` accepts both files and directories |
+| `robots.txt` or `sitemap.xml` is 404 after successful apply | Server binary predates website SEO feature | Upgrade `htmlservd`, restart it, then re-apply the site |
+| favicon files missing after successful apply | `branding/` files not configured or server binary predates website icon feature | Add `spec.head.icons` plus `branding/*`, or upgrade `htmlservd` and re-apply |
 
 ### Telemetry
 
@@ -64,6 +66,8 @@ htmlctl apply -f site/ --context staging
 # 5. Verify
 htmlctl status website/mysite --context staging
 htmlctl logs website/mysite --context staging --limit 50
+curl -sf https://staging.example.com/robots.txt
+curl -sf https://staging.example.com/sitemap.xml
 ```
 
 ---
@@ -109,3 +113,4 @@ htmlctl rollout undo website/mysite --context prod
 5. **SSH host key**: never disable host-key verification. If the key changes, regenerate `known_hosts` with `ssh-keyscan`.
 6. **Data backup**: snapshot `/var/lib/htmlservd` (DB + blobs) before high-risk operations.
 7. **Telemetry host attribution**: keep `htmlservd` bound to loopback and route telemetry through Caddy for accurate `Host`-based environment resolution.
+8. **Server/client feature parity**: when a feature affects release materialization, upgrade `htmlservd` before relying on it in a site apply.

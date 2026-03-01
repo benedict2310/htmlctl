@@ -7,6 +7,9 @@ All resources use `apiVersion: htmlctl.dev/v1`. Files live in a `site/` director
 ```
 site/
   website.yaml
+  branding/
+    favicon.svg
+    favicon.ico
   pages/
     index.page.yaml
     about.page.yaml
@@ -24,7 +27,7 @@ site/
     og-image.png
 ```
 
-**Agent rule:** edit `components/*`, `styles/*`, `scripts/*`, `assets/*` for the vast majority of changes. Only touch `website.yaml` or `pages/*.page.yaml` for structural/routing changes.
+**Agent rule:** edit `components/*`, `styles/*`, `scripts/*`, and `assets/*` for most content work. Touch `website.yaml` for website-level metadata and `branding/*` for favicon inputs. Only touch `pages/*.page.yaml` for routing or page-specific metadata changes.
 
 ---
 
@@ -40,11 +43,26 @@ metadata:
 spec:
   defaultStyleBundle: default
   baseTemplate: default
+  head:
+    icons:
+      svg: branding/favicon.svg
+      ico: branding/favicon.ico
+  seo:
+    publicBaseURL: https://mysite.com
+    robots:
+      enabled: true
+    sitemap:
+      enabled: true
 ```
 
 - `metadata.name`: alphanumeric + `_-`, max 128 chars; used in all CLI/API paths
 - `spec.defaultStyleBundle`: must match a StyleBundle name (`default` in v1)
 - `spec.baseTemplate`: base HTML template (`default` in v1)
+- `spec.head.icons`: optional website-level favicon config; source files live under `branding/`
+- `spec.seo.publicBaseURL`: canonical public site origin used for generated crawl artifacts
+- `spec.seo.robots.enabled`: generates root `/robots.txt`
+- `spec.seo.sitemap.enabled`: generates root `/sitemap.xml` and appends a `Sitemap:` line to `robots.txt`
+- `publicBaseURL` should point at the real public production URL because promote does not rebuild artifacts for prod
 
 ---
 
@@ -170,6 +188,14 @@ Binary files (images, fonts, SVGs) in `assets/`. Stored content-addressed (SHA-2
 - Accepted content types: images (PNG, JPG, GIF, WebP, AVIF, SVG), fonts (WOFF, WOFF2), common web assets
 - Filenames are sanitized; path traversal is rejected
 - Reference from HTML: `<img src="/assets/logo.svg">` or `<img src="/assets/og-image.png">`
+
+## Branding
+
+Website-level favicon source files live in `branding/`.
+
+- Supported v1 inputs are the typed favicon slots referenced from `website.yaml`
+- public output paths are conventional root files such as `/favicon.svg` and `/favicon.ico`
+- do not use `assets/` for favicon files when `branding/` is available
 
 ---
 

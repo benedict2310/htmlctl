@@ -77,9 +77,9 @@ Response `200 OK`:
 
 Empty environment → `200 OK` with `"backends": []`.
 
-### DELETE `/api/v1/websites/{website}/environments/{env}/backends/{path_prefix}`
+### DELETE `/api/v1/websites/{website}/environments/{env}/backends?path={path_prefix}`
 
-`path_prefix` is URL-encoded in the path segment.
+`path_prefix` is URL-encoded in the `path` query parameter (e.g. `path=%2Fapi%2F*`). Using a query parameter avoids the slash-normalization problem that arises when path prefixes containing `/` are embedded in URL path segments.
 
 Response `204 No Content` on success.
 Not found → `404 Not Found`.
@@ -115,7 +115,7 @@ All commands respect `--context` and `--output json` flags consistent with the r
 
 ### 7.1 Files to Create
 
-- `internal/server/backends.go` — `handleBackendAdd`, `handleBackendList`, `handleBackendRemove` handlers.
+- `internal/server/backends.go` — `handleBackends` dispatcher; `handleBackendAdd`, `handleBackendList`, `handleBackendRemove` sub-functions.
 - `internal/server/backends_test.go` — handler tests.
 - `cmd/htmlctl/backend.go` — `backendCmd`, `backendAddCmd`, `backendListCmd`, `backendRemoveCmd`.
 
@@ -127,14 +127,13 @@ All commands respect `--context` and `--output json` flags consistent with the r
 
 ### 7.3 Route Registration
 
-Follow the pattern used for domain bindings:
+All three operations share a single route; dispatch on `r.Method` inside the handler:
 
 ```go
-mux.HandleFunc("/api/v1/websites/{website}/environments/{env}/backends", s.requireAuth(s.handleBackendAddOrList))
-mux.HandleFunc("/api/v1/websites/{website}/environments/{env}/backends/{pathPrefix}", s.requireAuth(s.handleBackendRemove))
+mux.HandleFunc("/api/v1/websites/{website}/environments/{env}/backends", s.requireAuth(s.handleBackends))
 ```
 
-Dispatch on `r.Method` inside handlers.
+`DELETE` reads the path prefix from `r.URL.Query().Get("path")` and decodes it with `url.QueryUnescape`. A missing or empty `path` parameter returns `400`.
 
 ### 7.4 Validation (Server-Side)
 
@@ -177,6 +176,6 @@ After a successful `UpsertBackend` or `DeleteBackendByPathPrefix`, call the exis
 
 ## 10. Risks and Mitigations
 
-- **Risk:** URL-encoded `path_prefix` in DELETE path segment causes routing ambiguity (slashes in path prefix). **Mitigation:** require path prefix to be URL-encoded by the client; use `url.PathUnescape` in the handler. Document in CLI help text.
+- **Risk:** Path prefixes contain literal `/` which cannot be safely round-tripped through a URL path segment. **Mitigation:** resolved by design — `DELETE` uses a query parameter (`?path=...`) rather than a path segment. `url.QueryUnescape` is safe here; Go's `net/http` does not normalize query parameter values.
 - **Risk:** Caddy reload fails after a backend is added because the upstream is unreachable or the config is syntactically wrong. **Mitigation:** Caddy validates syntax at reload time (not upstream reachability). Log the reload error; surface it in the CLI output as a warning so the operator knows to check. The backend is persisted either way.
 - **Risk:** Operator adds a backend with a path prefix that shadows a legitimate static file path (e.g. `/styles/*`). **Mitigation:** this is operator intent, not a bug. Document the behaviour: `reverse_proxy` takes priority over `file_server` for the declared prefix. Future story could add a warning for suspicious prefixes.

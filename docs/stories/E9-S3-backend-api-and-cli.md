@@ -133,7 +133,7 @@ All three operations share a single route; dispatch on `r.Method` inside the han
 mux.HandleFunc("/api/v1/websites/{website}/environments/{env}/backends", s.requireAuth(s.handleBackends))
 ```
 
-`DELETE` reads the path prefix from `r.URL.Query().Get("path")` and decodes it with `url.QueryUnescape`. A missing or empty `path` parameter returns `400`.
+`DELETE` reads the path prefix from the `path` query parameter, but should parse `r.URL.RawQuery` with `url.ParseQuery` rather than relying on `r.URL.Query()`. That preserves the slash-safe query-parameter design while still allowing the handler to reject malformed query encoding with `400` instead of silently discarding it. A missing or empty `path` parameter also returns `400`.
 
 ### 7.4 Validation (Server-Side)
 
@@ -152,6 +152,7 @@ After a successful `UpsertBackend` or `DeleteBackendByPathPrefix`, call the exis
 - [ ] AC-3: `POST` with invalid `upstream` (non-http/https scheme, embedded credentials, empty host) returns `400`.
 - [ ] AC-4: `GET` returns all backends for the environment ordered by `path_prefix`; returns empty list (not `404`) when none exist.
 - [ ] AC-5: `DELETE` returns `204` on success and `404` when the prefix does not exist.
+- [ ] AC-5a: `DELETE` returns `400` when the `path` query parameter is missing, empty, or malformed.
 - [ ] AC-6: `POST` and `DELETE` trigger Caddyfile regeneration; Caddy reload failure does not roll back the DB change.
 - [ ] AC-7: All three endpoints reject unauthenticated requests with `401`.
 - [ ] AC-8: `htmlctl backend add` / `list` / `remove` call the correct endpoints and display human-readable output; `--output json` emits machine-parseable JSON.
@@ -171,11 +172,12 @@ After a successful `UpsertBackend` or `DeleteBackendByPathPrefix`, call the exis
   - List backends: populated environment → 200 ordered by path prefix.
   - Remove backend: existing → 204.
   - Remove backend: not found → 404.
+  - Remove backend: missing, empty, or malformed `path` query parameter → 400.
   - Remove backend: unauthenticated → 401.
   - 5xx responses contain no internal error detail (sanitization invariant).
 
 ## 10. Risks and Mitigations
 
-- **Risk:** Path prefixes contain literal `/` which cannot be safely round-tripped through a URL path segment. **Mitigation:** resolved by design — `DELETE` uses a query parameter (`?path=...`) rather than a path segment. `url.QueryUnescape` is safe here; Go's `net/http` does not normalize query parameter values.
+- **Risk:** Path prefixes contain literal `/` which cannot be safely round-tripped through a URL path segment. **Mitigation:** resolved by design — `DELETE` uses a query parameter (`?path=...`) rather than a path segment. Parse `r.URL.RawQuery` with `url.ParseQuery` so malformed query encoding is rejected explicitly instead of being silently ignored.
 - **Risk:** Caddy reload fails after a backend is added because the upstream is unreachable or the config is syntactically wrong. **Mitigation:** Caddy validates syntax at reload time (not upstream reachability). Log the reload error; surface it in the CLI output as a warning so the operator knows to check. The backend is persisted either way.
 - **Risk:** Operator adds a backend with a path prefix that shadows a legitimate static file path (e.g. `/styles/*`). **Mitigation:** this is operator intent, not a bug. Document the behaviour: `reverse_proxy` takes priority over `file_server` for the declared prefix. Future story could add a warning for suspicious prefixes.

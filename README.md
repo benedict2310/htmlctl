@@ -43,6 +43,7 @@ Write your site as declarative YAML resources. `htmlctl` renders them determinis
 ```
 
 **Environments** (`staging`, `prod`) each have their own active release pointer. Promotion copies the exact artifact bytes — no rebuild, guaranteed hash parity.
+Per-environment backends are managed separately from release content, so `/api/*` can point at different upstreams in staging and prod without changing the promoted static artifact.
 
 ---
 
@@ -303,6 +304,16 @@ Rules:
 | `htmlctl domain list` | List bound domains |
 | `htmlctl domain verify <domain>` | Check DNS propagation and TLS readiness |
 | `htmlctl domain remove <domain>` | Remove a domain binding |
+
+### Backends
+
+| Command | Description |
+|---------|-------------|
+| `htmlctl backend add website/<name> --env <env> --path /api/* --upstream <url>` | Declare an environment-scoped reverse proxy for a path prefix |
+| `htmlctl backend list website/<name> --env <env>` | List configured backends for an environment |
+| `htmlctl backend remove website/<name> --env <env> --path /api/*` | Remove a backend mapping by path |
+
+Backend paths must use the canonical prefix form `/<segment>/*`. They are runtime routing config, not bundle content, so `promote` does not copy or mutate backend definitions.
 
 ### Context
 

@@ -19,6 +19,7 @@
 ## Operations Notes
 
 - `docs/operations/domain-hardening.md` - domain rollback metadata preservation and same-domain concurrency locking behavior.
+- Environment backends are environment-scoped runtime config managed with `htmlctl backend add/list/remove`; see `docs/technical-spec.md` and the optional backend-routing verification in `docs/guides/first-deploy-docker.md`.
 - `scripts/clean-dev-state.sh` - clean `.tmp` dev/runtime state safely when mixed ownership appears.
 
 ## Review Logs

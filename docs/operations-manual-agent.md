@@ -265,7 +265,28 @@ htmlctl logs website/sample --context staging --limit 50
 htmlctl apply -f ./site --context staging --dry-run
 ```
 
-## 8. Runbook RB-RELEASE-01: History, Rollback, Promote
+## 8. Runbook RB-BACKEND-01: Environment Backends
+
+Use this when a site should proxy relative paths like `/api/*` or `/auth/*` to an environment-specific upstream.
+
+Backend rules:
+- backends are runtime routing config, not bundle content
+- they are not created or copied by `apply` or `promote`
+- paths must use canonical prefix form such as `/api/*`
+
+Add/list/remove:
+
+```bash
+htmlctl backend add website/sample --env staging --path /api/* --upstream https://staging-api.example.com --context staging
+htmlctl backend list website/sample --env staging --context staging
+htmlctl backend remove website/sample --env staging --path /api/* --context staging
+```
+
+Verification:
+- test the proxied URL on the environment hostname directly
+- if staging and prod should both proxy `/api/*`, declare one backend per environment
+
+## 9. Runbook RB-RELEASE-01: History, Rollback, Promote
 
 Release history:
 
@@ -294,7 +315,7 @@ htmlctl status website/sample --context prod
 htmlctl logs website/sample --context prod --limit 20
 ```
 
-## 9. Runbook RB-DOMAIN-01: Domain Binding + Verification
+## 10. Runbook RB-DOMAIN-01: Domain Binding + Verification
 
 Add/list/remove:
 
@@ -315,7 +336,7 @@ Expected behavior:
 - TLS failure -> actionable output to check Caddy serving/cert issuance.
 - success requires both DNS PASS and TLS PASS.
 
-## 10. Runbook RB-VPS-01: Deploy htmlservd on VPS (Native Binaries)
+## 11. Runbook RB-VPS-01: Deploy htmlservd on VPS (Native Binaries)
 
 Goal: production-grade VPS deployment with systemd and SSH-tunneled control.
 
@@ -391,7 +412,7 @@ curl -sf http://127.0.0.1:9400/readyz
 
 8. Run remote workflow from workstation (RB-REMOTE-01).
 
-## 11. Runbook RB-VPS-02: Deploy on VPS via Docker
+## 12. Runbook RB-VPS-02: Deploy on VPS via Docker
 
 Use `htmlservd-ssh` image with persistent volumes and mapped ports.
 
@@ -412,7 +433,7 @@ docker run -d \
 
 For local-like non-TLS dry environment, set `HTMLSERVD_CADDY_AUTO_HTTPS=false`.
 
-## 12. API Reference (for Agent Direct Calls)
+## 13. API Reference (for Agent Direct Calls)
 
 Health/version:
 - `GET /healthz`
@@ -441,7 +462,12 @@ Domain operations:
 - `GET /api/v1/domains/{domain}`
 - `DELETE /api/v1/domains/{domain}`
 
-## 13. Failure Modes and Deterministic Responses
+Backend operations:
+- `GET /api/v1/websites/{website}/environments/{env}/backends`
+- `POST /api/v1/websites/{website}/environments/{env}/backends`
+- `DELETE /api/v1/websites/{website}/environments/{env}/backends/{path}`
+
+## 14. Failure Modes and Deterministic Responses
 
 - `ssh host key verification failed`:
   - regenerate known hosts with `ssh-keyscan`.
@@ -451,12 +477,16 @@ Domain operations:
   - verify context `token` matches server token (`api.token` or `HTMLSERVD_API_TOKEN`).
 - local Docker preview not updating:
   - confirm preview env vars (`HTMLSERVD_PREVIEW_WEBSITE`, `HTMLSERVD_PREVIEW_ENV`) match context.
+- `404` on `/api/...` after adding a backend:
+  - verify `--path` uses canonical prefix form like `/api/*` and that the upstream serves the requested subpath.
+- `502 Bad Gateway` on `/api/...`:
+  - upstream is down or unreachable; for Docker host-side tests, use `http://host.docker.internal:<port>`.
 - `domain verify` TLS fail in local/dev:
   - expected unless public DNS/TLS is valid; for local HTTP set `HTMLSERVD_CADDY_AUTO_HTTPS=false`.
 - cleanup blocked by ownership in `.tmp`:
   - run `scripts/clean-dev-state.sh`.
 
-## 14. Operational Safety Checklist
+## 15. Operational Safety Checklist
 
 Before apply:
 - run `htmlctl diff`.
@@ -468,16 +498,18 @@ After apply:
 - `htmlctl status`.
 - `htmlctl logs`.
 - external route check (HTTP/TLS).
+- if the environment uses backends, run `htmlctl backend list ...` and test the proxied route directly.
 
 Before promote:
 - validate staging release behavior.
 - verify release history and active release id.
+- remember that backend config does not promote with the release.
 
 After promote:
 - verify prod status + external health.
 - keep rollback command ready.
 
-## 15. Data Paths and Backups
+## 16. Data Paths and Backups
 
 Default server state root:
 - `/var/lib/htmlservd`
@@ -492,7 +524,7 @@ Backup strategy:
 - snapshot full data dir before high-risk operations.
 - preserve both DB and release blobs together.
 
-## 16. Validation/CI Commands
+## 17. Validation/CI Commands
 
 Local test suite:
 
@@ -509,3 +541,4 @@ Manual equivalent:
 - apply site via SSH tunnel
 - verify `/blog`, `/about`, `/ora`
 - add domain and verify host-header route
+- optionally add `/api/*` backend and verify live reverse proxy routing

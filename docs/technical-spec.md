@@ -363,6 +363,10 @@ Audit log records:
   - `handle /collect/v1/events* { reverse_proxy 127.0.0.1:<htmlservd-port> }`
   - static file serving behavior is unchanged for all non-telemetry paths.
   - if the server listen port is dynamic (`port: 0`), Caddy telemetry proxy generation cannot resolve a stable backend port; use an explicit port in telemetry-enabled environments.
+- When environment backends are configured, generated site blocks also include path-prefix reverse proxies ahead of `file_server`.
+  - backend paths use canonical prefix form such as `/api/*`
+  - backends are environment-scoped runtime routing state and do not affect release artifact contents
+  - backends take precedence over static file serving for matching prefixes
 
 ## 9. CLI design (htmlctl)
 
@@ -407,6 +411,9 @@ Remote ops:
 - `htmlctl rollout history website/sample --context prod`
 - `htmlctl rollout undo website/sample --context prod`
 - `htmlctl logs website/sample --context prod`
+- `htmlctl backend add website/sample --env staging --path /api/* --upstream https://staging-api.example.com --context staging`
+- `htmlctl backend list website/sample --env staging --context staging`
+- `htmlctl backend remove website/sample --env staging --path /api/* --context staging`
 
 Domains:
 

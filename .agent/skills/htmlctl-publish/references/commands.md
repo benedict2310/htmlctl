@@ -168,3 +168,29 @@ htmlctl domain remove example.com --context prod
 - TLS: valid certificate served on port 443
 
 Both must pass for `verify` to succeed. In local/no-TLS environments, TLS failure is expected.
+
+---
+
+## Backends
+
+Environment backends are runtime routing config, not bundle content. `apply`, `diff`, and `promote` do not create, copy, or remove them.
+
+```bash
+# Add a reverse-proxy backend for one environment
+htmlctl backend add website/<name> \
+  --env staging \
+  --path /api/* \
+  --upstream https://staging-api.example.com \
+  --context staging
+
+# List configured backends for an environment
+htmlctl backend list website/<name> --env staging --context staging
+
+# Remove a backend mapping by path
+htmlctl backend remove website/<name> --env staging --path /api/* --context staging
+```
+
+Backend rules:
+- `--path` must use canonical prefix form such as `/api/*`
+- upstreams must be absolute `http://` or `https://` URLs
+- matching backend prefixes are routed before static file serving

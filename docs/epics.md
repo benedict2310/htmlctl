@@ -131,13 +131,14 @@ by guarding the field with `sync.RWMutex`. All 428 tests pass clean under `-race
 ## Epic 9 — Environment Backends
 
 **Goal:** Allow operators to declare per-environment reverse-proxy upstreams so that static sites can integrate dynamic services (auth, APIs) via relative paths, with Caddy routing requests to the correct backend per environment.
+**Status:** Complete (2026-03-01)
 
 **Motivation:** Static content is identical across environments after promotion. What differs is routing: staging may proxy `/api/*` to a test service while prod proxies the same prefix to the real one. Backends are environment configuration — not release content — and are managed independently of the promotion flow.
 
 | # | Story | File |
 |---|-------|------|
-| 9.1 | Environment backend data model + DB schema | [E9-S1](stories/E9-S1-environment-backend-model.md) |
-| 9.2 | Backend-aware Caddy site block generation | [E9-S2](stories/E9-S2-backend-caddy-config.md) |
-| 9.3 | Backend management API + CLI (`htmlctl backend add/list/remove`) | [E9-S3](stories/E9-S3-backend-api-and-cli.md) |
+| 9.1 | Environment backend data model + DB schema (Implemented) | [E9-S1](stories/E9-S1-environment-backend-model.md) |
+| 9.2 | Backend-aware Caddy site block generation (Implemented) | [E9-S2](stories/E9-S2-backend-caddy-config.md) |
+| 9.3 | Backend management API + CLI (`htmlctl backend add/list/remove`) (Implemented) | [E9-S3](stories/E9-S3-backend-api-and-cli.md) |
 
-**Done when:** `htmlctl backend add website/futurelab --env prod --path /api/ --upstream https://api.example.com` proxies live traffic and `htmlctl backend list` shows the declared backends.
+**Done when:** `htmlctl backend add website/futurelab --env prod --path /api/* --upstream https://api.example.com` proxies live traffic and `htmlctl backend list website/futurelab --env prod` shows the declared backends.

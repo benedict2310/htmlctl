@@ -189,7 +189,64 @@ Telemetry note:
 - If an `Origin` header is present, it must exactly match scheme, host, and port.
 - Do not embed the bearer token in public browser JavaScript; use trusted collectors only.
 
-## 6. Optional: Run `htmlctl` in Docker
+## 6. Optional: Verify Environment Backend Routing
+
+Backends are environment-scoped runtime routing config. They are not part of the rendered bundle and are not copied by `promote`.
+
+Backend path rules:
+
+- Use the canonical prefix form `/<segment>/*`.
+- Choose prefixes that should be handled by the reverse proxy before static file serving, such as `/api/*` or `/auth/*`.
+
+Start a temporary upstream on the host:
+
+```bash
+mkdir -p .tmp/first-deploy/backend/api
+printf 'backend-ok\n' > .tmp/first-deploy/backend/api/ping
+python3 -m http.server 18081 --bind 127.0.0.1 --directory .tmp/first-deploy/backend
+```
+
+Add a backend pointing at that upstream:
+
+```bash
+HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
+HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
+htmlctl backend add website/sample \
+  --env staging \
+  --path /api/* \
+  --upstream http://host.docker.internal:18081 \
+  --context local-staging
+```
+
+List the configured backends:
+
+```bash
+HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
+HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
+htmlctl backend list website/sample --env staging --context local-staging
+```
+
+Verify proxying through Caddy:
+
+```bash
+curl -sf http://127.0.0.1.nip.io:18080/api/ping
+```
+
+Remove the backend again:
+
+```bash
+HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
+HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
+htmlctl backend remove website/sample --env staging --path /api/* --context local-staging
+```
+
+After removal, the same path should no longer resolve:
+
+```bash
+curl -i http://127.0.0.1.nip.io:18080/api/ping
+```
+
+## 7. Optional: Run `htmlctl` in Docker
 
 `htmlctl:local` can use mounted key files (agent not required):
 
@@ -221,17 +278,19 @@ contexts:
 YAML
 ```
 
-## 7. Cleanup
+## 8. Cleanup
 
 ```bash
 docker rm -f htmlservd-first-deploy
 docker network rm htmlctl-net
 ```
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 - `ssh host key verification failed`: regenerate `.tmp/first-deploy/known_hosts` with `ssh-keyscan`.
 - `ssh agent unavailable`: `htmlctl` now supports key-file fallback; mount/provide `~/.ssh/id_ed25519` or set `HTMLCTL_SSH_KEY_PATH`.
 - `unauthorized`: ensure `HTMLSERVD_API_TOKEN` matches the context `token` field.
 - No telemetry rows: post through the bound hostname, include `Authorization: Bearer ${API_TOKEN}`, and avoid raw IP hosts (they are rejected for telemetry attribution).
+- `502 Bad Gateway` on `/api/...`: the backend upstream is down, unreachable from Docker, or not listening on the declared port. For host-side test servers, use `http://host.docker.internal:<port>`.
+- `404` on `/api/...` after adding a backend: verify the backend path is declared as `/<segment>/*` and that the upstream actually serves the requested subpath.
 - Permission errors under `.tmp/first-deploy`: avoid overriding `HOME` into a bind-mounted path; use `HTMLCTL_SSH_KNOWN_HOSTS_PATH` instead (as shown above).

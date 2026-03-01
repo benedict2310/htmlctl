@@ -47,6 +47,14 @@
 | Empty body from `curl http://127.0.0.1:18080/` | Caddy virtual hosting; no domain bound | Bind a domain: `htmlctl domain add 127.0.0.1.nip.io --context ...` |
 | Permission errors under `.tmp` | `HOME` overridden to bind-mounted path | Use `HTMLCTL_SSH_KNOWN_HOSTS_PATH` instead of relying on `~/.ssh` |
 
+### Backends / Reverse Proxy
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `404` on `/api/...` after adding a backend | Backend path is wrong or upstream does not serve that subpath | Use canonical prefix form such as `/api/*` and verify the upstream responds on the requested path |
+| `502 Bad Gateway` on `/api/...` | Upstream is down or unreachable from htmlservd/Caddy | Confirm the upstream is listening and reachable; for host-side Docker tests use `http://host.docker.internal:<port>` |
+| Backend missing in prod after successful promote | Expected backend state to move with the release | Recreate it with `htmlctl backend add ... --env prod ...`; backends are per-environment and not promoted |
+
 ---
 
 ## Pre-Apply Safety Checklist
@@ -115,3 +123,4 @@ htmlctl rollout undo website/mysite --context prod
 6. **Data backup**: snapshot `/var/lib/htmlservd` (DB + blobs) before high-risk operations.
 7. **Telemetry host attribution**: keep `htmlservd` bound to loopback and route telemetry through Caddy for accurate `Host`-based environment resolution.
 8. **Server/client feature parity**: when a feature affects release materialization, upgrade `htmlservd` before relying on it in a site apply.
+9. **Backend scope**: treat `htmlctl backend *` as environment config, not content deployment. Verify each environment separately.

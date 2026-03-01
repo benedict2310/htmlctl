@@ -74,6 +74,16 @@ Important constraints:
 - `promote` copies the release artifact byte-for-byte. It does not rebuild `robots.txt`, `sitemap.xml`, favicon output, or OG metadata.
 - if the client supports a website-level feature but the server binary is older, `apply` may still succeed while the expected generated artifact is missing. Upgrade `htmlservd`, then re-apply.
 
+## Runtime Backends
+
+Environment backends let a static site call dynamic services through relative paths such as `/api/*` or `/auth/*`.
+
+- Manage them with `htmlctl backend add`, `htmlctl backend list`, and `htmlctl backend remove`.
+- Backend paths must use the canonical prefix form `/<segment>/*`.
+- Backends are environment-scoped runtime routing state, not site content. They are not stored in `site/`, are not affected by `htmlctl apply`, and are not copied by `htmlctl promote`.
+- Use them when staging and prod should serve the same static release but proxy the same relative prefix to different upstreams.
+- After changing a backend, verify the route on that environment directly. Do not assume a staging backend exists in prod.
+
 ## Workflow Decision
 
 | Change type | Workflow |
@@ -81,6 +91,7 @@ Important constraints:
 | Content update (copy, cards, links, small edits to existing components) | Apply directly to staging → verify → promote to prod |
 | New standalone subpage (new component + new page, no changes to shared components) | Apply directly to staging → verify → promote to prod |
 | Website-level metadata change (`website.yaml`, `branding/`, favicon, robots, sitemap) | Verify server version first → apply to staging → verify generated artifacts → promote to prod |
+| Environment backend change (`htmlctl backend add/remove`) | Update the target environment directly → verify the proxied route on that environment |
 | Structural change to shared components, layout redesign, style overhaul | Test locally with Docker → apply to staging → promote to prod |
 
 ## Prerequisites
@@ -226,6 +237,25 @@ curl -sf -H "Host: 127.0.0.1.nip.io" http://127.0.0.1:18080/robots.txt
 curl -sf -H "Host: 127.0.0.1.nip.io" http://127.0.0.1:18080/sitemap.xml
 ```
 
+If the site depends on an environment backend, verify that separately after binding the local hostname:
+
+```bash
+mkdir -p .tmp/htmlctl-publish/backend/api
+printf 'backend-ok\n' > .tmp/htmlctl-publish/backend/api/ping
+python3 -m http.server 18081 --bind 127.0.0.1 --directory .tmp/htmlctl-publish/backend
+
+htmlctl backend add website/mysite \
+  --env staging \
+  --path /api/* \
+  --upstream http://host.docker.internal:18081 \
+  --context local-docker
+
+curl -sf http://127.0.0.1.nip.io:18080/api/ping
+htmlctl backend remove website/mysite --env staging --path /api/* --context local-docker
+```
+
+Backends are evaluated before `file_server` for matching prefixes, so `/api/*` requests should hit the upstream rather than any static file under that path.
+
 ### Ship to staging and prod
 
 ```bash
@@ -255,9 +285,11 @@ After apply:
 - if `robots` is enabled, verify `/robots.txt`
 - if `sitemap` is enabled, verify `/sitemap.xml`
 - if favicon is configured, verify the root icon files and page `<head>` output
+- if the environment uses backends, verify `htmlctl backend list website/mysite --env staging --context staging` and test the proxied URL directly
 
 Before promote:
 - Verify staging behavior end-to-end
+- remember that backends do not promote with the release; configure or verify them separately per environment
 - `htmlctl rollout history website/mysite --context staging` — confirm active release
 
 Rollback:

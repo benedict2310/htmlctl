@@ -116,6 +116,34 @@ curl -sf -H "Host: 127.0.0.1.nip.io" http://127.0.0.1:18080/sitemap.xml
 curl -sf -H "Host: 127.0.0.1.nip.io" http://127.0.0.1:18080/favicon.svg
 ```
 
+### Optional: verify environment backend routing
+
+Backends are environment-scoped runtime config. They are not part of `site/` and are not copied by `promote`.
+
+```bash
+mkdir -p .tmp/first-deploy/backend/api
+printf 'backend-ok\n' > .tmp/first-deploy/backend/api/ping
+python3 -m http.server 18081 --bind 127.0.0.1 --directory .tmp/first-deploy/backend
+
+HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
+HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
+htmlctl backend add website/sample \
+  --env staging \
+  --path /api/* \
+  --upstream http://host.docker.internal:18081 \
+  --context local-staging
+
+curl -sf http://127.0.0.1.nip.io:18080/api/ping
+
+HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
+HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
+htmlctl backend list website/sample --env staging --context local-staging
+
+HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
+HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
+htmlctl backend remove website/sample --env staging --path /api/* --context local-staging
+```
+
 ### Run htmlctl inside Docker (key-file auth, no agent required)
 
 ```bash
@@ -255,9 +283,13 @@ htmlctl apply -f ./site --context staging
 htmlctl status website/sample --context staging
 curl -sf https://staging.example.com/robots.txt
 curl -sf https://staging.example.com/sitemap.xml
+htmlctl backend add website/sample --env staging --path /api/* --upstream https://staging-api.example.com --context staging
 htmlctl domain add example.com --context prod
 htmlctl promote website/sample --from staging --to prod
+htmlctl backend add website/sample --env prod --path /api/* --upstream https://api.example.com --context prod
 ```
+
+If prod needs the same backend prefix, declare it explicitly for prod. Promotion does not carry backend state across environments.
 
 ---
 

@@ -311,6 +311,7 @@ func TestValidateSiteNormalizesWebsiteSEO(t *testing.T) {
 							},
 						},
 					},
+					Sitemap: &model.WebsiteSitemap{Enabled: true},
 				},
 			},
 		},
@@ -340,6 +341,9 @@ func TestValidateSiteNormalizesWebsiteSEO(t *testing.T) {
 	if len(group.Disallow) != 1 || group.Disallow[0] != "/drafts/" {
 		t.Fatalf("unexpected normalized disallow rules: %#v", group.Disallow)
 	}
+	if site.Website.Spec.SEO.Sitemap == nil || !site.Website.Spec.SEO.Sitemap.Enabled {
+		t.Fatalf("expected sitemap settings to be preserved")
+	}
 }
 
 func TestValidateSiteRejectsInvalidWebsiteSEO(t *testing.T) {
@@ -361,6 +365,13 @@ func TestValidateSiteRejectsInvalidWebsiteSEO(t *testing.T) {
 				PublicBaseURL: "https://example.com/?q=1",
 			},
 			wantError: "must not include a query string",
+		},
+		{
+			name: "sitemap enabled without public base url",
+			seo: &model.WebsiteSEO{
+				Sitemap: &model.WebsiteSitemap{Enabled: true},
+			},
+			wantError: "sitemap.enabled requires publicBaseURL",
 		},
 		{
 			name: "robots group without user agent",

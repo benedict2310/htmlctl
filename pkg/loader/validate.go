@@ -94,6 +94,9 @@ func NormalizeWebsiteSEO(seo *model.WebsiteSEO) error {
 		seo.PublicBaseURL = normalized
 	}
 	if seo.Robots == nil {
+		if seo.Sitemap != nil && seo.Sitemap.Enabled && strings.TrimSpace(seo.PublicBaseURL) == "" {
+			return fmt.Errorf("website seo sitemap.enabled requires publicBaseURL")
+		}
 		return nil
 	}
 	if len(seo.Robots.Groups) > maxRobotsGroups {
@@ -138,6 +141,9 @@ func NormalizeWebsiteSEO(seo *model.WebsiteSEO) error {
 			}
 			group.Disallow[j] = value
 		}
+	}
+	if seo.Sitemap != nil && seo.Sitemap.Enabled && strings.TrimSpace(seo.PublicBaseURL) == "" {
+		return fmt.Errorf("website seo sitemap.enabled requires publicBaseURL")
 	}
 	return nil
 }

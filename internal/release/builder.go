@@ -227,7 +227,11 @@ func (b *Builder) Build(ctx context.Context, websiteName, envName string) (out B
 	if err := b.copyOriginalAssets(ctx, snapshot.Assets, tmpReleaseDir); err != nil {
 		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
 	}
-	if err := b.materializeRobotsFile(ctx, site.Website.Spec.SEO, "", tmpReleaseDir); err != nil {
+	sitemapURL, err := b.materializeSitemapFile(ctx, site, log, tmpReleaseDir)
+	if err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
+	}
+	if err := b.materializeRobotsFile(ctx, site.Website.Spec.SEO, sitemapURL, tmpReleaseDir); err != nil {
 		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
 	}
 	if err := b.materializeOGImages(ctx, tmpReleaseDir, ogReadyPageHashes, log); err != nil {

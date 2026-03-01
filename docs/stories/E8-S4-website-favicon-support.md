@@ -1,7 +1,7 @@
 # E8-S4 — Website-Scoped Favicon Support
 
 **Epic:** Epic 8 — DX & Reliability  
-**Status:** Not Started  
+**Status:** Implemented (2026-03-01)  
 **Priority:** P2 (Medium — common browser/site identity requirement, currently awkward to manage)  
 **Estimated Effort:** 2–3 days  
 **Dependencies:** E2-S3 (bundle ingestion), E2-S4 (release builder), E3-S4 (diff engine), E7-S1 (server-rendered head metadata)  

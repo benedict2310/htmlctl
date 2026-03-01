@@ -32,6 +32,8 @@ spec:
             - /
           disallow:
             - /drafts/
+    sitemap:
+      enabled: true
 `)
 
 	var website Website
@@ -75,6 +77,9 @@ spec:
 	if got := website.Spec.SEO.Robots.Groups[0].Disallow; len(got) != 1 || got[0] != "/drafts/" {
 		t.Fatalf("unexpected robots disallow rules: %#v", got)
 	}
+	if website.Spec.SEO.Sitemap == nil || !website.Spec.SEO.Sitemap.Enabled {
+		t.Fatalf("expected website sitemap settings to be parsed")
+	}
 }
 
 func TestWebsiteHeadJSONMarshaling(t *testing.T) {
@@ -115,6 +120,7 @@ func TestWebsiteSEOJSONMarshaling(t *testing.T) {
 				},
 			},
 		},
+		Sitemap: &WebsiteSitemap{Enabled: true},
 	}
 
 	b, err := json.Marshal(seo)
@@ -128,6 +134,7 @@ func TestWebsiteSEOJSONMarshaling(t *testing.T) {
 		`"userAgents":["*","Googlebot"]`,
 		`"allow":["/"]`,
 		`"disallow":["/preview/"]`,
+		`"sitemap":{"enabled":true}`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in marshaled output, got: %s", want, got)

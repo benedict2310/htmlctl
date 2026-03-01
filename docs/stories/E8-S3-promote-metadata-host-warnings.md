@@ -1,7 +1,7 @@
 # E8-S3 — Promote Metadata Host Warnings
 
 **Epic:** Epic 8 — DX & Reliability  
-**Status:** Not Started  
+**Status:** Implemented (2026-03-01)  
 **Priority:** P2 (Medium — reduces silent prod metadata mistakes)  
 **Estimated Effort:** 0.5–1 day  
 **Dependencies:** E4-S3 (promote), E7-S1 (head metadata), E8-S2 (OG auto-injection, optional but recommended)  

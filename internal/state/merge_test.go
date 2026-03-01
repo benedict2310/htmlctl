@@ -313,6 +313,8 @@ spec:
             - "*"
           disallow:
             - /drafts/
+    sitemap:
+      enabled: true
 `)
 	iconBytes := []byte("<svg></svg>\n")
 	manifest := bundle.Manifest{
@@ -352,6 +354,9 @@ spec:
 	if !strings.Contains(website.SEOJSON, `"disallow":["/drafts/"]`) {
 		t.Fatalf("unexpected website seo_json: %q", website.SEOJSON)
 	}
+	if !strings.Contains(website.SEOJSON, `"sitemap":{"enabled":true}`) {
+		t.Fatalf("unexpected website seo_json: %q", website.SEOJSON)
+	}
 	icons, err := q.ListWebsiteIconsByWebsite(ctx, website.ID)
 	if err != nil {
 		t.Fatalf("ListWebsiteIconsByWebsite() error = %v", err)
@@ -380,7 +385,7 @@ func TestApplyPreservesWebsiteAndIconsForOldManifest(t *testing.T) {
 		DefaultStyleBundle: "default",
 		BaseTemplate:       "default",
 		HeadJSON:           `{"icons":{"svg":"branding/favicon.svg"}}`,
-		SEOJSON:            `{"publicBaseURL":"https://example.com","robots":{"enabled":true}}`,
+		SEOJSON:            `{"publicBaseURL":"https://example.com","robots":{"enabled":true},"sitemap":{"enabled":true}}`,
 		ContentHash:        "sha256:website",
 	})
 	if err != nil {
@@ -431,7 +436,7 @@ spec:
 	if err != nil {
 		t.Fatalf("GetWebsiteByName() error = %v", err)
 	}
-	if website.HeadJSON != `{"icons":{"svg":"branding/favicon.svg"}}` || website.SEOJSON != `{"publicBaseURL":"https://example.com","robots":{"enabled":true}}` || website.ContentHash != "sha256:website" {
+	if website.HeadJSON != `{"icons":{"svg":"branding/favicon.svg"}}` || website.SEOJSON != `{"publicBaseURL":"https://example.com","robots":{"enabled":true},"sitemap":{"enabled":true}}` || website.ContentHash != "sha256:website" {
 		t.Fatalf("unexpected website row after old manifest apply: %#v", website)
 	}
 	icons, err := q.ListWebsiteIconsByWebsite(ctx, websiteID)
@@ -461,7 +466,7 @@ func TestApplyWebsiteWithoutSEOBlockClearsStoredSEO(t *testing.T) {
 		Name:               "sample",
 		DefaultStyleBundle: "default",
 		BaseTemplate:       "default",
-		SEOJSON:            `{"publicBaseURL":"https://example.com","robots":{"enabled":true}}`,
+		SEOJSON:            `{"publicBaseURL":"https://example.com","robots":{"enabled":true},"sitemap":{"enabled":true}}`,
 		ContentHash:        "sha256:before",
 	})
 	if err != nil {

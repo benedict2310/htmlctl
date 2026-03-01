@@ -145,6 +145,8 @@ spec:
             - /
           disallow:
             - /drafts/
+    sitemap:
+      enabled: true
 `,
 		"pages/index.page.yaml": `apiVersion: htmlctl.dev/v1
 kind: Page
@@ -192,6 +194,9 @@ spec:
 	}
 	if !site.Website.Spec.SEO.Robots.Enabled {
 		t.Fatalf("expected robots to be enabled")
+	}
+	if site.Website.Spec.SEO.Sitemap == nil || !site.Website.Spec.SEO.Sitemap.Enabled {
+		t.Fatalf("expected sitemap to be enabled")
 	}
 }
 

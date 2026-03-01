@@ -1,7 +1,7 @@
 # E8-S5 — Declarative `robots.txt` Generation
 
 **Epic:** Epic 8 — DX & Reliability  
-**Status:** Not Started  
+**Status:** Implemented (2026-03-01)  
 **Priority:** P2 (Medium — foundational crawl-control capability for production sites)  
 **Estimated Effort:** 1–2 days  
 **Dependencies:** E8-S4 (website-scoped favicon support / first-class `Website` desired state)  

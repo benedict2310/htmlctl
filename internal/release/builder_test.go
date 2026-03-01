@@ -56,6 +56,9 @@ func TestBuilderBuildSuccess(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(releaseDir, "robots.txt")); !os.IsNotExist(err) {
 		t.Fatalf("expected robots.txt to be absent when website seo robots is not enabled, got err=%v", err)
 	}
+	if _, err := os.Stat(filepath.Join(releaseDir, "sitemap.xml")); !os.IsNotExist(err) {
+		t.Fatalf("expected sitemap.xml to be absent when website seo sitemap is not enabled, got err=%v", err)
+	}
 	indexHTML, err := os.ReadFile(filepath.Join(releaseDir, "index.html"))
 	if err != nil {
 		t.Fatalf("read index.html: %v", err)
@@ -233,6 +236,199 @@ func TestBuilderBuildMaterializesRobotsTxt(t *testing.T) {
 	}
 	if seo["publicBaseURL"] != "https://example.com" {
 		t.Fatalf("unexpected manifest publicBaseURL: %#v", seo["publicBaseURL"])
+	}
+}
+
+func TestBuilderBuildMaterializesSitemapAndRobotsReference(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openReleaseTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+	queries := dbpkg.NewQueries(db)
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+
+	websiteID, _ := seedReleaseState(t, ctx, queries, blobStore)
+	if err := queries.UpdateWebsiteSpec(ctx, dbpkg.WebsiteRow{
+		ID:                 websiteID,
+		DefaultStyleBundle: "default",
+		BaseTemplate:       "default",
+		SEOJSON:            `{"publicBaseURL":"https://example.com","robots":{"enabled":true},"sitemap":{"enabled":true}}`,
+		ContentHash:        "sha256:website",
+	}); err != nil {
+		t.Fatalf("UpdateWebsiteSpec() error = %v", err)
+	}
+
+	builder, err := NewBuilder(db, blobStore, filepath.Join(dataDir, "websites"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatalf("NewBuilder() error = %v", err)
+	}
+	res, err := builder.Build(ctx, "sample", "staging")
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+
+	releaseDir := filepath.Join(dataDir, "websites", "sample", "envs", "staging", "releases", res.ReleaseID)
+	sitemap := readReleaseFileString(t, releaseDir, "sitemap.xml")
+	if !strings.Contains(sitemap, `<loc>https://example.com/</loc>`) {
+		t.Fatalf("expected sitemap.xml to include home URL, got %s", sitemap)
+	}
+	robots := readReleaseFileString(t, releaseDir, "robots.txt")
+	if !strings.Contains(robots, "Sitemap: https://example.com/sitemap.xml\n") {
+		t.Fatalf("expected robots.txt to reference sitemap.xml, got %s", robots)
+	}
+	manifest := readReleaseFileString(t, releaseDir, ".manifest.json")
+	var snapshot map[string]any
+	if err := json.Unmarshal([]byte(manifest), &snapshot); err != nil {
+		t.Fatalf("unmarshal release manifest snapshot: %v", err)
+	}
+	resources := snapshot["resources"].(map[string]any)
+	websiteResource := resources["website"].(map[string]any)
+	seo := websiteResource["seo"].(map[string]any)
+	sitemapConfig := seo["sitemap"].(map[string]any)
+	if sitemapConfig["enabled"] != true {
+		t.Fatalf("expected sitemap config in manifest snapshot, got %#v", sitemapConfig)
+	}
+}
+
+func TestBuilderBuildMaterializesSitemapWithoutRobots(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openReleaseTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+	queries := dbpkg.NewQueries(db)
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+
+	websiteID, _ := seedReleaseState(t, ctx, queries, blobStore)
+	if err := queries.UpdateWebsiteSpec(ctx, dbpkg.WebsiteRow{
+		ID:                 websiteID,
+		DefaultStyleBundle: "default",
+		BaseTemplate:       "default",
+		SEOJSON:            `{"publicBaseURL":"https://example.com","sitemap":{"enabled":true}}`,
+		ContentHash:        "sha256:website",
+	}); err != nil {
+		t.Fatalf("UpdateWebsiteSpec() error = %v", err)
+	}
+
+	builder, err := NewBuilder(db, blobStore, filepath.Join(dataDir, "websites"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatalf("NewBuilder() error = %v", err)
+	}
+	res, err := builder.Build(ctx, "sample", "staging")
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+
+	releaseDir := filepath.Join(dataDir, "websites", "sample", "envs", "staging", "releases", res.ReleaseID)
+	if _, err := os.Stat(filepath.Join(releaseDir, "sitemap.xml")); err != nil {
+		t.Fatalf("expected sitemap.xml to exist: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(releaseDir, "robots.txt")); !os.IsNotExist(err) {
+		t.Fatalf("expected robots.txt to remain absent when robots are disabled, got err=%v", err)
+	}
+}
+
+func TestBuilderBuildFailsWhenSitemapPublicBaseURLIsInvalid(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name    string
+		seoJSON string
+		wantErr string
+	}{
+		{
+			name:    "missing publicBaseURL",
+			seoJSON: `{"sitemap":{"enabled":true}}`,
+			wantErr: "sitemap.enabled requires publicBaseURL",
+		},
+		{
+			name:    "relative publicBaseURL",
+			seoJSON: `{"publicBaseURL":"/docs","sitemap":{"enabled":true}}`,
+			wantErr: "must be absolute",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dataDir := t.TempDir()
+			db := openReleaseTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+			defer db.Close()
+			queries := dbpkg.NewQueries(db)
+			blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+
+			websiteID, envID := seedReleaseState(t, ctx, queries, blobStore)
+			if err := queries.UpdateWebsiteSpec(ctx, dbpkg.WebsiteRow{
+				ID:                 websiteID,
+				DefaultStyleBundle: "default",
+				BaseTemplate:       "default",
+				SEOJSON:            tc.seoJSON,
+				ContentHash:        "sha256:website",
+			}); err != nil {
+				t.Fatalf("UpdateWebsiteSpec() error = %v", err)
+			}
+
+			builder, err := NewBuilder(db, blobStore, filepath.Join(dataDir, "websites"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+			if err != nil {
+				t.Fatalf("NewBuilder() error = %v", err)
+			}
+			_, err = builder.Build(ctx, "sample", "staging")
+			if err == nil {
+				t.Fatalf("expected build failure")
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("expected error containing %q, got %v", tc.wantErr, err)
+			}
+
+			releases, err := queries.ListReleasesByEnvironment(ctx, envID)
+			if err != nil {
+				t.Fatalf("ListReleasesByEnvironment() error = %v", err)
+			}
+			if len(releases) == 0 || releases[0].Status != "failed" {
+				t.Fatalf("expected failed release row, got %#v", releases)
+			}
+		})
+	}
+}
+
+func TestBuilderBuildFailsOnInvalidPublicBaseURLWhenSitemapDisabled(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openReleaseTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+	queries := dbpkg.NewQueries(db)
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+
+	websiteID, envID := seedReleaseState(t, ctx, queries, blobStore)
+	if err := queries.UpdateWebsiteSpec(ctx, dbpkg.WebsiteRow{
+		ID:                 websiteID,
+		DefaultStyleBundle: "default",
+		BaseTemplate:       "default",
+		SEOJSON:            `{"publicBaseURL":"/docs","robots":{"enabled":true}}`,
+		ContentHash:        "sha256:website",
+	}); err != nil {
+		t.Fatalf("UpdateWebsiteSpec() error = %v", err)
+	}
+
+	builder, err := NewBuilder(db, blobStore, filepath.Join(dataDir, "websites"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatalf("NewBuilder() error = %v", err)
+	}
+	_, err = builder.Build(ctx, "sample", "staging")
+	if err == nil {
+		t.Fatalf("expected build failure")
+	}
+	if !strings.Contains(err.Error(), "website seo publicBaseURL: must be absolute") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	releases, err := queries.ListReleasesByEnvironment(ctx, envID)
+	if err != nil {
+		t.Fatalf("ListReleasesByEnvironment() error = %v", err)
+	}
+	if len(releases) == 0 || releases[0].Status != "failed" {
+		t.Fatalf("expected failed release row, got %#v", releases)
 	}
 }
 

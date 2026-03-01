@@ -1,7 +1,7 @@
 # E8-S6 — Automatic `sitemap.xml` Generation
 
 **Epic:** Epic 8 — DX & Reliability  
-**Status:** Not Started  
+**Status:** In Progress (implemented locally, awaiting review/commit)  
 **Priority:** P2 (Medium — essential crawl/discovery feature for production SEO)  
 **Estimated Effort:** 1.5–2.5 days  
 **Dependencies:** E8-S4 (website-scoped favicon support / first-class `Website` desired state), E8-S5 (declarative `robots.txt` generation)  

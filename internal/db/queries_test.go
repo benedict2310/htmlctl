@@ -162,7 +162,7 @@ func TestUpdateWebsiteSpecPersistsWebsiteMetadataAndContentHash(t *testing.T) {
 		DefaultStyleBundle: "brand",
 		BaseTemplate:       "marketing",
 		HeadJSON:           `{"icons":{"svg":"branding/favicon.svg"}}`,
-		SEOJSON:            `{"publicBaseURL":"https://example.com","robots":{"enabled":true}}`,
+		SEOJSON:            `{"publicBaseURL":"https://example.com","robots":{"enabled":true},"sitemap":{"enabled":true}}`,
 		ContentHash:        "sha256:website",
 	}); err != nil {
 		t.Fatalf("UpdateWebsiteSpec() error = %v", err)
@@ -178,7 +178,7 @@ func TestUpdateWebsiteSpecPersistsWebsiteMetadataAndContentHash(t *testing.T) {
 	if row.HeadJSON != `{"icons":{"svg":"branding/favicon.svg"}}` {
 		t.Fatalf("unexpected website head_json: %q", row.HeadJSON)
 	}
-	if row.SEOJSON != `{"publicBaseURL":"https://example.com","robots":{"enabled":true}}` {
+	if row.SEOJSON != `{"publicBaseURL":"https://example.com","robots":{"enabled":true},"sitemap":{"enabled":true}}` {
 		t.Fatalf("unexpected website seo_json: %q", row.SEOJSON)
 	}
 	if row.ContentHash != "sha256:website" {

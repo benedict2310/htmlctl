@@ -53,6 +53,8 @@ All resources are stored in sqlite (metadata/manifests/audit), with blobs/releas
       - `userAgents`: ordered user-agent values
       - `allow`: ordered path-prefix rules
       - `disallow`: ordered path-prefix rules
+  - `sitemap` (optional):
+    - `enabled`: generate `/sitemap.xml` when `true`
 
 Example:
 
@@ -81,6 +83,8 @@ spec:
           disallow:
             - /preview/
             - /drafts/
+    sitemap:
+      enabled: true
 ```
 
 ### 2.2 Environment
@@ -232,10 +236,17 @@ Pages are not full HTML docs; they are layouts that reference components. Render
   - `/favicon.ico`
   - `/apple-touch-icon.png`
 - `robots.txt` is generated during release materialization from `website.yaml spec.seo.robots` and written to `/robots.txt` when enabled
+- `sitemap.xml` is generated during release materialization from `website.yaml spec.seo.sitemap` and declared pages when enabled
+- sitemap URL selection is deterministic:
+  - pages default to `publicBaseURL + route`
+  - relative `canonicalURL` values override the derived route URL when they resolve within the configured public-base scope
+  - absolute `canonicalURL` values are used only when they match the configured canonical public scheme+host and stay within the configured public-base path scope
+  - pages with `head.meta.robots` containing `noindex` or `none` are excluded
 - `robots.txt` generation is deterministic:
   - default allow-all policy when `enabled: true` and no groups are defined
   - groups emitted in input order
   - within each group: `User-agent`, then `Allow`, then `Disallow`, all in input order
+  - appends a single `Sitemap: .../sitemap.xml` line when both robots and sitemap are enabled
   - LF-only output, no request-time generation
 - Favicon support introduces no generation/transcoding step: htmlctl/htmlservd never resize, convert, or synthesize icon variants
 - Head metadata render order is deterministic:

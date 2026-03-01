@@ -23,8 +23,13 @@ type WebsiteHead struct {
 }
 
 type WebsiteSEO struct {
-	PublicBaseURL string         `yaml:"publicBaseURL" json:"publicBaseURL,omitempty"`
-	Robots        *WebsiteRobots `yaml:"robots,omitempty" json:"robots,omitempty"`
+	PublicBaseURL string          `yaml:"publicBaseURL" json:"publicBaseURL,omitempty"`
+	Robots        *WebsiteRobots  `yaml:"robots,omitempty" json:"robots,omitempty"`
+	Sitemap       *WebsiteSitemap `yaml:"sitemap,omitempty" json:"sitemap,omitempty"`
+}
+
+type WebsiteSitemap struct {
+	Enabled bool `yaml:"enabled" json:"enabled"`
 }
 
 type WebsiteRobots struct {

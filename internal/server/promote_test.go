@@ -25,6 +25,7 @@ func TestPromoteEndpointSuccess(t *testing.T) {
 	baseURL := "http://" + srv.Addr()
 
 	applySampleSite(t, baseURL)
+	setOnlyWebsiteSEOJSON(t, srv.db, `{"publicBaseURL":"https://example.com","robots":{"enabled":true},"sitemap":{"enabled":true}}`)
 	sourceReleaseID := createReleaseWithActor(t, baseURL, "alice")
 	ensureEnvironment(t, srv.db, "sample", "prod")
 
@@ -54,6 +55,11 @@ func TestPromoteEndpointSuccess(t *testing.T) {
 
 	stagingDir := filepath.Join(srv.dataPaths.WebsitesRoot, "sample", "envs", "staging", "releases", sourceReleaseID)
 	prodDir := filepath.Join(srv.dataPaths.WebsitesRoot, "sample", "envs", "prod", "releases", out.ReleaseID)
+	for _, rel := range []string{"robots.txt", "sitemap.xml"} {
+		if _, err := os.Stat(filepath.Join(stagingDir, rel)); err != nil {
+			t.Fatalf("expected staging release file %s to exist: %v", rel, err)
+		}
+	}
 	stagingHashes, err := computePromotedContentHashes(stagingDir)
 	if err != nil {
 		t.Fatalf("computePromotedContentHashes(staging) error = %v", err)
@@ -363,6 +369,13 @@ func setOnlyPageHeadJSON(t *testing.T, db *sql.DB, headJSON string) {
 	t.Helper()
 	if _, err := db.Exec(`UPDATE pages SET head_json = ? WHERE name = ?`, headJSON, "index"); err != nil {
 		t.Fatalf("UPDATE pages head_json error = %v", err)
+	}
+}
+
+func setOnlyWebsiteSEOJSON(t *testing.T, db *sql.DB, seoJSON string) {
+	t.Helper()
+	if _, err := db.Exec(`UPDATE websites SET seo_json = ? WHERE name = ?`, seoJSON, "sample"); err != nil {
+		t.Fatalf("UPDATE websites seo_json error = %v", err)
 	}
 }
 

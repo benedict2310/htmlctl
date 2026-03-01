@@ -333,4 +333,209 @@ New-client full apply requirement:
 
 - Should `appleTouch` be included in the first implementation or deferred to a follow-up story if the initial scope must stay tighter? Recommendation: include it now; it is small and fits the same model cleanly.
 
+## 13. Architectural Review Notes
+
+> Added after codebase review. These notes resolve ambiguities and provide implementation-ready guidance.
+
+### 13.1 Current State Baseline
+
+- `WebsiteSpec` currently only has `DefaultStyleBundle` and `BaseTemplate`. There are no `Head`, `Icons`, or `SEO` fields.
+- `WebsiteRow` has no JSON metadata columns — only `id`, `name`, `default_style_bundle`, `base_template`, `created_at`, `updated_at`.
+- The highest existing DB migration is **v4** (`telemetry_events`). This story's migration is **005**.
+- E7-S1 is the correct pattern to follow: typed structs with dual `yaml`/`json` tags, `HeadJSON` column on the row, `HeadJSONOrDefault()` helper, and deterministic HTML rendering in `pkg/renderer/head.go`.
+
+### 13.2 DB Schema Clarifications
+
+**Slot naming in `website_icons.slot`:** Use lowercase snake_case to match Go/SQL conventions:
+- `svg` → SVG favicon slot
+- `ico` → ICO favicon slot
+- `apple_touch` → Apple touch icon slot (not `appleTouch`)
+
+The Go struct field remains `AppleTouch string` with `yaml:"appleTouch"` tag; the DB slot value is `"apple_touch"`.
+
+**`head_json` scope:** Persist the full marshaled `WebsiteSpec.Head` (the `*WebsiteHead` pointer) as JSON, mirroring how `pages.head_json` stores `PageSpec.Head`. This accommodates future website-level head additions. E8-S5 will add a separate `seo_json` column for SEO/robots metadata; do **not** mix them into `head_json`.
+
+**Migration 005 SQL template:**
+```sql
+ALTER TABLE websites ADD COLUMN head_json TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE websites ADD COLUMN content_hash TEXT NOT NULL DEFAULT '';
+
+CREATE TABLE IF NOT EXISTS website_icons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    website_id INTEGER NOT NULL REFERENCES websites(id) ON DELETE RESTRICT,
+    slot TEXT NOT NULL CHECK(slot IN ('svg', 'ico', 'apple_touch')),
+    source_path TEXT NOT NULL,
+    content_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    content_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    UNIQUE(website_id, slot)
+);
+CREATE INDEX IF NOT EXISTS idx_website_icons_website_id ON website_icons(website_id);
+```
+
+Note the `CHECK` constraint on `slot` — it prevents the table from becoming a generic file store.
+
+### 13.3 Resource Kind & Name Conventions
+
+**Bundle resource kinds** (add to allowed list in `internal/bundle/manifest.go`):
+- `"website"` — references exactly `website.yaml`, must appear at most once per bundle
+- `"websiteicon"` — references one branding file per slot
+
+**WebsiteIcon resource name pattern:** `"website-icon-{slot}"` with slot as snake_case:
+- `"website-icon-svg"`, `"website-icon-ico"`, `"website-icon-apple-touch"`
+
+This keeps names stable, distinct from file paths, and matching DB slot naming.
+
+**Bundle manifest validation additions in `manifest.go`:**
+```go
+case "website":
+    if ref.File != "website.yaml" {
+        return fmt.Errorf("website resource file must be website.yaml")
+    }
+case "websiteicon":
+    validIconNames := map[string]bool{
+        "website-icon-svg": true,
+        "website-icon-ico": true,
+        "website-icon-apple-touch": true,
+    }
+    if !validIconNames[r.Name] {
+        return fmt.Errorf("invalid websiteicon name %q", r.Name)
+    }
+```
+
+### 13.4 Model Additions to `pkg/model/types.go`
+
+```go
+type WebsiteIcons struct {
+    SVG        string `yaml:"svg,omitempty"        json:"svg,omitempty"`
+    ICO        string `yaml:"ico,omitempty"        json:"ico,omitempty"`
+    AppleTouch string `yaml:"appleTouch,omitempty" json:"appleTouch,omitempty"`
+}
+
+type WebsiteHead struct {
+    Icons *WebsiteIcons `yaml:"icons,omitempty" json:"icons,omitempty"`
+}
+
+// Extend WebsiteSpec:
+type WebsiteSpec struct {
+    DefaultStyleBundle string       `yaml:"defaultStyleBundle"`
+    BaseTemplate       string       `yaml:"baseTemplate"`
+    Head               *WebsiteHead `yaml:"head,omitempty" json:"head,omitempty"`
+}
+```
+
+**Add `Branding` field to `Site`:**
+```go
+type BrandingAsset struct {
+    Slot       string // db/bundle slot: "svg", "ico", "apple_touch"
+    SourcePath string // relative to site root, e.g. "branding/favicon.svg"
+}
+
+type Site struct {
+    // existing fields ...
+    Branding map[string]BrandingAsset // keyed by slot, e.g. "svg" -> {...}
+}
+```
+
+### 13.5 Loader Validation Additions
+
+Add to `pkg/loader/validate.go`:
+- `spec.head.icons.svg` must end with `.svg` (case-insensitive)
+- `spec.head.icons.ico` must end with `.ico`
+- `spec.head.icons.appleTouch` must end with `.png`
+- Referenced file must exist under `branding/` (checked at load time, not just at validation time)
+- Reject paths with `..` components
+
+### 13.6 DB Query Additions
+
+Required new helpers in `internal/db/queries.go`:
+- `UpsertWebsiteHead(ctx, websiteID, headJSON, contentHash string) error`
+- `UpsertWebsiteIcon(ctx, WebsiteIconRow) error` — uses `ON CONFLICT(website_id, slot) DO UPDATE`
+- `ListWebsiteIconsByWebsite(ctx, websiteID) ([]WebsiteIconRow, error)` — ordered by `slot`
+- `DeleteWebsiteIconsNotIn(ctx, websiteID, slots []string) (int64, error)` — used for full-apply cleanup
+- Update `GetWebsiteByName` to `SELECT` new columns `head_json`, `content_hash`
+
+Add `WebsiteIconRow` to `internal/db/models.go`:
+```go
+type WebsiteIconRow struct {
+    ID          int64
+    WebsiteID   int64
+    Slot        string
+    SourcePath  string
+    ContentType string
+    SizeBytes   int64
+    ContentHash string
+    CreatedAt   string
+    UpdatedAt   string
+}
+```
+
+### 13.7 Renderer Changes
+
+**`pageTemplateData` struct** (in `pkg/renderer/template.go`) needs a new field:
+```go
+type pageTemplateData struct {
+    Title            string
+    Description      string
+    WebsiteIconsHTML template.HTML // NEW — injected between description and HeadMetaHTML
+    HeadMetaHTML     template.HTML
+    StyleHrefs       []string
+    ContentHTML      template.HTML
+    ScriptSrc        string
+}
+```
+
+**Template injection order** (between `<meta name="description">` and HeadMetaHTML):
+```html
+{{- if .WebsiteIconsHTML }}
+{{.WebsiteIconsHTML}}{{- end }}
+```
+
+**New rendering function** (add to `pkg/renderer/head.go` or new `pkg/renderer/website_icons.go`):
+```go
+func renderWebsiteIcons(icons *model.WebsiteIcons) (template.HTML, error)
+```
+
+This generates `<link rel="icon" ...>` tags; only emits tags for configured slots; output is deterministic.
+
+Add `pkg/renderer/website_icons.go` to the **Files to Create** list.
+
+### 13.8 State Merge Full-Apply Cleanup
+
+In `internal/state/merge.go`, full-apply cleanup for icons requires checking whether any `WebsiteIcon` resources were in the manifest before running `DeleteWebsiteIconsNotIn`. If no `WebsiteIcon` resources are present (old-style bundle), do **not** call the delete helper — this preserves existing icon state.
+
+```go
+// Pseudo-code pattern:
+hasIconResources := /* any res.Kind == "websiteicon" in manifest */
+if b.Manifest.Mode == bundle.ApplyModeFull && hasIconResources {
+    deleted, err := q.DeleteWebsiteIconsNotIn(ctx, website.ID, keepSlots)
+    // track deletions
+}
+```
+
+Apply the same pattern for the `Website` resource: only update `head_json`/`content_hash` if a `Website` resource is present in the manifest.
+
+### 13.9 Release Builder Materialization Sequence
+
+The current materialization sequence in `builder.go` is:
+1. `materializeSource` → reconstructs YAML source tree
+2. `loader.LoadSite` → parses into model
+3. `ensureOGBlobs` → per-page OG image blobs
+4. `renderer.Render` → renders HTML
+5. `copyOriginalStyles` → copies CSS
+6. `copyOriginalAssets` → copies assets from blob store
+
+**Insert after step 6:**
+```
+7. materializeFaviconFiles → writes /favicon.svg, /favicon.ico, /apple-touch-icon.png from blobs
+```
+
+`materializeSource` must also write back branding source files from blobs so `loader.LoadSite` can parse the fully reconstructed site (including `website.yaml` with head/icons and branding files).
+
+### 13.10 Coordination with E8-S5
+
+E8-S5 (robots.txt) will add a separate `seo_json TEXT NOT NULL DEFAULT '{}'` column to the `websites` table in a separate **migration 006**. Do not pre-create this column in migration 005. The two metadata stores (`head_json` for favicon/head, `seo_json` for SEO/robots) remain isolated by design.
+
 ---

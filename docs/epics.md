@@ -123,6 +123,8 @@ by guarding the field with `sync.RWMutex`. All 428 tests pass clean under `-race
 | 8.2 | Automatic OG image generation (Implemented) | [E8-S2](stories/E8-S2-og-image-generation.md) |
 | 8.3 | Promote metadata host warnings | [E8-S3](stories/E8-S3-promote-metadata-host-warnings.md) |
 | 8.4 | Website-scoped favicon support | [E8-S4](stories/E8-S4-website-favicon-support.md) |
+| 8.5 | Declarative `robots.txt` generation | [E8-S5](stories/E8-S5-robots-txt-generation.md) |
+| 8.6 | Automatic `sitemap.xml` generation | [E8-S6](stories/E8-S6-sitemap-xml-generation.md) |
 
 ---
 

@@ -25,12 +25,24 @@ func (s *Server) generateCaddyConfig(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	backendsByEnvironment := map[int64][]caddy.Backend{}
+	backendRows, err := q.ListBackends(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, backendRow := range backendRows {
+		backendsByEnvironment[backendRow.EnvironmentID] = append(backendsByEnvironment[backendRow.EnvironmentID], caddy.Backend{
+			PathPrefix: backendRow.PathPrefix,
+			Upstream:   backendRow.Upstream,
+		})
+	}
 	sites := make([]caddy.Site, 0, len(rows))
 	for _, row := range rows {
 		root := filepath.Join(s.dataPaths.WebsitesRoot, row.WebsiteName, "envs", row.EnvironmentName, "current")
 		sites = append(sites, caddy.Site{
-			Domain: row.Domain,
-			Root:   filepath.ToSlash(root),
+			Domain:   row.Domain,
+			Root:     filepath.ToSlash(root),
+			Backends: append([]caddy.Backend(nil), backendsByEnvironment[row.EnvironmentID]...),
 		})
 	}
 	return caddy.GenerateConfigWithOptions(sites, caddy.ConfigOptions{

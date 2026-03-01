@@ -13,6 +13,8 @@ const (
 	OperationPromote         = "promote"
 	OperationDomainAdd       = "domain.add"
 	OperationDomainRemove    = "domain.remove"
+	OperationBackendAdd      = "backend.add"
+	OperationBackendRemove   = "backend.remove"
 )
 
 type Entry struct {

@@ -127,6 +127,22 @@ type DomainBindingsResponse struct {
 	Domains []DomainBinding `json:"domains" yaml:"domains"`
 }
 
+type Backend struct {
+	ID          int64  `json:"id,omitempty" yaml:"id,omitempty"`
+	PathPrefix  string `json:"pathPrefix" yaml:"pathPrefix"`
+	Upstream    string `json:"upstream" yaml:"upstream"`
+	CreatedAt   string `json:"createdAt,omitempty" yaml:"createdAt,omitempty"`
+	UpdatedAt   string `json:"updatedAt,omitempty" yaml:"updatedAt,omitempty"`
+	Website     string `json:"website,omitempty" yaml:"website,omitempty"`
+	Environment string `json:"environment,omitempty" yaml:"environment,omitempty"`
+}
+
+type BackendsResponse struct {
+	Website     string    `json:"website,omitempty" yaml:"website,omitempty"`
+	Environment string    `json:"environment,omitempty" yaml:"environment,omitempty"`
+	Backends    []Backend `json:"backends" yaml:"backends"`
+}
+
 type LogsResponse struct {
 	Entries []AuditLogEntry `json:"entries" yaml:"entries"`
 	Total   int             `json:"total" yaml:"total"`

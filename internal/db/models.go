@@ -138,6 +138,15 @@ type DomainBindingResolvedRow struct {
 	UpdatedAt       string
 }
 
+type BackendRow struct {
+	ID            int64
+	EnvironmentID int64
+	PathPrefix    string
+	Upstream      string
+	CreatedAt     string
+	UpdatedAt     string
+}
+
 type TelemetryEventRow struct {
 	ID            int64
 	EnvironmentID int64

@@ -100,6 +100,7 @@ func NewRootCmd(version string) *cobra.Command {
 	cmd.AddCommand(newRolloutCmd())
 	cmd.AddCommand(newPromoteCmd())
 	cmd.AddCommand(newDomainCmd())
+	cmd.AddCommand(newBackendCmd())
 	cmd.AddCommand(newLogsCmd())
 	cmd.AddCommand(newVersionCmd(version))
 

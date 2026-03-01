@@ -601,6 +601,129 @@ func (q *Queries) DeleteDomainBindingByDomain(ctx context.Context, domain string
 	return affected > 0, nil
 }
 
+func (q *Queries) UpsertBackend(ctx context.Context, in BackendRow) error {
+	_, err := q.db.ExecContext(ctx, `
+INSERT INTO environment_backends(environment_id, path_prefix, upstream)
+VALUES(?, ?, ?)
+ON CONFLICT(environment_id, path_prefix) DO UPDATE SET
+  upstream=excluded.upstream,
+  updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+`, in.EnvironmentID, in.PathPrefix, in.Upstream)
+	if err != nil {
+		return fmt.Errorf("upsert backend: %w", err)
+	}
+	return nil
+}
+
+func (q *Queries) ListBackendsByEnvironment(ctx context.Context, environmentID int64) ([]BackendRow, error) {
+	rows, err := q.db.QueryContext(ctx, `
+SELECT
+  id,
+  environment_id,
+  path_prefix,
+  upstream,
+  created_at,
+  updated_at
+FROM environment_backends
+WHERE environment_id = ?
+ORDER BY path_prefix ASC
+`, environmentID)
+	if err != nil {
+		return nil, fmt.Errorf("list backends by environment: %w", err)
+	}
+	defer rows.Close()
+
+	out, err := scanBackendRows(rows)
+	if err != nil {
+		return nil, fmt.Errorf("list backends by environment: %w", err)
+	}
+	return out, nil
+}
+
+func (q *Queries) GetBackendByPathPrefix(ctx context.Context, environmentID int64, pathPrefix string) (BackendRow, error) {
+	var out BackendRow
+	err := q.db.QueryRowContext(ctx, `
+SELECT
+  id,
+  environment_id,
+  path_prefix,
+  upstream,
+  created_at,
+  updated_at
+FROM environment_backends
+WHERE environment_id = ? AND path_prefix = ?
+`, environmentID, pathPrefix).Scan(
+		&out.ID,
+		&out.EnvironmentID,
+		&out.PathPrefix,
+		&out.Upstream,
+		&out.CreatedAt,
+		&out.UpdatedAt,
+	)
+	if err != nil {
+		return out, fmt.Errorf("get backend by path prefix: %w", err)
+	}
+	return out, nil
+}
+
+func (q *Queries) ListBackends(ctx context.Context) ([]BackendRow, error) {
+	rows, err := q.db.QueryContext(ctx, `
+SELECT
+  id,
+  environment_id,
+  path_prefix,
+  upstream,
+  created_at,
+  updated_at
+FROM environment_backends
+ORDER BY environment_id ASC, path_prefix ASC
+`)
+	if err != nil {
+		return nil, fmt.Errorf("list backends: %w", err)
+	}
+	defer rows.Close()
+
+	out, err := scanBackendRows(rows)
+	if err != nil {
+		return nil, fmt.Errorf("list backends: %w", err)
+	}
+	return out, nil
+}
+
+func (q *Queries) DeleteBackendByPathPrefix(ctx context.Context, environmentID int64, pathPrefix string) (bool, error) {
+	res, err := q.db.ExecContext(ctx, `DELETE FROM environment_backends WHERE environment_id = ? AND path_prefix = ?`, environmentID, pathPrefix)
+	if err != nil {
+		return false, fmt.Errorf("delete backend: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("backend rows affected: %w", err)
+	}
+	return affected > 0, nil
+}
+
+func scanBackendRows(rows *sql.Rows) ([]BackendRow, error) {
+	out := []BackendRow{}
+	for rows.Next() {
+		var row BackendRow
+		if err := rows.Scan(
+			&row.ID,
+			&row.EnvironmentID,
+			&row.PathPrefix,
+			&row.Upstream,
+			&row.CreatedAt,
+			&row.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan backend row: %w", err)
+		}
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate backend rows: %w", err)
+	}
+	return out, nil
+}
+
 func (q *Queries) InsertTelemetryEvent(ctx context.Context, in TelemetryEventRow) (int64, error) {
 	res, err := q.db.ExecContext(
 		ctx,

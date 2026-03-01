@@ -26,6 +26,8 @@ func (s *Server) handleWebsiteAPI(w http.ResponseWriter, r *http.Request) {
 		s.handleManifest(w, r)
 	case strings.HasSuffix(r.URL.Path, "/logs"):
 		s.handleLogs(w, r)
+	case strings.HasSuffix(r.URL.Path, "/backends"):
+		s.handleBackends(w, r)
 	case strings.HasSuffix(r.URL.Path, "/status"):
 		s.handleStatus(w, r)
 	case strings.HasSuffix(r.URL.Path, "/telemetry/events"):

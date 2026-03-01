@@ -6,11 +6,19 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	backendpkg "github.com/benedict2310/htmlctl/internal/backend"
 )
 
+type Backend struct {
+	PathPrefix string
+	Upstream   string
+}
+
 type Site struct {
-	Domain string
-	Root   string
+	Domain   string
+	Root     string
+	Backends []Backend
 }
 
 type ConfigOptions struct {
@@ -59,12 +67,28 @@ func GenerateConfigWithOptions(sites []Site, opts ConfigOptions) (string, error)
 		if opts.DisableAutoHTTPS {
 			siteAddress = "http://" + domain
 		}
+		backends := append([]Backend(nil), site.Backends...)
+		sort.Slice(backends, func(i, j int) bool {
+			return backends[i].PathPrefix < backends[j].PathPrefix
+		})
+		for _, backend := range backends {
+			if _, err := backendpkg.ValidatePathPrefix(backend.PathPrefix); err != nil {
+				return "", fmt.Errorf("invalid backend path prefix for domain %q: %w", domain, err)
+			}
+			if _, err := backendpkg.ValidateUpstreamURL(backend.Upstream); err != nil {
+				return "", fmt.Errorf("invalid backend upstream for domain %q: %w", domain, err)
+			}
+		}
+
 		fmt.Fprintf(&b, "%s {\n", siteAddress)
 		fmt.Fprintf(&b, "\troot * %s\n", root)
 		if opts.TelemetryPort > 0 {
 			b.WriteString("\thandle /collect/v1/events* {\n")
 			fmt.Fprintf(&b, "\t\treverse_proxy 127.0.0.1:%d\n", opts.TelemetryPort)
 			b.WriteString("\t}\n")
+		}
+		for _, backend := range backends {
+			fmt.Fprintf(&b, "\treverse_proxy %s %s\n", backend.PathPrefix, backend.Upstream)
 		}
 		b.WriteString("\tfile_server\n")
 		b.WriteString("}\n\n")

@@ -21,6 +21,9 @@ func TestParsePathsWithValidNames(t *testing.T) {
 	if gotWebsite, gotEnv, ok, err := parseManifestPath("/api/v1/websites/" + website + "/environments/" + env + "/manifest"); !ok || err != nil || gotWebsite != website || gotEnv != env {
 		t.Fatalf("parseManifestPath() = (%q, %q, %v, %v)", gotWebsite, gotEnv, ok, err)
 	}
+	if gotWebsite, gotEnv, ok, err := parseBackendsPath("/api/v1/websites/" + website + "/environments/" + env + "/backends"); !ok || err != nil || gotWebsite != website || gotEnv != env {
+		t.Fatalf("parseBackendsPath() = (%q, %q, %v, %v)", gotWebsite, gotEnv, ok, err)
+	}
 	if gotWebsite, gotEnv, envScoped, ok, err := parseLogsPath("/api/v1/websites/" + website + "/environments/" + env + "/logs"); !ok || err != nil || !envScoped || gotWebsite != website || gotEnv != env {
 		t.Fatalf("parseLogsPath(env) = (%q, %q, %v, %v, %v)", gotWebsite, gotEnv, envScoped, ok, err)
 	}
@@ -56,6 +59,9 @@ func TestParsePathsRejectInvalidNames(t *testing.T) {
 	}
 	if _, _, ok, err := parseManifestPath("/api/v1/websites/sample/environments/staging%1/manifest"); ok || err == nil {
 		t.Fatalf("expected manifest path name validation error, got ok=%v err=%v", ok, err)
+	}
+	if _, _, ok, err := parseBackendsPath("/api/v1/websites/sample/environments/staging%1/backends"); ok || err == nil {
+		t.Fatalf("expected backends path name validation error, got ok=%v err=%v", ok, err)
 	}
 	if _, _, _, ok, err := parseLogsPath("/api/v1/websites/future%lab/logs"); ok || err == nil {
 		t.Fatalf("expected website logs path name validation error, got ok=%v err=%v", ok, err)

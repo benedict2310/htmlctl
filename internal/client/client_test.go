@@ -452,6 +452,69 @@ func TestDomainBindingClientMethods(t *testing.T) {
 	}
 }
 
+func TestBackendClientMethods(t *testing.T) {
+	call := 0
+	mock := &mockTransport{
+		doFn: func(ctx context.Context, req *http.Request) (*http.Response, error) {
+			call++
+			switch call {
+			case 1:
+				if req.Method != http.MethodPost || req.URL.Path != "/api/v1/websites/sample/environments/staging/backends" {
+					t.Fatalf("unexpected add request: %s %s", req.Method, req.URL.String())
+				}
+				if req.Header.Get("Content-Type") != "application/json" {
+					t.Fatalf("expected JSON content type, got %q", req.Header.Get("Content-Type"))
+				}
+				body, err := io.ReadAll(req.Body)
+				if err != nil {
+					t.Fatalf("read add request body: %v", err)
+				}
+				if got := string(body); !strings.Contains(got, `"pathPrefix":"/api/*"`) || !strings.Contains(got, `"upstream":"https://api.example.com"`) {
+					t.Fatalf("unexpected add request body %s", got)
+				}
+				return jsonResponse(http.StatusCreated, `{"pathPrefix":"/api/*","upstream":"https://api.example.com","createdAt":"2026-03-01T12:00:00Z","updatedAt":"2026-03-01T12:00:00Z"}`), nil
+			case 2:
+				if req.Method != http.MethodGet || req.URL.Path != "/api/v1/websites/sample/environments/staging/backends" {
+					t.Fatalf("unexpected list request: %s %s", req.Method, req.URL.String())
+				}
+				return jsonResponse(http.StatusOK, `{"website":"sample","environment":"staging","backends":[{"pathPrefix":"/api/*","upstream":"https://api.example.com","createdAt":"2026-03-01T12:00:00Z","updatedAt":"2026-03-01T12:00:00Z"}]}`), nil
+			case 3:
+				if req.Method != http.MethodDelete || req.URL.Path != "/api/v1/websites/sample/environments/staging/backends" {
+					t.Fatalf("unexpected remove request: %s %s", req.Method, req.URL.String())
+				}
+				if req.URL.RawQuery != "path=%2Fapi%2F%2A" {
+					t.Fatalf("unexpected remove query %q", req.URL.RawQuery)
+				}
+				return jsonResponse(http.StatusNoContent, ``), nil
+			default:
+				t.Fatalf("unexpected call count %d", call)
+				return nil, nil
+			}
+		},
+	}
+
+	api := New(mock)
+	created, err := api.AddBackend(context.Background(), "sample", "staging", "/api/*", "https://api.example.com")
+	if err != nil {
+		t.Fatalf("AddBackend() error = %v", err)
+	}
+	if created.PathPrefix != "/api/*" || created.Upstream != "https://api.example.com" {
+		t.Fatalf("unexpected AddBackend response: %#v", created)
+	}
+
+	listed, err := api.ListBackends(context.Background(), "sample", "staging")
+	if err != nil {
+		t.Fatalf("ListBackends() error = %v", err)
+	}
+	if len(listed.Backends) != 1 || listed.Backends[0].PathPrefix != "/api/*" {
+		t.Fatalf("unexpected ListBackends response: %#v", listed)
+	}
+
+	if err := api.RemoveBackend(context.Background(), "sample", "staging", "/api/*"); err != nil {
+		t.Fatalf("RemoveBackend() error = %v", err)
+	}
+}
+
 type mockTransport struct {
 	doFn func(ctx context.Context, req *http.Request) (*http.Response, error)
 }

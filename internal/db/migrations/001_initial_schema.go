@@ -138,5 +138,10 @@ func All() []Migration {
 			Name:    "website_seo",
 			UpSQL:   websiteSEOMigrationSQL,
 		},
+		{
+			Version: 7,
+			Name:    "environment_backends",
+			UpSQL:   environmentBackendsMigrationSQL,
+		},
 	}
 }

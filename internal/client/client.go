@@ -307,6 +307,64 @@ func (c *APIClient) DeleteDomainBinding(ctx context.Context, domain string) erro
 	return c.do(req, nil)
 }
 
+func (c *APIClient) AddBackend(ctx context.Context, website, environment, pathPrefix, upstream string) (Backend, error) {
+	pathValue := fmt.Sprintf(
+		"/api/v1/websites/%s/environments/%s/backends",
+		url.PathEscape(strings.TrimSpace(website)),
+		url.PathEscape(strings.TrimSpace(environment)),
+	)
+	payload, err := json.Marshal(map[string]string{
+		"pathPrefix": strings.TrimSpace(pathPrefix),
+		"upstream":   strings.TrimSpace(upstream),
+	})
+	if err != nil {
+		return Backend{}, fmt.Errorf("marshal backend payload: %w", err)
+	}
+	req, err := c.newRequest(ctx, http.MethodPost, pathValue, bytes.NewReader(payload))
+	if err != nil {
+		return Backend{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	var out Backend
+	if err := c.do(req, &out); err != nil {
+		return Backend{}, err
+	}
+	return out, nil
+}
+
+func (c *APIClient) ListBackends(ctx context.Context, website, environment string) (BackendsResponse, error) {
+	pathValue := fmt.Sprintf(
+		"/api/v1/websites/%s/environments/%s/backends",
+		url.PathEscape(strings.TrimSpace(website)),
+		url.PathEscape(strings.TrimSpace(environment)),
+	)
+	req, err := c.newRequest(ctx, http.MethodGet, pathValue, nil)
+	if err != nil {
+		return BackendsResponse{}, err
+	}
+
+	var out BackendsResponse
+	if err := c.do(req, &out); err != nil {
+		return BackendsResponse{}, err
+	}
+	return out, nil
+}
+
+func (c *APIClient) RemoveBackend(ctx context.Context, website, environment, pathPrefix string) error {
+	pathValue := fmt.Sprintf(
+		"/api/v1/websites/%s/environments/%s/backends?path=%s",
+		url.PathEscape(strings.TrimSpace(website)),
+		url.PathEscape(strings.TrimSpace(environment)),
+		url.QueryEscape(strings.TrimSpace(pathPrefix)),
+	)
+	req, err := c.newRequest(ctx, http.MethodDelete, pathValue, nil)
+	if err != nil {
+		return err
+	}
+	return c.do(req, nil)
+}
+
 func (c *APIClient) GetLogs(ctx context.Context, website, environment string, limit int) (LogsResponse, error) {
 	path := fmt.Sprintf(
 		"/api/v1/websites/%s/environments/%s/logs",

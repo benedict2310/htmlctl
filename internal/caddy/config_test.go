@@ -48,6 +48,20 @@ func TestGenerateConfigRejectsInvalidSite(t *testing.T) {
 	if _, err := GenerateConfig([]Site{{Domain: "example.com", Root: "/srv/sample/{current}"}}); err == nil {
 		t.Fatalf("expected forbidden-root-character error")
 	}
+	if _, err := GenerateConfig([]Site{{
+		Domain:   "example.com",
+		Root:     "/srv/sample/current",
+		Backends: []Backend{{PathPrefix: "/api/", Upstream: "https://api.example.com"}},
+	}}); err == nil {
+		t.Fatalf("expected invalid backend path prefix error")
+	}
+	if _, err := GenerateConfig([]Site{{
+		Domain:   "example.com",
+		Root:     "/srv/sample/current",
+		Backends: []Backend{{PathPrefix: "/api/*", Upstream: "ftp://api.example.com"}},
+	}}); err == nil {
+		t.Fatalf("expected invalid backend upstream error")
+	}
 }
 
 func TestGenerateConfigWithAutoHTTPSDisabled(t *testing.T) {
@@ -77,6 +91,63 @@ func TestGenerateConfigWithTelemetryProxy(t *testing.T) {
 	}
 	if !strings.Contains(cfg, "reverse_proxy 127.0.0.1:9400") {
 		t.Fatalf("expected telemetry reverse proxy in config, got:\n%s", cfg)
+	}
+}
+
+func TestGenerateConfigWithBackends(t *testing.T) {
+	cfg, err := GenerateConfig([]Site{
+		{
+			Domain: "example.com",
+			Root:   "/srv/sample/prod/current",
+			Backends: []Backend{
+				{PathPrefix: "/auth/*", Upstream: "https://auth.example.com"},
+				{PathPrefix: "/api/*", Upstream: "https://api.example.com"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("GenerateConfig() error = %v", err)
+	}
+
+	apiIndex := strings.Index(cfg, "\treverse_proxy /api/* https://api.example.com")
+	authIndex := strings.Index(cfg, "\treverse_proxy /auth/* https://auth.example.com")
+	fileServerIndex := strings.Index(cfg, "\tfile_server")
+	if apiIndex == -1 || authIndex == -1 || fileServerIndex == -1 {
+		t.Fatalf("expected backend directives and file_server, got:\n%s", cfg)
+	}
+	if !(apiIndex < authIndex && authIndex < fileServerIndex) {
+		t.Fatalf("expected sorted backend directives before file_server, got:\n%s", cfg)
+	}
+}
+
+func TestGenerateConfigMixedBackendSites(t *testing.T) {
+	cfg, err := GenerateConfig([]Site{
+		{
+			Domain: "example.com",
+			Root:   "/srv/sample/prod/current",
+			Backends: []Backend{
+				{PathPrefix: "/api/*", Upstream: "https://api.example.com"},
+			},
+		},
+		{
+			Domain: "static.example.com",
+			Root:   "/srv/sample/static/current",
+		},
+	})
+	if err != nil {
+		t.Fatalf("GenerateConfig() error = %v", err)
+	}
+	if strings.Count(cfg, "reverse_proxy /api/* https://api.example.com") != 1 {
+		t.Fatalf("expected one backend directive, got:\n%s", cfg)
+	}
+	staticBlockStart := strings.Index(cfg, "static.example.com {")
+	staticBlockEnd := strings.Index(cfg[staticBlockStart:], "}\n")
+	if staticBlockStart == -1 || staticBlockEnd == -1 {
+		t.Fatalf("expected static.example.com block, got:\n%s", cfg)
+	}
+	staticBlock := cfg[staticBlockStart : staticBlockStart+staticBlockEnd]
+	if strings.Contains(staticBlock, "reverse_proxy /api/* https://api.example.com") {
+		t.Fatalf("did not expect backend directive in static-only site block, got:\n%s", staticBlock)
 	}
 }
 

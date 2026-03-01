@@ -59,6 +59,101 @@ func TestGenerateCaddyConfigFromDomainBindings(t *testing.T) {
 	}
 }
 
+func TestGenerateCaddyConfigIncludesEnvironmentBackends(t *testing.T) {
+	srv := startTestServer(t)
+	q := dbpkg.NewQueries(srv.db)
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{
+		Name:               "sample",
+		DefaultStyleBundle: "default",
+		BaseTemplate:       "default",
+	})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	envID, err := q.InsertEnvironment(ctx, dbpkg.EnvironmentRow{WebsiteID: websiteID, Name: "prod"})
+	if err != nil {
+		t.Fatalf("InsertEnvironment(prod) error = %v", err)
+	}
+	if _, err := q.InsertDomainBinding(ctx, dbpkg.DomainBindingRow{
+		Domain:        "example.com",
+		EnvironmentID: envID,
+	}); err != nil {
+		t.Fatalf("InsertDomainBinding() error = %v", err)
+	}
+	if err := q.UpsertBackend(ctx, dbpkg.BackendRow{
+		EnvironmentID: envID,
+		PathPrefix:    "/api/*",
+		Upstream:      "https://api.example.com",
+	}); err != nil {
+		t.Fatalf("UpsertBackend(/api/*) error = %v", err)
+	}
+	if err := q.UpsertBackend(ctx, dbpkg.BackendRow{
+		EnvironmentID: envID,
+		PathPrefix:    "/auth/*",
+		Upstream:      "https://auth.example.com",
+	}); err != nil {
+		t.Fatalf("UpsertBackend(/auth/*) error = %v", err)
+	}
+
+	cfg, err := srv.generateCaddyConfig(ctx)
+	if err != nil {
+		t.Fatalf("generateCaddyConfig() error = %v", err)
+	}
+	apiIndex := strings.Index(cfg, "reverse_proxy /api/* https://api.example.com")
+	authIndex := strings.Index(cfg, "reverse_proxy /auth/* https://auth.example.com")
+	fileServerIndex := strings.Index(cfg, "\tfile_server")
+	if apiIndex == -1 || authIndex == -1 || fileServerIndex == -1 {
+		t.Fatalf("expected backend directives and file_server, got:\n%s", cfg)
+	}
+	if !(apiIndex < authIndex && authIndex < fileServerIndex) {
+		t.Fatalf("expected sorted backend directives before file_server, got:\n%s", cfg)
+	}
+}
+
+func TestGenerateCaddyConfigSharesEnvironmentBackendsAcrossDomains(t *testing.T) {
+	srv := startTestServer(t)
+	q := dbpkg.NewQueries(srv.db)
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{
+		Name:               "sample",
+		DefaultStyleBundle: "default",
+		BaseTemplate:       "default",
+	})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	envID, err := q.InsertEnvironment(ctx, dbpkg.EnvironmentRow{WebsiteID: websiteID, Name: "prod"})
+	if err != nil {
+		t.Fatalf("InsertEnvironment(prod) error = %v", err)
+	}
+	for _, domain := range []string{"example.com", "www.example.com"} {
+		if _, err := q.InsertDomainBinding(ctx, dbpkg.DomainBindingRow{
+			Domain:        domain,
+			EnvironmentID: envID,
+		}); err != nil {
+			t.Fatalf("InsertDomainBinding(%s) error = %v", domain, err)
+		}
+	}
+	if err := q.UpsertBackend(ctx, dbpkg.BackendRow{
+		EnvironmentID: envID,
+		PathPrefix:    "/api/*",
+		Upstream:      "https://api.example.com",
+	}); err != nil {
+		t.Fatalf("UpsertBackend() error = %v", err)
+	}
+
+	cfg, err := srv.generateCaddyConfig(ctx)
+	if err != nil {
+		t.Fatalf("generateCaddyConfig() error = %v", err)
+	}
+	if strings.Count(cfg, "reverse_proxy /api/* https://api.example.com") != 2 {
+		t.Fatalf("expected backend directive in both site blocks, got:\n%s", cfg)
+	}
+}
+
 func TestGenerateCaddyConfigIncludesTelemetryProxyWhenEnabled(t *testing.T) {
 	srv := startTestServer(t)
 	srv.cfg.Telemetry.Enabled = true

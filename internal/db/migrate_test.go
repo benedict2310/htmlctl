@@ -4,6 +4,8 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+
+	"github.com/benedict2310/htmlctl/internal/db/migrations"
 )
 
 func TestRunMigrationsIdempotent(t *testing.T) {
@@ -26,8 +28,8 @@ func TestRunMigrationsIdempotent(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations`).Scan(&count); err != nil {
 		t.Fatalf("query schema_migrations count: %v", err)
 	}
-	if count != 6 {
-		t.Fatalf("expected 6 applied migrations, got %d", count)
+	if count != len(migrations.All()) {
+		t.Fatalf("expected %d applied migrations, got %d", len(migrations.All()), count)
 	}
 }
 

@@ -165,6 +165,9 @@ docker rm -f htmlservd-demo
 ```
 site/
 ├── website.yaml            # Website resource (required)
+├── branding/
+│   ├── favicon.svg         # Optional website icons (published to /favicon.svg, etc.)
+│   └── favicon.ico
 ├── pages/
 │   ├── index.page.yaml     # One file per page
 │   └── about.page.yaml
@@ -195,7 +198,20 @@ metadata:
 spec:
   defaultStyleBundle: default
   baseTemplate: default
+  head:
+    icons:
+      svg: branding/favicon.svg
+      ico: branding/favicon.ico
+  seo:
+    publicBaseURL: https://example.com
+    robots:
+      enabled: true
+    sitemap:
+      enabled: true
 ```
+
+Website-level metadata supports favicon publication plus generated `robots.txt` and `sitemap.xml`.
+See [`docs/technical-spec.md`](docs/technical-spec.md) for the full model and [`docs/guides/first-deploy-docker.md`](docs/guides/first-deploy-docker.md) for the end-to-end workflow.
 
 ### Page
 
@@ -364,11 +380,21 @@ docker build --target htmlctl -t htmlctl:local .               # CLI-only image
 
 | Document | Description |
 |----------|-------------|
-| [`docs/guides/first-deploy-docker.md`](docs/guides/first-deploy-docker.md) | Full Docker quickstart with telemetry |
+| [`docs/guides/first-deploy-docker.md`](docs/guides/first-deploy-docker.md) | Full Docker quickstart and end-to-end deployment flow |
 | [`docs/guides/showcase-demo.md`](docs/guides/showcase-demo.md) | Repeatable showcase demo recording flow |
 | [`docs/setup/hetzner-htmlservd.md`](docs/setup/hetzner-htmlservd.md) | VPS setup runbook |
 | [`docs/technical-spec.md`](docs/technical-spec.md) | Architecture, API, and resource model |
 | [`docs/reference/docker-images.md`](docs/reference/docker-images.md) | Docker image reference |
+
+---
+
+## Security Notes
+
+- `/api/v1/*` requires `Authorization: Bearer <token>` when an API token is configured.
+- Telemetry ingest (`POST /collect/v1/events`) is bearer-authenticated and intended for trusted collectors, not public browser JavaScript.
+- SSH auth prefers the agent, then falls back to a private key file constrained to the local user’s home directory.
+
+See [`docs/technical-spec.md`](docs/technical-spec.md) and [`docs/reference/docker-images.md`](docs/reference/docker-images.md).
 
 ---
 

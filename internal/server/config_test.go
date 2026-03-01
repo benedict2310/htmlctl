@@ -199,6 +199,7 @@ func TestConfigValidateErrors(t *testing.T) {
 		{BindAddr: "127.0.0.1", Port: 70000, DataDir: "/tmp/x", LogLevel: "info"},
 		{BindAddr: "127.0.0.1", Port: 9400, DataDir: "", LogLevel: "info"},
 		{BindAddr: "127.0.0.1", Port: 9400, DataDir: "/tmp/x", LogLevel: "bad"},
+		{BindAddr: "127.0.0.1", Port: 9400, DataDir: "/tmp/x", LogLevel: "info", Telemetry: TelemetryConfig{Enabled: true}},
 		{BindAddr: "127.0.0.1", Port: 9400, DataDir: "/tmp/x", LogLevel: "info", Telemetry: TelemetryConfig{MaxBodyBytes: -1}},
 		{BindAddr: "127.0.0.1", Port: 9400, DataDir: "/tmp/x", LogLevel: "info", Telemetry: TelemetryConfig{MaxEvents: -1}},
 		{BindAddr: "127.0.0.1", Port: 9400, DataDir: "/tmp/x", LogLevel: "info", Telemetry: TelemetryConfig{RetentionDays: -1}},
@@ -207,5 +208,21 @@ func TestConfigValidateErrors(t *testing.T) {
 		if err := cfg.Validate(); err == nil {
 			t.Fatalf("case %d: expected validation error", i)
 		}
+	}
+}
+
+func TestConfigValidateAllowsTelemetryWithNestedAPIToken(t *testing.T) {
+	cfg := Config{
+		BindAddr: "127.0.0.1",
+		Port:     9400,
+		DataDir:  "/tmp/x",
+		LogLevel: "info",
+		API:      APIConfig{Token: "nested-token"},
+		Telemetry: TelemetryConfig{
+			Enabled: true,
+		},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected nested api.token to satisfy telemetry auth requirement, got %v", err)
 	}
 }

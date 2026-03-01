@@ -34,8 +34,9 @@
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| No telemetry rows after page load | Browsing raw IP, not hostname | Use bound hostname: `http://127.0.0.1.nip.io:18080/` not `http://127.0.0.1:18080/` |
+| `401` on telemetry ingest | Missing or wrong bearer token | Send `Authorization: Bearer <token>` with the server API token |
 | `400` on telemetry ingest | Host not in domain bindings | `htmlctl domain add <hostname> --context ...` first |
+| `400` on telemetry ingest with `Origin` present | Scheme/host/port mismatch | Make the `Origin` header exactly match the public telemetry URL |
 | Telemetry endpoint missing | `HTMLSERVD_TELEMETRY_ENABLED` not set | Set `HTMLSERVD_TELEMETRY_ENABLED=true` and restart |
 
 ### Docker / Local

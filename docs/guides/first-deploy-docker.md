@@ -124,38 +124,7 @@ CSS
 
 ```bash
 cat > .tmp/first-deploy/site/scripts/site.js <<'JS'
-(function () {
-  var key = 'htmlctl.telemetry.sessionId';
-  var sessionId = window.sessionStorage.getItem(key);
-  if (!sessionId) {
-    sessionId = 'sess_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-    window.sessionStorage.setItem(key, sessionId);
-  }
-
-  var payload = JSON.stringify({
-    events: [
-      {
-        name: 'page_view',
-        path: window.location.pathname || '/',
-        occurredAt: new Date().toISOString(),
-        sessionId: sessionId,
-        attrs: { source: 'first-deploy-guide' }
-      }
-    ]
-  });
-
-  if (navigator.sendBeacon) {
-    navigator.sendBeacon('/collect/v1/events', new Blob([payload], { type: 'text/plain;charset=UTF-8' }));
-    return;
-  }
-  fetch('/collect/v1/events', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'same-origin',
-    keepalive: true,
-    body: payload
-  }).catch(function () {});
-})();
+console.log('sample site loaded');
 JS
 ```
 
@@ -197,7 +166,16 @@ Open the site on the bound domain (not `127.0.0.1`):
 open http://127.0.0.1.nip.io:18080/
 ```
 
-Verify telemetry events:
+Submit and verify a telemetry event through the bound hostname:
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer ${API_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -H "Origin: http://127.0.0.1.nip.io:18080" \
+  --data '{"events":[{"name":"page_view","path":"/","attrs":{"source":"first-deploy-guide"}}]}' \
+  http://127.0.0.1.nip.io:18080/collect/v1/events
+```
 
 ```bash
 curl -sS \
@@ -207,9 +185,9 @@ curl -sS \
 
 Telemetry note:
 
-- v1 telemetry ingest is same-origin only.
-- Browser pages should send events with `navigator.sendBeacon('/collect/v1/events', JSON.stringify(payload))`.
-- Cross-origin CORS preflight flows are intentionally unsupported in v1.
+- Telemetry ingest requires the server bearer token.
+- If an `Origin` header is present, it must exactly match scheme, host, and port.
+- Do not embed the bearer token in public browser JavaScript; use trusted collectors only.
 
 ## 6. Optional: Run `htmlctl` in Docker
 
@@ -255,5 +233,5 @@ docker network rm htmlctl-net
 - `ssh host key verification failed`: regenerate `.tmp/first-deploy/known_hosts` with `ssh-keyscan`.
 - `ssh agent unavailable`: `htmlctl` now supports key-file fallback; mount/provide `~/.ssh/id_ed25519` or set `HTMLCTL_SSH_KEY_PATH`.
 - `unauthorized`: ensure `HTMLSERVD_API_TOKEN` matches the context `token` field.
-- No telemetry rows: make sure you opened `http://127.0.0.1.nip.io:18080/` (domain-bound) rather than `http://127.0.0.1:18080/` (IP hosts are rejected for telemetry attribution).
+- No telemetry rows: post through the bound hostname, include `Authorization: Bearer ${API_TOKEN}`, and avoid raw IP hosts (they are rejected for telemetry attribution).
 - Permission errors under `.tmp/first-deploy`: avoid overriding `HOME` into a bind-mounted path; use `HTMLCTL_SSH_KNOWN_HOSTS_PATH` instead (as shown above).

@@ -16,6 +16,8 @@ import (
 	dbpkg "github.com/benedict2310/htmlctl/internal/db"
 )
 
+const telemetryTestToken = "secret-token"
+
 func TestTelemetryIngestAcceptedAndPersisted(t *testing.T) {
 	srv := startTelemetryServer(t, Config{
 		BindAddr: "127.0.0.1",
@@ -41,6 +43,7 @@ func TestTelemetryIngestAcceptedAndPersisted(t *testing.T) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Host = "example.com"
+	setTelemetryAuth(req)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -78,7 +81,7 @@ func TestTelemetryIngestAcceptedAndPersisted(t *testing.T) {
 	}
 }
 
-func TestTelemetryIngestNoAuthRequired(t *testing.T) {
+func TestTelemetryIngestRequiresAuth(t *testing.T) {
 	srv := startTelemetryServer(t, Config{
 		BindAddr: "127.0.0.1",
 		Port:     0,
@@ -107,13 +110,9 @@ func TestTelemetryIngestNoAuthRequired(t *testing.T) {
 		t.Fatalf("POST /collect/v1/events error = %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusUnauthorized {
+	if resp.StatusCode != http.StatusUnauthorized {
 		b, _ := io.ReadAll(resp.Body)
-		t.Fatalf("expected telemetry ingest to bypass API auth middleware, got 401 body=%s", string(b))
-	}
-	if resp.StatusCode != http.StatusAccepted {
-		b, _ := io.ReadAll(resp.Body)
-		t.Fatalf("expected 202, got %d body=%s", resp.StatusCode, string(b))
+		t.Fatalf("expected 401, got %d body=%s", resp.StatusCode, string(b))
 	}
 }
 
@@ -168,6 +167,7 @@ func TestTelemetryIngestValidationAndSanitizedErrors(t *testing.T) {
 			t.Fatalf("new request: %v", err)
 		}
 		req.Host = "example.com"
+		setTelemetryAuth(req)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("POST /collect/v1/events error = %v", err)
@@ -203,6 +203,7 @@ func TestTelemetryIngestValidationAndSanitizedErrors(t *testing.T) {
 			t.Fatalf("new request: %v", err)
 		}
 		req.Host = "example.com"
+		setTelemetryAuth(req)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("POST /collect/v1/events error = %v", err)
@@ -235,6 +236,7 @@ func TestTelemetryIngestValidationAndSanitizedErrors(t *testing.T) {
 			t.Fatalf("new request: %v", err)
 		}
 		req.Host = "missing.example.com"
+		setTelemetryAuth(req)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("POST /collect/v1/events error = %v", err)
@@ -271,6 +273,7 @@ func TestTelemetryIngestValidationAndSanitizedErrors(t *testing.T) {
 			t.Fatalf("new request: %v", err)
 		}
 		req.Host = "example.com"
+		setTelemetryAuth(req)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatalf("POST /collect/v1/events error = %v", err)
@@ -336,7 +339,7 @@ func TestTelemetryReadListFilters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	req.Header.Set("Authorization", "Bearer secret-token")
+	req.Header.Set("Authorization", "Bearer "+telemetryTestToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("GET telemetry events error = %v", err)
@@ -447,6 +450,10 @@ func TestRunTelemetryRetentionCleanup(t *testing.T) {
 
 func startTelemetryServer(t *testing.T, cfg Config) *Server {
 	t.Helper()
+	if cfg.Telemetry.Enabled && strings.TrimSpace(cfg.APIToken) == "" {
+		cfg.APIToken = telemetryTestToken
+		cfg.API.Token = telemetryTestToken
+	}
 	srv, err := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), "v-test")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -463,6 +470,12 @@ func startTelemetryServer(t *testing.T, cfg Config) *Server {
 		_ = srv.Shutdown(ctx)
 	})
 	return srv
+}
+
+func setTelemetryAuth(req *http.Request) {
+	if req != nil {
+		req.Header.Set("Authorization", "Bearer "+telemetryTestToken)
+	}
 }
 
 func seedTelemetryEnvironment(t *testing.T, srv *Server, website, environment, domain string) int64 {
@@ -547,7 +560,7 @@ VALUES(?, 'page_view', '/', '{bad')`, envID); err != nil {
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	req.Header.Set("Authorization", "Bearer secret-token")
+	req.Header.Set("Authorization", "Bearer "+telemetryTestToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("GET telemetry events error = %v", err)
@@ -638,6 +651,7 @@ func TestTelemetryIngestHostWithPort(t *testing.T) {
 		t.Fatalf("new request: %v", err)
 	}
 	req.Host = "example.com:443"
+	setTelemetryAuth(req)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("POST /collect/v1/events error = %v", err)
@@ -672,6 +686,7 @@ func TestTelemetryIngestAcceptsSendBeaconContentType(t *testing.T) {
 	}
 	req.Host = "example.com"
 	req.Header.Set("Content-Type", "text/plain;charset=UTF-8")
+	setTelemetryAuth(req)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("POST /collect/v1/events error = %v", err)
@@ -706,6 +721,7 @@ func TestTelemetryIngestRejectsUnsupportedContentType(t *testing.T) {
 	}
 	req.Host = "example.com"
 	req.Header.Set("Content-Type", "application/xml")
+	setTelemetryAuth(req)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("POST /collect/v1/events error = %v", err)
@@ -740,6 +756,7 @@ func TestTelemetryIngestRejectsCrossOrigin(t *testing.T) {
 	}
 	req.Host = "example.com"
 	req.Header.Set("Origin", "https://www.example.com")
+	setTelemetryAuth(req)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("POST /collect/v1/events error = %v", err)
@@ -767,7 +784,12 @@ func TestTelemetryIngestMethodNotAllowed(t *testing.T) {
 	})
 	baseURL := "http://" + srv.Addr()
 
-	resp, err := http.Get(baseURL + "/collect/v1/events")
+	req, err := http.NewRequest(http.MethodGet, baseURL+"/collect/v1/events", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	setTelemetryAuth(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("GET /collect/v1/events error = %v", err)
 	}
@@ -815,9 +837,80 @@ func TestTelemetryIngestOptionsReturnsSameOriginGuidance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
+	setTelemetryAuth(req)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("OPTIONS /collect/v1/events error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400, got %d body=%s", resp.StatusCode, string(b))
+	}
+}
+
+func TestTelemetryIngestRejectsOriginSchemeMismatch(t *testing.T) {
+	srv := startTelemetryServer(t, Config{
+		BindAddr: "127.0.0.1",
+		Port:     0,
+		DataDir:  t.TempDir(),
+		LogLevel: "info",
+		DBWAL:    true,
+		Telemetry: TelemetryConfig{
+			Enabled:       true,
+			MaxBodyBytes:  64 * 1024,
+			MaxEvents:     50,
+			RetentionDays: 0,
+		},
+	})
+	baseURL := "http://" + srv.Addr()
+	seedTelemetryEnvironment(t, srv, "sample", "staging", "example.com")
+
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/collect/v1/events", strings.NewReader(`{"events":[{"name":"page_view","path":"/"}]}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Host = "example.com"
+	req.Header.Set("Origin", "https://example.com")
+	setTelemetryAuth(req)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /collect/v1/events error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400, got %d body=%s", resp.StatusCode, string(b))
+	}
+}
+
+func TestTelemetryIngestRejectsOriginPortMismatch(t *testing.T) {
+	srv := startTelemetryServer(t, Config{
+		BindAddr: "127.0.0.1",
+		Port:     0,
+		DataDir:  t.TempDir(),
+		LogLevel: "info",
+		DBWAL:    true,
+		Telemetry: TelemetryConfig{
+			Enabled:       true,
+			MaxBodyBytes:  64 * 1024,
+			MaxEvents:     50,
+			RetentionDays: 0,
+		},
+	})
+	baseURL := "http://" + srv.Addr()
+	seedTelemetryEnvironment(t, srv, "sample", "staging", "example.com")
+
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/collect/v1/events", strings.NewReader(`{"events":[{"name":"page_view","path":"/"}]}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Host = "example.com:443"
+	req.Header.Set("Origin", "http://example.com:444")
+	setTelemetryAuth(req)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /collect/v1/events error = %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {

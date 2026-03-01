@@ -58,15 +58,16 @@ Auth behavior:
 
 - `/api/v1/*` requires `Authorization: Bearer <token>` when `HTMLSERVD_API_TOKEN` (or config `api.token`) is set.
 - `/healthz`, `/readyz`, `/version` remain unauthenticated.
-- `POST /collect/v1/events` is unauthenticated by design and is routed through Caddy only when telemetry is enabled.
-- Telemetry ingest is same-origin only in v1; cross-origin CORS preflight is intentionally unsupported.
+- `POST /collect/v1/events` requires `Authorization: Bearer <token>` and is routed through Caddy only when telemetry is enabled.
+- Telemetry cannot be enabled without an API token.
+- When an `Origin` header is present, telemetry ingest requires an exact same-origin match on scheme, host, and port; cross-origin CORS preflight remains unsupported.
 - `htmlservd --require-auth` forces startup failure if no API token is configured.
 
 Telemetry behavior:
 
 - In preview bootstrap mode with telemetry enabled, the entrypoint Caddyfile includes:
   - `handle /collect/v1/events* { reverse_proxy 127.0.0.1:${HTMLSERVD_PORT} }`
-- Browser recommendation: use `navigator.sendBeacon('/collect/v1/events', JSON.stringify(payload))` (default `text/plain` content type).
+- Do not expose the server bearer token to browser JavaScript. Use telemetry ingest only from trusted collectors or internal services.
 - Keep htmlservd bound to loopback in production-style deployments when telemetry is enabled so host attribution remains trustworthy.
 - Use an explicit non-zero `HTMLSERVD_PORT` when telemetry is enabled and Caddy config generation is expected.
 

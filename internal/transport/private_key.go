@@ -3,6 +3,7 @@ package transport
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -106,8 +107,14 @@ func sanitizePrivateKeyPath(input string) (string, error) {
 	}
 
 	pathResolved := path
-	if evalDir, err := filepath.EvalSymlinks(filepath.Dir(path)); err == nil {
+	if evalPath, err := filepath.EvalSymlinks(path); err == nil {
+		pathResolved = filepath.Clean(evalPath)
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return "", fmt.Errorf("%w: resolve private key symlinks: %w", ErrSSHKeyPath, redactPathError(err))
+	} else if evalDir, dirErr := filepath.EvalSymlinks(filepath.Dir(path)); dirErr == nil {
 		pathResolved = filepath.Join(filepath.Clean(evalDir), filepath.Base(path))
+	} else if !errors.Is(dirErr, fs.ErrNotExist) {
+		return "", fmt.Errorf("%w: resolve private key directory symlinks: %w", ErrSSHKeyPath, redactPathError(dirErr))
 	}
 
 	rel, err := filepath.Rel(homeResolved, pathResolved)
@@ -121,7 +128,7 @@ func sanitizePrivateKeyPath(input string) (string, error) {
 		return "", fmt.Errorf("%w: private key path must be within user home directory", ErrSSHKeyPath)
 	}
 
-	return path, nil
+	return pathResolved, nil
 }
 
 func redactPathError(err error) error {

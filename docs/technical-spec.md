@@ -196,7 +196,7 @@ In v1, a single bundle `default`:
 
 ### 2.8 Telemetry event (optional platform capability)
 
-- Public ingest endpoint: `POST /collect/v1/events`
+- Authenticated ingest endpoint: `POST /collect/v1/events`
 - Authenticated read endpoint:
   - `GET /api/v1/websites/{website}/environments/{env}/telemetry/events`
 - Stored fields:
@@ -212,7 +212,7 @@ In v1, a single bundle `default`:
   - max 50 events/request (`telemetry.maxEvents`)
   - event names match `[a-zA-Z0-9][a-zA-Z0-9_-]*`, max 64 chars
   - max 16 attrs/event; attr key <= 64 bytes; attr value <= 256 bytes
-  - accepted request body content types: `application/json` and `text/plain` (sendBeacon-compatible)
+  - accepted request body content types: `application/json` and `text/plain`
   - `telemetry.maxBodyBytes: 0` and `telemetry.maxEvents: 0` mean "use server defaults" (not unlimited)
 - Query filters:
   - `event`, `since`, `until`, `limit`, `offset`
@@ -331,15 +331,17 @@ For any environment apply:
 - API authentication in v1:
   - all `/api/v1/*` routes require `Authorization: Bearer <token>` when `api.token` (or `HTMLSERVD_API_TOKEN`) is configured.
   - health routes (`/healthz`, `/readyz`) remain unauthenticated.
-  - telemetry ingest `POST /collect/v1/events` is intentionally unauthenticated and outside `/api/v1/*`.
+  - telemetry ingest `POST /collect/v1/events` is bearer-authenticated, even though it lives outside `/api/v1/*`.
+  - telemetry cannot be enabled without an API token.
   - if no API token is configured, the server starts with a prominent warning for rollout safety.
   - operators can enforce token configuration at startup via `htmlservd --require-auth`.
 - token comparison uses constant-time checks (`crypto/subtle`).
 - telemetry host attribution trust model:
   - ingest host is accepted only when it matches an existing domain binding.
   - unbound hosts return `400`.
-  - ingest is same-origin only in v1; cross-origin CORS preflight is intentionally not supported.
-  - recommended browser usage: `navigator.sendBeacon('/collect/v1/events', JSON.stringify(payload))`.
+  - when an `Origin` header is present, ingest requires an exact same-origin match on scheme, host, and port.
+  - cross-origin CORS preflight is intentionally not supported.
+  - do not embed the server bearer token in public browser JavaScript; use a trusted collector if telemetry ingest is exposed externally.
   - when telemetry is enabled, run htmlservd behind Caddy and keep htmlservd bound to loopback for trustworthy host attribution.
 
 Audit log records:

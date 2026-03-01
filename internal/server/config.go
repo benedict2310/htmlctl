@@ -176,6 +176,8 @@ func LoadConfig(configPath string) (Config, error) {
 }
 
 func (c Config) Validate() error {
+	apiToken := strings.TrimSpace(c.APIToken)
+	nestedToken := strings.TrimSpace(c.API.Token)
 	if strings.TrimSpace(c.BindAddr) == "" {
 		return fmt.Errorf("bind address is required")
 	}
@@ -188,9 +190,11 @@ func (c Config) Validate() error {
 	if _, err := parseLogLevel(c.LogLevel); err != nil {
 		return err
 	}
-	if strings.TrimSpace(c.APIToken) != "" && strings.TrimSpace(c.API.Token) != "" &&
-		strings.TrimSpace(c.APIToken) != strings.TrimSpace(c.API.Token) {
+	if apiToken != "" && nestedToken != "" && apiToken != nestedToken {
 		return fmt.Errorf("apiToken and api.token must match when both are set")
+	}
+	if c.Telemetry.Enabled && apiToken == "" && nestedToken == "" {
+		return fmt.Errorf("telemetry enabled requires api token")
 	}
 	if c.Telemetry.MaxBodyBytes < 0 {
 		return fmt.Errorf("telemetry maxBodyBytes must be >= 0")
@@ -202,6 +206,13 @@ func (c Config) Validate() error {
 		return fmt.Errorf("telemetry retentionDays must be >= 0")
 	}
 	return nil
+}
+
+func (c Config) EffectiveAPIToken() string {
+	if token := strings.TrimSpace(c.APIToken); token != "" {
+		return token
+	}
+	return strings.TrimSpace(c.API.Token)
 }
 
 func (c Config) ListenAddr() string {

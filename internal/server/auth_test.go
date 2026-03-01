@@ -181,3 +181,56 @@ func TestAuthIntegrationHealthBypassAndAPIGuard(t *testing.T) {
 		t.Fatalf("expected authorized API request to pass, got %d", okResp.StatusCode)
 	}
 }
+
+func TestAuthIntegrationNestedAPITokenGuardsRoutes(t *testing.T) {
+	cfg := Config{
+		BindAddr: "127.0.0.1",
+		Port:     0,
+		DataDir:  t.TempDir(),
+		LogLevel: "info",
+		DBWAL:    true,
+		API:      APIConfig{Token: "nested-secret"},
+		Telemetry: TelemetryConfig{
+			Enabled:       true,
+			MaxBodyBytes:  64 * 1024,
+			MaxEvents:     50,
+			RetentionDays: 0,
+		},
+	}
+	srv, err := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), "v-test")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = srv.Shutdown(ctx)
+	})
+
+	baseURL := "http://" + srv.Addr()
+
+	apiResp, err := http.Get(baseURL + "/api/v1/websites")
+	if err != nil {
+		t.Fatalf("GET /api/v1/websites error = %v", err)
+	}
+	apiResp.Body.Close()
+	if apiResp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected unauthenticated API call to return 401, got %d", apiResp.StatusCode)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/collect/v1/events", nil)
+	if err != nil {
+		t.Fatalf("new telemetry request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /collect/v1/events error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected unauthenticated telemetry ingest to return 401, got %d", resp.StatusCode)
+	}
+}

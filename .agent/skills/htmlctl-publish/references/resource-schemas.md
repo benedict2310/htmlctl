@@ -265,40 +265,18 @@ body { font-family: sans-serif; background: var(--bg); }
 
 To collect page-view events from the browser without external infrastructure, add to `scripts/site.js`:
 
-```js
-(function () {
-  var key = 'htmlctl.sessionId';
-  var sessionId = window.sessionStorage.getItem(key);
-  if (!sessionId) {
-    sessionId = 'sess_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-    window.sessionStorage.setItem(key, sessionId);
-  }
-
-  var payload = JSON.stringify({
-    events: [{
-      name: 'page_view',
-      path: window.location.pathname || '/',
-      occurredAt: new Date().toISOString(),
-      sessionId: sessionId,
-      attrs: { source: 'browser' }
-    }]
-  });
-
-  if (navigator.sendBeacon) {
-    navigator.sendBeacon('/collect/v1/events', new Blob([payload], { type: 'text/plain;charset=UTF-8' }));
-    return;
-  }
-  fetch('/collect/v1/events', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'same-origin',
-    keepalive: true,
-    body: payload
-  }).catch(function () {});
-})();
+```bash
+curl -sS \
+  -H "Authorization: Bearer ${API_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -H "Origin: https://example.com" \
+  --data '{"events":[{"name":"page_view","path":"/","attrs":{"source":"trusted-collector"}}]}' \
+  https://example.com/collect/v1/events
 ```
 
-- Ingest endpoint `POST /collect/v1/events` is **unauthenticated** and same-origin only.
+- Ingest endpoint `POST /collect/v1/events` is authenticated with the server bearer token.
+- Do not embed the bearer token in public browser JavaScript.
+- If an `Origin` header is present, it must exactly match scheme, host, and port.
 - Telemetry is attributed by the request's `Host` header — must match a domain binding.
 - Raw IP hosts (`127.0.0.1`) are rejected; always use a bound hostname (`127.0.0.1.nip.io` locally).
 - Events are queryable via the authenticated API — see `references/api.md`.

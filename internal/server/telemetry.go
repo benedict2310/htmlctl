@@ -78,7 +78,7 @@ type telemetryEventResponse struct {
 func (s *Server) handleTelemetryIngest(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		w.Header().Set("Allow", http.MethodPost)
-		writeAPIError(w, http.StatusBadRequest, "cors preflight is not supported; telemetry ingest is same-origin only", nil)
+		writeAPIError(w, http.StatusBadRequest, "cors preflight is not supported; telemetry ingest accepts authenticated same-origin POSTs only", nil)
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -94,7 +94,7 @@ func (s *Server) handleTelemetryIngest(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusUnsupportedMediaType, err.Error(), nil)
 		return
 	}
-	if err := validateTelemetrySameOrigin(r.Header.Get("Origin"), r.Host); err != nil {
+	if err := validateTelemetrySameOrigin(r.Header.Get("Origin"), r); err != nil {
 		writeAPIError(w, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
@@ -518,7 +518,7 @@ func validateTelemetryContentType(rawContentType string) error {
 	}
 }
 
-func validateTelemetrySameOrigin(rawOrigin, rawHost string) error {
+func validateTelemetrySameOrigin(rawOrigin string, r *http.Request) error {
 	origin := strings.TrimSpace(rawOrigin)
 	if origin == "" {
 		return nil
@@ -527,18 +527,70 @@ func validateTelemetrySameOrigin(rawOrigin, rawHost string) error {
 	if err != nil || strings.TrimSpace(originURL.Host) == "" {
 		return fmt.Errorf("invalid Origin header")
 	}
+	originScheme, err := normalizeTelemetryScheme(originURL.Scheme)
+	if err != nil {
+		return fmt.Errorf("invalid Origin header")
+	}
+	expectedScheme, err := telemetryRequestScheme(r)
+	if err != nil {
+		return fmt.Errorf("invalid Origin header")
+	}
 	originHost, err := normalizeTelemetryHost(originURL.Host)
 	if err != nil {
 		return fmt.Errorf("invalid Origin header")
 	}
-	host, err := normalizeTelemetryHost(rawHost)
+	host, err := normalizeTelemetryHost(r.Host)
 	if err != nil {
 		return fmt.Errorf("host is not bound to any environment")
 	}
-	if originHost != host {
+	originPort := normalizedTelemetryPort(originURL.Host, originScheme)
+	hostPort := normalizedTelemetryPort(r.Host, expectedScheme)
+	if originScheme != expectedScheme || originHost != host || originPort != hostPort {
 		return fmt.Errorf("cross-origin telemetry ingest is not supported")
 	}
 	return nil
+}
+
+func normalizeTelemetryScheme(raw string) (string, error) {
+	scheme := strings.ToLower(strings.TrimSpace(raw))
+	switch scheme {
+	case "http", "https":
+		return scheme, nil
+	default:
+		return "", fmt.Errorf("unsupported scheme %q", raw)
+	}
+}
+
+func telemetryRequestScheme(r *http.Request) (string, error) {
+	if r == nil {
+		return "", fmt.Errorf("request is required")
+	}
+	if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); forwarded != "" {
+		first, _, _ := strings.Cut(forwarded, ",")
+		return normalizeTelemetryScheme(first)
+	}
+	if r.TLS != nil {
+		return "https", nil
+	}
+	return "http", nil
+}
+
+func normalizedTelemetryPort(rawHost, scheme string) string {
+	port := ""
+	if strings.Contains(rawHost, ":") {
+		if parsed, err := url.Parse("http://" + rawHost); err == nil {
+			port = strings.TrimSpace(parsed.Port())
+		}
+	}
+	if port != "" {
+		return port
+	}
+	switch scheme {
+	case "https":
+		return "443"
+	default:
+		return "80"
+	}
 }
 
 func (s *Server) resolveTelemetryEnvironmentID(ctx context.Context, host string) (int64, error) {

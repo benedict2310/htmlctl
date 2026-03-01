@@ -136,6 +136,30 @@ func TestSanitizePrivateKeyPathRejectsHomeDirectoryPath(t *testing.T) {
 	}
 }
 
+func TestSanitizePrivateKeyPathRejectsSymlinkedFileOutsideHome(t *testing.T) {
+	insideHome := tempDirUnderHome(t, "htmlctl-key-link-inside-")
+	outsideHome := t.TempDir()
+	target := filepath.Join(outsideHome, "id_rsa")
+	if err := os.WriteFile(target, []byte("not-a-private-key"), 0o600); err != nil {
+		t.Fatalf("write target key: %v", err)
+	}
+	linkPath := filepath.Join(insideHome, "id_rsa")
+	if err := os.Symlink(target, linkPath); err != nil {
+		t.Fatalf("symlink outside-home key: %v", err)
+	}
+
+	_, err := sanitizePrivateKeyPath(linkPath)
+	if err == nil {
+		t.Fatalf("expected symlinked outside-home key to be rejected")
+	}
+	if !errors.Is(err, ErrSSHKeyPath) {
+		t.Fatalf("expected ErrSSHKeyPath, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "within user home directory") {
+		t.Fatalf("expected home-directory restriction error, got %v", err)
+	}
+}
+
 func TestResolveKnownHostsPathEnvFallback(t *testing.T) {
 	t.Setenv(envKnownHostsPath, "/env/known_hosts")
 	got := resolveKnownHostsPath("")

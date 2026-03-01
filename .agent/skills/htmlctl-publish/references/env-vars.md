@@ -34,7 +34,7 @@ SSH auth order:
 |----------|---------|-------------|
 | `HTMLSERVD_API_TOKEN` | _(none)_ | Shared bearer token — required for all `/api/v1/*` routes when set |
 
-When `HTMLSERVD_API_TOKEN` is set (or `api.token` in config), all `/api/v1/*` requests must include `Authorization: Bearer <token>`. Health and version endpoints remain unauthenticated. Use `htmlservd --require-auth` to fail at startup if no token is configured.
+When `HTMLSERVD_API_TOKEN` is set (or `api.token` in config), all `/api/v1/*` requests and telemetry ingest (`POST /collect/v1/events`) must include `Authorization: Bearer <token>`. Health and version endpoints remain unauthenticated. Use `htmlservd --require-auth` to fail at startup if no token is configured.
 
 ### Caddy Integration
 
@@ -51,7 +51,7 @@ When `HTMLSERVD_CADDY_AUTO_HTTPS=false`, domain blocks are written as `http://<d
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HTMLSERVD_TELEMETRY_ENABLED` | `false` | Enable the `POST /collect/v1/events` ingest endpoint |
+| `HTMLSERVD_TELEMETRY_ENABLED` | `false` | Enable the authenticated `POST /collect/v1/events` ingest endpoint; requires `HTMLSERVD_API_TOKEN` |
 | `HTMLSERVD_TELEMETRY_MAX_BODY_BYTES` | `65536` | Max request body size in bytes (0 = use default) |
 | `HTMLSERVD_TELEMETRY_MAX_EVENTS` | `50` | Max events per request (0 = use default, not unlimited) |
 | `HTMLSERVD_TELEMETRY_RETENTION_DAYS` | `90` | Days to retain telemetry rows (0 = no auto-deletion) |

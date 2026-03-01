@@ -109,11 +109,12 @@ Domain add/remove operations update SQLite, regenerate the Caddyfile, and reload
 
 ## Telemetry
 
-### Ingest (unauthenticated, same-origin only)
+### Ingest (authenticated)
 
 ```http
 POST /collect/v1/events
-Content-Type: application/json   # or text/plain (sendBeacon-compatible)
+Authorization: Bearer <token>
+Content-Type: application/json   # or text/plain
 ```
 
 Request body:
@@ -127,7 +128,7 @@ Request body:
       "occurredAt": "2026-02-25T10:00:00Z",
       "sessionId": "sess_abc123",
       "attrs": {
-        "source": "browser",
+        "source": "collector",
         "referrer": "https://google.com"
       }
     }
@@ -141,7 +142,7 @@ Limits (defaults, configurable):
 - Event name: `[a-zA-Z0-9][a-zA-Z0-9_-]*`, max 64 chars
 - Max 16 attrs/event; key ≤ 64 bytes; value ≤ 256 bytes
 
-Trust model: the `Host` header is used to resolve the environment. Requests from unbound hosts return `400`. Route telemetry through Caddy (not directly to `htmlservd`) for accurate host attribution.
+Trust model: the `Host` header is used to resolve the environment. Requests from unbound hosts return `400`. If an `Origin` header is present, it must exactly match scheme, host, and port. Route telemetry through Caddy (not directly to `htmlservd`) for accurate host attribution.
 
 ### Query (authenticated)
 

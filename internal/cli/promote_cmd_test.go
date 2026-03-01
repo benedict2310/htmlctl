@@ -25,7 +25,8 @@ func TestPromoteCommandTableOutput(t *testing.T) {
   "fileCount":3,
   "hash":"sha256:abc",
   "hashVerified":true,
-  "strategy":"hardlink"
+  "strategy":"hardlink",
+  "warnings":["page=index field=canonicalURL host=staging.example.com does not match target environment prod domains"]
 }`), nil
 		},
 	}
@@ -36,6 +37,9 @@ func TestPromoteCommandTableOutput(t *testing.T) {
 	}
 	if !strings.Contains(out, "Promoted sample: staging -> prod") || !strings.Contains(out, "release 01ARZ3NDEKTSV4RRFFQ69G5FAB") {
 		t.Fatalf("unexpected output: %s", out)
+	}
+	if !strings.Contains(out, "Warning: page=index field=canonicalURL host=staging.example.com") {
+		t.Fatalf("expected warning output, got: %s", out)
 	}
 }
 
@@ -51,7 +55,8 @@ func TestPromoteCommandJSONOutput(t *testing.T) {
   "fileCount":2,
   "hash":"sha256:def",
   "hashVerified":true,
-  "strategy":"copy"
+  "strategy":"copy",
+  "warnings":["warning one","warning two"]
 }`), nil
 		},
 	}
@@ -60,8 +65,11 @@ func TestPromoteCommandJSONOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if !strings.Contains(out, `"hashVerified": true`) || !strings.Contains(out, `"strategy": "copy"`) {
+	if !strings.Contains(out, `"hashVerified": true`) || !strings.Contains(out, `"strategy": "copy"`) || !strings.Contains(out, `"warnings": [`) {
 		t.Fatalf("unexpected JSON output: %s", out)
+	}
+	if strings.Contains(out, "Warning: ") {
+		t.Fatalf("expected no plain-text warnings in JSON output: %s", out)
 	}
 }
 

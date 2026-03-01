@@ -102,15 +102,16 @@ type RollbackResponse struct {
 }
 
 type PromoteResponse struct {
-	Website         string `json:"website" yaml:"website"`
-	FromEnvironment string `json:"fromEnvironment" yaml:"fromEnvironment"`
-	ToEnvironment   string `json:"toEnvironment" yaml:"toEnvironment"`
-	SourceReleaseID string `json:"sourceReleaseId" yaml:"sourceReleaseId"`
-	ReleaseID       string `json:"releaseId" yaml:"releaseId"`
-	FileCount       int    `json:"fileCount" yaml:"fileCount"`
-	Hash            string `json:"hash" yaml:"hash"`
-	HashVerified    bool   `json:"hashVerified" yaml:"hashVerified"`
-	Strategy        string `json:"strategy" yaml:"strategy"`
+	Website         string   `json:"website" yaml:"website"`
+	FromEnvironment string   `json:"fromEnvironment" yaml:"fromEnvironment"`
+	ToEnvironment   string   `json:"toEnvironment" yaml:"toEnvironment"`
+	SourceReleaseID string   `json:"sourceReleaseId" yaml:"sourceReleaseId"`
+	ReleaseID       string   `json:"releaseId" yaml:"releaseId"`
+	FileCount       int      `json:"fileCount" yaml:"fileCount"`
+	Hash            string   `json:"hash" yaml:"hash"`
+	HashVerified    bool     `json:"hashVerified" yaml:"hashVerified"`
+	Strategy        string   `json:"strategy" yaml:"strategy"`
+	Warnings        []string `json:"warnings,omitempty" yaml:"warnings,omitempty"`
 }
 
 type DomainBinding struct {

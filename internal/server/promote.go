@@ -19,15 +19,16 @@ type promoteRequest struct {
 }
 
 type promoteResponse struct {
-	Website         string `json:"website"`
-	FromEnvironment string `json:"fromEnvironment"`
-	ToEnvironment   string `json:"toEnvironment"`
-	SourceReleaseID string `json:"sourceReleaseId"`
-	ReleaseID       string `json:"releaseId"`
-	FileCount       int    `json:"fileCount"`
-	Hash            string `json:"hash"`
-	HashVerified    bool   `json:"hashVerified"`
-	Strategy        string `json:"strategy"`
+	Website         string   `json:"website"`
+	FromEnvironment string   `json:"fromEnvironment"`
+	ToEnvironment   string   `json:"toEnvironment"`
+	SourceReleaseID string   `json:"sourceReleaseId"`
+	ReleaseID       string   `json:"releaseId"`
+	FileCount       int      `json:"fileCount"`
+	Hash            string   `json:"hash"`
+	HashVerified    bool     `json:"hashVerified"`
+	Strategy        string   `json:"strategy"`
+	Warnings        []string `json:"warnings,omitempty"`
 }
 
 func (s *Server) handlePromote(w http.ResponseWriter, r *http.Request) {
@@ -100,6 +101,12 @@ func (s *Server) handlePromote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	warnings, warnErr := collectPromoteMetadataHostWarnings(r.Context(), s.db, website, sourceEnv, targetEnv, result.SourceReleaseID)
+	if warnErr != nil {
+		s.logger.Warn("failed to analyze promoted metadata hosts", "website", website, "from", sourceEnv, "to", targetEnv, "source_release_id", result.SourceReleaseID, "error", warnErr)
+		warnings = nil
+	}
+
 	if s.auditLogger != nil {
 		targetReleaseID := result.ReleaseID
 		if err := s.auditLogger.Log(r.Context(), audit.Entry{
@@ -139,6 +146,7 @@ func (s *Server) handlePromote(w http.ResponseWriter, r *http.Request) {
 		Hash:            result.Hash,
 		HashVerified:    true,
 		Strategy:        result.Strategy,
+		Warnings:        warnings,
 	})
 }
 

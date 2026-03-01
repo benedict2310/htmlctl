@@ -77,6 +77,74 @@ func TestPromoteEndpointSuccess(t *testing.T) {
 	waitForPromoteAuditEntry(t, baseURL)
 }
 
+func TestPromoteEndpointIncludesMetadataHostWarnings(t *testing.T) {
+	srv := startTestServer(t)
+	baseURL := "http://" + srv.Addr()
+
+	applySampleSite(t, baseURL)
+	setOnlyPageHeadJSON(t, srv.db, `{"canonicalURL":"https://staging.example.com/","openGraph":{"image":"https://staging.example.com/og/index.png"}}`)
+	sourceReleaseID := createReleaseWithActor(t, baseURL, "alice")
+	ensureEnvironment(t, srv.db, "sample", "prod")
+	insertDomainBindingForEnv(t, srv.db, "sample", "staging", "staging.example.com")
+	insertDomainBindingForEnv(t, srv.db, "sample", "prod", "example.com")
+
+	resp, err := http.Post(baseURL+"/api/v1/websites/sample/promote", "application/json", bytes.NewBufferString(`{"from":"staging","to":"prod"}`))
+	if err != nil {
+		t.Fatalf("POST /promote error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d body=%s", resp.StatusCode, string(body))
+	}
+	var out promoteResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode promote response: %v", err)
+	}
+	if out.SourceReleaseID != sourceReleaseID {
+		t.Fatalf("unexpected source release id: %#v", out)
+	}
+	if len(out.Warnings) != 2 {
+		t.Fatalf("expected 2 warnings, got %#v", out.Warnings)
+	}
+	sort.Strings(out.Warnings)
+	if !strings.Contains(out.Warnings[0], "field=canonicalURL") || !strings.Contains(out.Warnings[1], "field=openGraph.image") {
+		t.Fatalf("unexpected warnings: %#v", out.Warnings)
+	}
+}
+
+func TestPromoteEndpointIgnoresWarningAnalysisFailure(t *testing.T) {
+	srv := startTestServer(t)
+	baseURL := "http://" + srv.Addr()
+
+	applySampleSite(t, baseURL)
+	sourceReleaseID := createReleaseWithActor(t, baseURL, "alice")
+	ensureEnvironment(t, srv.db, "sample", "prod")
+	if _, err := srv.db.Exec(`UPDATE releases SET manifest_json = ? WHERE id = ?`, `{"resources":{"pages":[{"name":"index","head":"bad"}]}}`, sourceReleaseID); err != nil {
+		t.Fatalf("UPDATE releases manifest_json error = %v", err)
+	}
+
+	resp, err := http.Post(baseURL+"/api/v1/websites/sample/promote", "application/json", bytes.NewBufferString(`{"from":"staging","to":"prod"}`))
+	if err != nil {
+		t.Fatalf("POST /promote error = %v", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read promote response body: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", resp.StatusCode, string(body))
+	}
+	var out promoteResponse
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("decode promote response: %v body=%s", err, string(body))
+	}
+	if len(out.Warnings) != 0 {
+		t.Fatalf("expected empty warnings on analysis failure, got %#v", out.Warnings)
+	}
+}
+
 func TestPromoteEndpointSourceHasNoActiveRelease(t *testing.T) {
 	srv := startTestServer(t)
 	baseURL := "http://" + srv.Addr()
@@ -272,6 +340,29 @@ func ensureEnvironment(t *testing.T, db *sql.DB, website, env string) {
 	}
 	if _, err := q.InsertEnvironment(context.Background(), dbpkg.EnvironmentRow{WebsiteID: websiteRow.ID, Name: env}); err != nil {
 		t.Fatalf("InsertEnvironment(%q) error = %v", env, err)
+	}
+}
+
+func insertDomainBindingForEnv(t *testing.T, db *sql.DB, website, env, domain string) {
+	t.Helper()
+	q := dbpkg.NewQueries(db)
+	websiteRow, err := q.GetWebsiteByName(context.Background(), website)
+	if err != nil {
+		t.Fatalf("GetWebsiteByName(%q) error = %v", website, err)
+	}
+	envRow, err := q.GetEnvironmentByName(context.Background(), websiteRow.ID, env)
+	if err != nil {
+		t.Fatalf("GetEnvironmentByName(%q) error = %v", env, err)
+	}
+	if _, err := q.InsertDomainBinding(context.Background(), dbpkg.DomainBindingRow{Domain: domain, EnvironmentID: envRow.ID}); err != nil {
+		t.Fatalf("InsertDomainBinding(%q) error = %v", domain, err)
+	}
+}
+
+func setOnlyPageHeadJSON(t *testing.T, db *sql.DB, headJSON string) {
+	t.Helper()
+	if _, err := db.Exec(`UPDATE pages SET head_json = ? WHERE name = ?`, headJSON, "index"); err != nil {
+		t.Fatalf("UPDATE pages head_json error = %v", err)
 	}
 }
 

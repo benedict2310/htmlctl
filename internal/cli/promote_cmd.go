@@ -59,6 +59,9 @@ func newPromoteCmd() *cobra.Command {
 				resp.Hash,
 				resp.Strategy,
 			)
+			for _, warning := range resp.Warnings {
+				fmt.Fprintf(cmd.OutOrStdout(), "Warning: %s\n", warning)
+			}
 			return nil
 		},
 	}

@@ -16,7 +16,7 @@ Expose backend management as authenticated HTTP API endpoints on `htmlservd` and
 
 ## 2. User Story
 
-As an operator, I want to run `htmlctl backend add website/futurelab --env prod --path /api/ --upstream https://api.futurelab.studio` and have Caddy immediately start proxying those requests, so that I can wire dynamic services into my static site without editing server config files.
+As an operator, I want to run `htmlctl backend add website/futurelab --env prod --path /api/* --upstream https://api.futurelab.studio` and have Caddy immediately start proxying those requests, so that I can wire dynamic services into my static site without editing server config files.
 
 ## 3. Scope
 
@@ -42,6 +42,7 @@ As an operator, I want to run `htmlctl backend add website/futurelab --env prod 
 
 - **Auth:** all three endpoints require `Authorization: Bearer <token>` — consistent with all `/api/v1/*` routes.
 - **Caddyfile regeneration:** add/remove both trigger the existing `s.reloadCaddy()` path (same as domain-bind operations). No new reload infrastructure needed.
+- **Validation ownership:** request validation delegates to `internal/backend` helpers introduced in E9-S1. The API layer reports validation failures, but does not define its own matcher semantics.
 - **Audit log:** `add` logs operation `"backend.add"`, `remove` logs `"backend.remove"`. Summary includes `path_prefix` and `upstream` (for add) or `path_prefix` (for remove).
 - **Error responses:** all 5xx responses go through `writeInternalAPIError` — no internal paths or schema details exposed to clients.
 - **CLI pattern:** follows `htmlctl domain` command structure — subcommands under a parent `backend` command, context-aware, machine-parseable output.
@@ -52,12 +53,12 @@ As an operator, I want to run `htmlctl backend add website/futurelab --env prod 
 
 Request body (JSON):
 ```json
-{ "pathPrefix": "/api/", "upstream": "https://api.example.com" }
+{ "pathPrefix": "/api/*", "upstream": "https://api.example.com" }
 ```
 
 Response `201 Created`:
 ```json
-{ "pathPrefix": "/api/", "upstream": "https://api.example.com", "createdAt": "..." }
+{ "pathPrefix": "/api/*", "upstream": "https://api.example.com", "createdAt": "..." }
 ```
 
 Validation errors → `400 Bad Request` with `errors` array.
@@ -69,7 +70,7 @@ Response `200 OK`:
 ```json
 {
   "backends": [
-    { "pathPrefix": "/api/", "upstream": "https://api.example.com", "createdAt": "...", "updatedAt": "..." }
+    { "pathPrefix": "/api/*", "upstream": "https://api.example.com", "createdAt": "...", "updatedAt": "..." }
   ]
 }
 ```
@@ -86,26 +87,26 @@ Not found → `404 Not Found`.
 ## 6. CLI Design
 
 ```
-htmlctl backend add website/futurelab --env prod --path /api/ --upstream https://api.example.com
+htmlctl backend add website/futurelab --env prod --path /api/* --upstream https://api.example.com
 htmlctl backend list website/futurelab --env prod
-htmlctl backend remove website/futurelab --env prod --path /api/
+htmlctl backend remove website/futurelab --env prod --path /api/*
 ```
 
 **`backend add` output:**
 ```
-backend /api/ -> https://api.example.com added to futurelab/prod
+backend /api/* -> https://api.example.com added to futurelab/prod
 ```
 
 **`backend list` output (table):**
 ```
 PATH PREFIX   UPSTREAM                          CREATED
-/api/         https://api.example.com           2026-03-01T12:00:00Z
-/auth/        https://auth.example.com          2026-03-01T12:05:00Z
+/api/*        https://api.example.com           2026-03-01T12:00:00Z
+/auth/*       https://auth.example.com          2026-03-01T12:05:00Z
 ```
 
 **`backend remove` output:**
 ```
-backend /api/ removed from futurelab/prod
+backend /api/* removed from futurelab/prod
 ```
 
 All commands respect `--context` and `--output json` flags consistent with the rest of the CLI.
@@ -137,8 +138,8 @@ Dispatch on `r.Method` inside handlers.
 
 ### 7.4 Validation (Server-Side)
 
-- `path_prefix`: delegate to `names.ValidateBackendPathPrefix` (E9-S1). Must start with `/`, no `..`, max 256 chars.
-- `upstream`: parse with `url.Parse`; require `Scheme` in `{http, https}`, non-empty `Host`, no `User` (embedded credentials disallowed). Use `writeAPIError(w, 400, ...)` on failure.
+- `path_prefix`: delegate to `backend.ValidatePathPrefix` (E9-S1). Accept only the canonical prefix matcher forms defined there, such as `/api/*`.
+- `upstream`: delegate to `backend.ValidateUpstreamURL` (E9-S1). Require absolute `http` or `https`, non-empty host, no credentials, and no query string or fragment. Use `writeAPIError(w, 400, ...)` on failure.
 
 ### 7.5 Reload Caddy After Mutation
 
@@ -148,6 +149,7 @@ After a successful `UpsertBackend` or `DeleteBackendByPathPrefix`, call the exis
 
 - [ ] AC-1: `POST` with valid body inserts or updates the backend and returns `201` (or `200` on upsert) with the stored row.
 - [ ] AC-2: `POST` with invalid `path_prefix` (no leading `/`, contains `..`, too long) returns `400` with a descriptive error message that contains no internal path or schema detail.
+- [ ] AC-2a: `POST` with ambiguous or non-canonical `path_prefix` forms such as `/api/` or `/api` returns `400`.
 - [ ] AC-3: `POST` with invalid `upstream` (non-http/https scheme, embedded credentials, empty host) returns `400`.
 - [ ] AC-4: `GET` returns all backends for the environment ordered by `path_prefix`; returns empty list (not `404`) when none exist.
 - [ ] AC-5: `DELETE` returns `204` on success and `404` when the prefix does not exist.
@@ -162,6 +164,7 @@ After a successful `UpsertBackend` or `DeleteBackendByPathPrefix`, call the exis
 - `internal/server/backends_test.go`:
   - Add backend: valid request → 201 + correct body.
   - Add backend: invalid path prefix → 400 with no internal detail.
+  - Add backend: ambiguous path prefix (`/api/`, `/api`) → 400.
   - Add backend: invalid upstream (bad scheme, credentials) → 400.
   - Add backend: unauthenticated → 401.
   - Add backend: upsert existing → 200 with updated upstream.
@@ -176,4 +179,4 @@ After a successful `UpsertBackend` or `DeleteBackendByPathPrefix`, call the exis
 
 - **Risk:** URL-encoded `path_prefix` in DELETE path segment causes routing ambiguity (slashes in path prefix). **Mitigation:** require path prefix to be URL-encoded by the client; use `url.PathUnescape` in the handler. Document in CLI help text.
 - **Risk:** Caddy reload fails after a backend is added because the upstream is unreachable or the config is syntactically wrong. **Mitigation:** Caddy validates syntax at reload time (not upstream reachability). Log the reload error; surface it in the CLI output as a warning so the operator knows to check. The backend is persisted either way.
-- **Risk:** Operator adds a backend with a path prefix that shadows a legitimate static file path (e.g. `/styles/`). **Mitigation:** this is operator intent, not a bug. Document the behaviour: `reverse_proxy` takes priority over `file_server` for the declared prefix. Future story could add a warning for suspicious prefixes.
+- **Risk:** Operator adds a backend with a path prefix that shadows a legitimate static file path (e.g. `/styles/*`). **Mitigation:** this is operator intent, not a bug. Document the behaviour: `reverse_proxy` takes priority over `file_server` for the declared prefix. Future story could add a warning for suspicious prefixes.

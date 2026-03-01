@@ -43,9 +43,11 @@ The static serving invariant is preserved: `file_server` remains the terminal ha
 ## 5. Architecture Alignment
 
 - **Caddy directive order:** `reverse_proxy` must appear before `file_server` within a site block. Caddy's default directive order places `reverse_proxy` before `file_server`, so no explicit `order` global directive is needed — but the template must emit `reverse_proxy` before `file_server` for clarity.
+- **Validation ownership:** E9-S1 centralizes matcher and upstream validation in `internal/backend`. This story consumes already-validated rows and must not invent a second matcher contract locally.
 - **Determinism:** backends are sorted by `path_prefix` ascending before template rendering. `ListBackendsByEnvironment` (E9-S1) already returns rows in `path_prefix` order; the caddy layer sorts again defensively.
 - **Promotion invariant:** this story adds no release artifact changes. Generated Caddyfile is server configuration, not a release file.
 - **Caddyfile format:** continues to use the Caddyfile DSL (not Caddy JSON API) for consistency with E5-S2.
+- **Static-first scope:** backend matchers are prefix-only in v1 (`/<segment>/*`). Catch-all proxying and exact-path overrides are out of scope and should not be introduced here.
 
 ## 6. Generated Output
 
@@ -126,6 +128,7 @@ Group by environment ID to avoid N+1: load backends for all environments in a si
 - [ ] AC-5: Generated Caddyfile is deterministic: identical input always produces identical output.
 - [ ] AC-6: `go test ./internal/caddy/... ./internal/server/...` passes; `go test -race` passes.
 - [ ] AC-7: No changes to the existing `file_server` behaviour or domain-binding semantics.
+- [ ] AC-8: The generator accepts only the canonical prefix matcher forms defined by E9-S1; story examples and tests use values such as `/api/*`, not ambiguous forms like `/api/`.
 
 ## 9. Tests to Add
 
@@ -140,5 +143,5 @@ Group by environment ID to avoid N+1: load backends for all environments in a si
 
 ## 10. Risks and Mitigations
 
-- **Risk:** `reverse_proxy` directive with a trailing slash on `path_prefix` vs without (e.g. `/api/` vs `/api/*`) behaves differently in Caddy. **Mitigation:** document the expected format in AC-5 of E9-S1 and validate accordingly; add a template test with each variant.
+- **Risk:** Caddy path matching is exact by default, so an operator-friendly-looking value like `/api/` would not behave like a prefix matcher. **Mitigation:** E9-S1 defines and validates the canonical prefix form `/<segment>/*`; this story consumes only those validated rows and uses that same syntax in all examples and tests.
 - **Risk:** Caddy fails to reload after generating a config with an unreachable upstream. **Mitigation:** Caddy accepts the config and returns 502 at request time — this is expected and acceptable. Caddy does not validate upstream reachability at config load time.

@@ -392,8 +392,12 @@ contexts:
 
 Token utilities:
 
+- `htmlctl context create <name> --server <ssh://user@host> --website <website> --environment <env>`
+- `htmlctl context list`
+- `htmlctl context use <name>`
 - `htmlctl context token generate` (prints a random 32-byte hex token)
 - `htmlctl context set <name> --token <token>`
+- `htmlctl config view` (redacts tokens by default; pass `--show-secrets` for explicit secret inspection)
 
 ### 9.2 Core commands
 

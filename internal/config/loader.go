@@ -56,7 +56,7 @@ func LoadFromPath(path string) (Config, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return cfg, fmt.Errorf("config file not found at %s (create it or set %s)", path, EnvConfigPath)
+			return cfg, fmt.Errorf("config file not found at %s: run 'htmlctl context create <name> --server <ssh://user@host> --website <website> --environment <env>' to create it, or set %s", path, EnvConfigPath)
 		}
 		return cfg, fmt.Errorf("read config file %s: %w", path, err)
 	}

@@ -10,9 +10,12 @@ import (
 func ResolveContext(cfg Config, explicitName string) (ContextInfo, error) {
 	name := strings.TrimSpace(explicitName)
 	if name == "" {
+		if len(availableContextNames(cfg.Contexts)) == 0 {
+			return ContextInfo{}, fmt.Errorf("no context selected: config has no contexts. Next: run 'htmlctl context create <name> --server <ssh://user@host> --website <website> --environment <env>'.")
+		}
 		name = strings.TrimSpace(cfg.CurrentContext)
 		if name == "" {
-			return ContextInfo{}, fmt.Errorf("no context selected: set current-context or pass --context")
+			return ContextInfo{}, fmt.Errorf("no context selected: run 'htmlctl context use <name>' or pass --context")
 		}
 	}
 
@@ -32,9 +35,9 @@ func ResolveContext(cfg Config, explicitName string) (ContextInfo, error) {
 
 	available := availableContextNames(cfg.Contexts)
 	if len(available) == 0 {
-		return ContextInfo{}, fmt.Errorf("context %q not found: config has no contexts", name)
+		return ContextInfo{}, fmt.Errorf("context %q not found: config has no contexts. Next: run 'htmlctl context create <name> --server <ssh://user@host> --website <website> --environment <env>'.", name)
 	}
-	return ContextInfo{}, fmt.Errorf("context %q not found; available contexts: %s", name, strings.Join(available, ", "))
+	return ContextInfo{}, fmt.Errorf("context %q not found; available contexts: %s. Next: run 'htmlctl context list'.", name, strings.Join(available, ", "))
 }
 
 func availableContextNames(contexts []Context) []string {

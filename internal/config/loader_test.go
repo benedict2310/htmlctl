@@ -222,3 +222,41 @@ func TestSaveWritesUpdatedConfig(t *testing.T) {
 		t.Fatalf("expected default apiVersion %q, got %q", DefaultAPIVersion, loaded.APIVersion)
 	}
 }
+
+func TestConfigRedactedCopyMasksTokens(t *testing.T) {
+	cfg := Config{
+		CurrentContext: "staging",
+		Contexts: []Context{
+			{
+				Name:        "staging",
+				Server:      "ssh://root:secret@staging.example.com?token=secret-token#secret-fragment",
+				Website:     "sample",
+				Environment: "staging",
+				Token:       "secret-token",
+			},
+			{
+				Name:        "prod",
+				Server:      "ssh://root@prod.example.com",
+				Website:     "sample",
+				Environment: "prod",
+			},
+		},
+	}
+
+	redacted := cfg.RedactedCopy()
+	if redacted.Contexts[0].Token != RedactedSecret {
+		t.Fatalf("expected token to be redacted, got %q", redacted.Contexts[0].Token)
+	}
+	if redacted.Contexts[0].Server != RedactServerURL(cfg.Contexts[0].Server) {
+		t.Fatalf("expected server URL secrets to be redacted, got %q", redacted.Contexts[0].Server)
+	}
+	if strings.Contains(redacted.Contexts[0].Server, "secret-token") || strings.Contains(redacted.Contexts[0].Server, "secret-fragment") {
+		t.Fatalf("expected embedded server URL secrets to be redacted, got %q", redacted.Contexts[0].Server)
+	}
+	if cfg.Contexts[0].Token != "secret-token" {
+		t.Fatalf("expected original config to be unchanged, got %q", cfg.Contexts[0].Token)
+	}
+	if cfg.Contexts[0].Server != "ssh://root:secret@staging.example.com?token=secret-token#secret-fragment" {
+		t.Fatalf("expected original server to be unchanged, got %q", cfg.Contexts[0].Server)
+	}
+}

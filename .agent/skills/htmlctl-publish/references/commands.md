@@ -3,14 +3,20 @@
 ## Context Management
 
 ```bash
+# Create a context without editing YAML by hand
+htmlctl context create <name> --server ssh://user@host --website <website> --environment <env>
+
 # Show all configured contexts
 htmlctl context list
 
 # Show the active context name
 htmlctl config current-context
 
-# Show full config (all contexts, current)
+# Show full config (all contexts, current) with tokens redacted
 htmlctl config view
+
+# Show full config including secrets
+htmlctl config view --show-secrets
 
 # Switch active context
 htmlctl context use <name>

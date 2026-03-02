@@ -34,6 +34,86 @@ func TestConfigViewCommandPrintsYAML(t *testing.T) {
 	}
 }
 
+func TestConfigViewCommandRedactsTokensByDefault(t *testing.T) {
+	configPath := writeTestConfigFileWithToken(t, "staging", "super-secret-token")
+	t.Setenv(config.EnvConfigPath, configPath)
+
+	cmd := NewRootCmd("test")
+	out := &bytes.Buffer{}
+	errOut := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(errOut)
+	cmd.SetArgs([]string{"config", "view"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	got := out.String()
+	if strings.Contains(got, "super-secret-token") {
+		t.Fatalf("expected token to be redacted, got: %s", got)
+	}
+	if !strings.Contains(got, "token: "+config.RedactedSecret) {
+		t.Fatalf("expected redacted token marker, got: %s", got)
+	}
+}
+
+func TestConfigViewCommandRedactsSecretsEmbeddedInServerURL(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	content := `apiVersion: htmlctl.dev/v1
+current-context: staging
+contexts:
+  - name: staging
+    server: ssh://root@staging.example.com?token=super-secret-token
+    website: sample
+    environment: staging
+`
+	if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write config file: %v", err)
+	}
+	t.Setenv(config.EnvConfigPath, configPath)
+
+	cmd := NewRootCmd("test")
+	out := &bytes.Buffer{}
+	errOut := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(errOut)
+	cmd.SetArgs([]string{"config", "view"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	got := out.String()
+	if strings.Contains(got, "super-secret-token") {
+		t.Fatalf("expected server URL secret to be redacted, got: %s", got)
+	}
+	if !strings.Contains(got, "redacted") {
+		t.Fatalf("expected redacted marker in output, got: %s", got)
+	}
+}
+
+func TestConfigViewCommandShowsSecretsWhenRequested(t *testing.T) {
+	configPath := writeTestConfigFileWithToken(t, "staging", "super-secret-token")
+	t.Setenv(config.EnvConfigPath, configPath)
+
+	cmd := NewRootCmd("test")
+	out := &bytes.Buffer{}
+	errOut := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(errOut)
+	cmd.SetArgs([]string{"config", "view", "--show-secrets"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "token: super-secret-token") {
+		t.Fatalf("expected raw token in output, got: %s", got)
+	}
+}
+
 func TestConfigCurrentContextCommandPrintsActiveName(t *testing.T) {
 	configPath := writeTestConfigFile(t, "prod")
 	t.Setenv(config.EnvConfigPath, configPath)
@@ -120,6 +200,9 @@ func TestConfigUseContextUnknownContextFailsWithAvailableList(t *testing.T) {
 	if !strings.Contains(msg, "available contexts") {
 		t.Fatalf("expected available contexts in error, got %v", err)
 	}
+	if !strings.Contains(msg, "htmlctl context list") {
+		t.Fatalf("expected context list guidance, got %v", err)
+	}
 	if !strings.Contains(msg, "staging") || !strings.Contains(msg, "prod") {
 		t.Fatalf("expected known contexts in error, got %v", err)
 	}
@@ -143,6 +226,9 @@ func TestConfigCurrentContextMissingConfigFailsWithHelpfulError(t *testing.T) {
 	if !strings.Contains(err.Error(), "config file not found") {
 		t.Fatalf("expected helpful missing config message, got %v", err)
 	}
+	if !strings.Contains(err.Error(), "htmlctl context create") {
+		t.Fatalf("expected context create guidance, got %v", err)
+	}
 	if !strings.Contains(err.Error(), config.EnvConfigPath) {
 		t.Fatalf("expected env var hint in error, got %v", err)
 	}
@@ -159,6 +245,29 @@ contexts:
     server: ssh://root@staging.example.com
     website: sample
     environment: staging
+  - name: prod
+    server: ssh://root@prod.example.com
+    website: sample
+    environment: prod
+`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write config file: %v", err)
+	}
+	return path
+}
+
+func writeTestConfigFileWithToken(t *testing.T, currentContext, token string) string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	content := `apiVersion: htmlctl.dev/v1
+current-context: ` + currentContext + `
+contexts:
+  - name: staging
+    server: ssh://root@staging.example.com
+    website: sample
+    environment: staging
+    token: ` + token + `
   - name: prod
     server: ssh://root@prod.example.com
     website: sample

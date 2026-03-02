@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/benedict2310/htmlctl/internal/config"
 	"golang.org/x/crypto/ssh"
 	xknownhosts "golang.org/x/crypto/ssh/knownhosts"
 )
@@ -48,33 +49,43 @@ func (e ServerEndpoint) Address() string {
 // ParseServerURL parses ssh://user@host[:port] server URLs.
 func ParseServerURL(raw string) (ServerEndpoint, error) {
 	raw = strings.TrimSpace(raw)
+	safeRaw := config.RedactServerURL(raw)
 	if raw == "" {
 		return ServerEndpoint{}, fmt.Errorf("server URL is required")
 	}
 
 	u, err := url.Parse(raw)
 	if err != nil {
-		return ServerEndpoint{}, fmt.Errorf("parse server URL %q: %w", raw, err)
+		return ServerEndpoint{}, fmt.Errorf("parse server URL %q: invalid format", safeRaw)
 	}
 	if u.Scheme != "ssh" {
 		return ServerEndpoint{}, fmt.Errorf("invalid server URL scheme %q: expected ssh", u.Scheme)
 	}
 	if u.User == nil || strings.TrimSpace(u.User.Username()) == "" {
-		return ServerEndpoint{}, fmt.Errorf("server URL %q must include user (ssh://user@host)", raw)
+		return ServerEndpoint{}, fmt.Errorf("server URL %q must include user (ssh://user@host)", safeRaw)
+	}
+	if _, ok := u.User.Password(); ok {
+		return ServerEndpoint{}, fmt.Errorf("server URL %q must not include password", safeRaw)
 	}
 	host := strings.TrimSpace(u.Hostname())
 	if host == "" {
-		return ServerEndpoint{}, fmt.Errorf("server URL %q must include host", raw)
+		return ServerEndpoint{}, fmt.Errorf("server URL %q must include host", safeRaw)
 	}
 	if path := strings.TrimSpace(u.EscapedPath()); path != "" && path != "/" {
-		return ServerEndpoint{}, fmt.Errorf("server URL %q must not include path", raw)
+		return ServerEndpoint{}, fmt.Errorf("server URL %q must not include path", safeRaw)
+	}
+	if strings.TrimSpace(u.RawQuery) != "" {
+		return ServerEndpoint{}, fmt.Errorf("server URL %q must not include query", safeRaw)
+	}
+	if strings.TrimSpace(u.Fragment) != "" {
+		return ServerEndpoint{}, fmt.Errorf("server URL %q must not include fragment", safeRaw)
 	}
 
 	port := DefaultSSHPort
 	if p := strings.TrimSpace(u.Port()); p != "" {
 		n, err := strconv.Atoi(p)
 		if err != nil || n < 1 || n > 65535 {
-			return ServerEndpoint{}, fmt.Errorf("server URL %q has invalid port %q", raw, p)
+			return ServerEndpoint{}, fmt.Errorf("server URL %q has invalid port %q", safeRaw, p)
 		}
 		port = n
 	}

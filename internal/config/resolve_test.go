@@ -112,8 +112,26 @@ func TestResolveContextNoCurrentContextSelected(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected no-current-context error")
 	}
-	if !strings.Contains(err.Error(), "set current-context") {
+	if !strings.Contains(err.Error(), "htmlctl context use <name>") {
 		t.Fatalf("expected current-context guidance, got %v", err)
+	}
+}
+
+func TestResolveContextNoCurrentContextAndNoContexts(t *testing.T) {
+	cfg := Config{
+		CurrentContext: "",
+		Contexts:       nil,
+	}
+
+	_, err := ResolveContext(cfg, "")
+	if err == nil {
+		t.Fatalf("expected no-current-context error")
+	}
+	if !strings.Contains(err.Error(), "config has no contexts") {
+		t.Fatalf("expected no-contexts detail, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "htmlctl context create") {
+		t.Fatalf("expected create guidance, got %v", err)
 	}
 }
 
@@ -129,5 +147,8 @@ func TestResolveContextMissingFromEmptyContexts(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "config has no contexts") {
 		t.Fatalf("expected no-contexts detail, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "htmlctl context create <name>") {
+		t.Fatalf("expected create guidance, got %v", err)
 	}
 }

@@ -319,9 +319,13 @@ Backend paths must use the canonical prefix form `/<segment>/*`. They are runtim
 
 | Command | Description |
 |---------|-------------|
+| `htmlctl context create <name> --server <ssh://user@host> --website <website> --environment <env>` | Create a context entry without editing YAML manually |
+| `htmlctl context list` | List configured contexts |
+| `htmlctl context use <name>` | Switch active context |
 | `htmlctl context token generate` | Generate a 32-byte hex API token |
-| `htmlctl config view` | Print current config |
-| `htmlctl config use-context <name>` | Switch active context |
+| `htmlctl config view` | Print current config with tokens redacted by default |
+| `htmlctl config view --show-secrets` | Print current config including tokens |
+| `htmlctl config use-context <name>` | Switch active context (legacy alias; prefer `context use`) |
 
 All commands accept `--output json` or `--output yaml` for machine-parseable output.
 

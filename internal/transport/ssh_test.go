@@ -34,8 +34,11 @@ func TestParseServerURLRejectsInvalidValues(t *testing.T) {
 		"",
 		"http://root@example.com",
 		"ssh://example.com",
+		"ssh://root:secret@example.com",
 		"ssh://root@",
 		"ssh://root@example.com/bad-path",
+		"ssh://root@example.com?token=secret",
+		"ssh://root@example.com#frag",
 		"ssh://root@example.com:0",
 		"ssh://root@example.com:99999",
 	}
@@ -44,6 +47,46 @@ func TestParseServerURLRejectsInvalidValues(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected parse error for %q", input)
 		}
+	}
+}
+
+func TestParseServerURLPasswordErrorRedactsSecret(t *testing.T) {
+	_, err := ParseServerURL("ssh://root:secret@example.com")
+	if err == nil {
+		t.Fatalf("expected parse error")
+	}
+	if strings.Contains(err.Error(), "secret") {
+		t.Fatalf("expected password to be redacted, got %v", err)
+	}
+}
+
+func TestParseServerURLMalformedPasswordURLDoesNotLeakSecret(t *testing.T) {
+	_, err := ParseServerURL("ssh://root:secret@%zz")
+	if err == nil {
+		t.Fatalf("expected parse error")
+	}
+	if strings.Contains(err.Error(), "secret") {
+		t.Fatalf("expected password to be redacted, got %v", err)
+	}
+}
+
+func TestParseServerURLQueryErrorDoesNotLeakSecret(t *testing.T) {
+	_, err := ParseServerURL("ssh://root@example.com?token=secret")
+	if err == nil {
+		t.Fatalf("expected parse error")
+	}
+	if strings.Contains(err.Error(), "secret") {
+		t.Fatalf("expected query secret to be redacted, got %v", err)
+	}
+}
+
+func TestParseServerURLFragmentErrorDoesNotLeakSecret(t *testing.T) {
+	_, err := ParseServerURL("ssh://root@example.com#secret-fragment")
+	if err == nil {
+		t.Fatalf("expected parse error")
+	}
+	if strings.Contains(err.Error(), "secret-fragment") {
+		t.Fatalf("expected fragment secret to be redacted, got %v", err)
 	}
 }
 

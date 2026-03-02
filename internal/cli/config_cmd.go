@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/benedict2310/htmlctl/internal/config"
 	"github.com/spf13/cobra"
@@ -12,7 +11,8 @@ import (
 func newConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
-		Short: "Manage htmlctl contexts",
+		Short: "Inspect htmlctl config and active context",
+		Long:  "Inspect htmlctl config and active context. Use the 'context' command group to create, update, list, and switch contexts.",
 	}
 	markRequiresConfig(cmd)
 
@@ -24,15 +24,21 @@ func newConfigCmd() *cobra.Command {
 }
 
 func newConfigViewCmd() *cobra.Command {
-	return &cobra.Command{
+	var showSecrets bool
+
+	cmd := &cobra.Command{
 		Use:   "view",
-		Short: "Print the loaded config",
+		Short: "Print the loaded config with tokens redacted by default",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rt, err := runtimeFromCommand(cmd)
 			if err != nil {
 				return err
 			}
-			out, err := yaml.Marshal(&rt.Config)
+			cfg := rt.Config
+			if !showSecrets {
+				cfg = cfg.RedactedCopy()
+			}
+			out, err := yaml.Marshal(&cfg)
 			if err != nil {
 				return fmt.Errorf("marshal config output: %w", err)
 			}
@@ -43,6 +49,8 @@ func newConfigViewCmd() *cobra.Command {
 			return err
 		},
 	}
+	cmd.Flags().BoolVar(&showSecrets, "show-secrets", false, "Print secret values such as context tokens")
+	return cmd
 }
 
 func newConfigCurrentContextCmd() *cobra.Command {
@@ -65,28 +73,8 @@ func newConfigCurrentContextCmd() *cobra.Command {
 }
 
 func newConfigUseContextCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "use-context <name>",
-		Short: "Switch current-context",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			rt, err := runtimeFromCommand(cmd)
-			if err != nil {
-				return err
-			}
-
-			ctx, err := config.ResolveContext(rt.Config, args[0])
-			if err != nil {
-				return err
-			}
-
-			rt.Config.CurrentContext = strings.TrimSpace(ctx.Name)
-			if err := config.Save(rt.ConfigPath, rt.Config); err != nil {
-				return err
-			}
-
-			fmt.Fprintf(cmd.OutOrStdout(), "Switched to context %q\n", ctx.Name)
-			return nil
-		},
-	}
+	cmd := newContextUseCmd()
+	cmd.Use = "use-context <name>"
+	cmd.Short = "Switch current-context (preferred: htmlctl context use <name>)"
+	return cmd
 }

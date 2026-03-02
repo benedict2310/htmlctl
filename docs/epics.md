@@ -142,3 +142,40 @@ by guarding the field with `sync.RWMutex`. All 428 tests pass clean under `-race
 | 9.3 | Backend management API + CLI (`htmlctl backend add/list/remove`) (Implemented) | [E9-S3](stories/E9-S3-backend-api-and-cli.md) |
 
 **Done when:** `htmlctl backend add website/futurelab --env prod --path /api/* --upstream https://api.example.com` proxies live traffic and `htmlctl backend list website/futurelab --env prod` shows the declared backends.
+
+---
+
+## Epic 10 — Review, Automation, and Lifecycle
+
+**Goal:** Extend htmlctl from a static-site deployment control plane into a fuller publishing platform with draft review URLs, reproducible Git-driven deployment, visitor access control, storage lifecycle management, and richer component delivery.
+**Status:** Planned
+
+**Motivation:** Epics 1-9 established deterministic rendering, safe release promotion, production TLS/domain routing, telemetry, and environment-specific backends. The next set of features should increase operator leverage without undermining those guarantees: review non-active releases safely, deploy from source control without manual checkout steps, protect selected paths, control storage growth, and let components carry scoped behavior without falling back to large global bundles.
+
+| # | Story | File |
+|---|-------|------|
+| 10.1 | Preview URLs for draft releases | [E10-S1](stories/E10-S1-preview-urls-draft-releases.md) |
+| 10.2 | Git input mode for `apply` | [E10-S2](stories/E10-S2-git-input-apply.md) |
+| 10.3 | Path-based auth policies | [E10-S3](stories/E10-S3-path-auth-policies.md) |
+| 10.4 | Release retention and storage GC | [E10-S4](stories/E10-S4-release-retention-and-gc.md) |
+| 10.5 | Component-scoped CSS/JS fragments | [E10-S5](stories/E10-S5-component-scoped-css-js-fragments.md) |
+
+**Done when:** operators can create expiring preview hosts for specific releases, deploy a site directly from a pinned Git ref, gate selected prefixes with stored auth policies, prune old storage safely without breaking rollback or previews, and ship per-component CSS/JS sidecars deterministically.
+
+---
+
+## Epic 11 — CLI UX Polish
+
+**Goal:** Make `htmlctl` feel more like a coherent operator control plane by fixing command inconsistencies, context ergonomics, diagnostics, and unsafe/default-awkward CLI behavior.
+**Status:** Planned
+
+**Motivation:** Epics 8 and 9 improved reliability and added backend management, but the command surface still has avoidable friction: `config` vs `context` is split awkwardly, many remote commands ignore context defaults, `config view` exposes secrets, remote version skew is hard to detect, error output is often less actionable than it should be, and the command inventory does not line up cleanly with what operators expect.
+
+| # | Story | File |
+|---|-------|------|
+| 11.1 | Safe context lifecycle and config UX | [E11-S1](stories/E11-S1-safe-context-lifecycle-and-config-ux.md) |
+| 11.2 | Context-aware defaults for remote commands | [E11-S2](stories/E11-S2-context-aware-defaults-remote-commands.md) |
+| 11.3 | Remote diagnostics and version awareness | [E11-S3](stories/E11-S3-remote-diagnostics-and-version-awareness.md) |
+| 11.4 | Inventory and workflow guidance polish | [E11-S4](stories/E11-S4-inventory-and-workflow-guidance-polish.md) |
+
+**Done when:** operators can inspect and manage contexts safely, use common remote commands without repeatedly restating the current website/environment, detect client/server skew quickly, and discover resource inventory and next steps from the CLI without reading the source.

@@ -125,6 +125,7 @@ by guarding the field with `sync.RWMutex`. All 428 tests pass clean under `-race
 | 8.4 | Website-scoped favicon support (Implemented) | [E8-S4](stories/E8-S4-website-favicon-support.md) |
 | 8.5 | Declarative `robots.txt` generation (Implemented) | [E8-S5](stories/E8-S5-robots-txt-generation.md) |
 | 8.6 | Automatic `sitemap.xml` generation (Implemented) | [E8-S6](stories/E8-S6-sitemap-xml-generation.md) |
+| 8.7 | `llms.txt` generation and auto-generated JSON-LD structured data | [E8-S7](stories/E8-S7-llms-txt-and-structured-data.md) |
 
 ---
 

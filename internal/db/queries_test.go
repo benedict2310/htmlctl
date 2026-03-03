@@ -1247,3 +1247,201 @@ func TestBackendCRUD(t *testing.T) {
 		t.Fatalf("expected deleted=false for missing backend")
 	}
 }
+
+func TestReleasePreviewCRUD(t *testing.T) {
+	q, cleanup := setupDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	envID, err := q.InsertEnvironment(ctx, EnvironmentRow{WebsiteID: websiteID, Name: "staging"})
+	if err != nil {
+		t.Fatalf("InsertEnvironment() error = %v", err)
+	}
+	if err := q.InsertRelease(ctx, ReleaseRow{
+		ID:            "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+		EnvironmentID: envID,
+		ManifestJSON:  `{}`,
+		OutputHashes:  `{}`,
+		BuildLog:      "ok",
+		Status:        "active",
+	}); err != nil {
+		t.Fatalf("InsertRelease() error = %v", err)
+	}
+
+	id, err := q.InsertReleasePreview(ctx, ReleasePreviewRow{
+		EnvironmentID: envID,
+		ReleaseID:     "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+		Hostname:      "abc123--staging--sample.preview.example.com",
+		CreatedBy:     "alice",
+		ExpiresAt:     "2026-03-05T12:00:00Z",
+	})
+	if err != nil {
+		t.Fatalf("InsertReleasePreview() error = %v", err)
+	}
+
+	row, err := q.GetReleasePreviewByID(ctx, envID, id)
+	if err != nil {
+		t.Fatalf("GetReleasePreviewByID() error = %v", err)
+	}
+	if row.Hostname != "abc123--staging--sample.preview.example.com" || row.CreatedBy != "alice" {
+		t.Fatalf("unexpected preview row: %#v", row)
+	}
+
+	rows, err := q.ListReleasePreviewsByEnvironment(ctx, envID, "2026-03-04T00:00:00.000000000Z")
+	if err != nil {
+		t.Fatalf("ListReleasePreviewsByEnvironment() error = %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != id {
+		t.Fatalf("unexpected environment preview rows: %#v", rows)
+	}
+
+	resolved, err := q.ListReleasePreviews(ctx, "2026-03-04T00:00:00Z")
+	if err != nil {
+		t.Fatalf("ListReleasePreviews() error = %v", err)
+	}
+	if len(resolved) != 1 {
+		t.Fatalf("expected one resolved preview row, got %#v", resolved)
+	}
+	if resolved[0].WebsiteName != "sample" || resolved[0].EnvironmentName != "staging" {
+		t.Fatalf("unexpected resolved preview row: %#v", resolved[0])
+	}
+
+	active, err := q.GetActiveReleasePreviewByHostname(ctx, "abc123--staging--sample.preview.example.com", "2026-03-04T00:00:00Z")
+	if err != nil {
+		t.Fatalf("GetActiveReleasePreviewByHostname() error = %v", err)
+	}
+	if active.ID != id {
+		t.Fatalf("unexpected active preview row: %#v", active)
+	}
+
+	deleted, err := q.DeleteReleasePreviewByID(ctx, envID, id)
+	if err != nil {
+		t.Fatalf("DeleteReleasePreviewByID() error = %v", err)
+	}
+	if !deleted {
+		t.Fatalf("expected deleted=true for existing preview")
+	}
+	deleted, err = q.DeleteReleasePreviewByID(ctx, envID, id)
+	if err != nil {
+		t.Fatalf("DeleteReleasePreviewByID(second) error = %v", err)
+	}
+	if deleted {
+		t.Fatalf("expected deleted=false for missing preview")
+	}
+}
+
+func TestDeleteExpiredReleasePreviews(t *testing.T) {
+	q, cleanup := setupDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	envID, err := q.InsertEnvironment(ctx, EnvironmentRow{WebsiteID: websiteID, Name: "staging"})
+	if err != nil {
+		t.Fatalf("InsertEnvironment() error = %v", err)
+	}
+	for _, releaseID := range []string{"01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW"} {
+		if err := q.InsertRelease(ctx, ReleaseRow{
+			ID:            releaseID,
+			EnvironmentID: envID,
+			ManifestJSON:  `{}`,
+			OutputHashes:  `{}`,
+			BuildLog:      "ok",
+			Status:        "active",
+		}); err != nil {
+			t.Fatalf("InsertRelease(%s) error = %v", releaseID, err)
+		}
+	}
+
+	if _, err := q.InsertReleasePreview(ctx, ReleasePreviewRow{
+		EnvironmentID: envID,
+		ReleaseID:     "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+		Hostname:      "expired--staging--sample.preview.example.com",
+		CreatedBy:     "alice",
+		ExpiresAt:     "2026-03-01T00:00:00Z",
+	}); err != nil {
+		t.Fatalf("InsertReleasePreview(expired) error = %v", err)
+	}
+	if _, err := q.InsertReleasePreview(ctx, ReleasePreviewRow{
+		EnvironmentID: envID,
+		ReleaseID:     "01ARZ3NDEKTSV4RRFFQ69G5FAW",
+		Hostname:      "active--staging--sample.preview.example.com",
+		CreatedBy:     "alice",
+		ExpiresAt:     "2026-03-10T00:00:00Z",
+	}); err != nil {
+		t.Fatalf("InsertReleasePreview(active) error = %v", err)
+	}
+
+	deleted, err := q.DeleteExpiredReleasePreviews(ctx, "2026-03-05T00:00:00Z")
+	if err != nil {
+		t.Fatalf("DeleteExpiredReleasePreviews() error = %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("expected one deleted preview, got %d", deleted)
+	}
+
+	rows, err := q.ListReleasePreviewsByEnvironment(ctx, envID, "2026-03-05T00:00:00.000000000Z")
+	if err != nil {
+		t.Fatalf("ListReleasePreviewsByEnvironment() error = %v", err)
+	}
+	if len(rows) != 1 || rows[0].Hostname != "active--staging--sample.preview.example.com" {
+		t.Fatalf("unexpected remaining preview rows: %#v", rows)
+	}
+}
+
+func TestReleasePreviewExpiryBoundaryUsesStableTimestampOrdering(t *testing.T) {
+	q, cleanup := setupDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	envID, err := q.InsertEnvironment(ctx, EnvironmentRow{WebsiteID: websiteID, Name: "staging"})
+	if err != nil {
+		t.Fatalf("InsertEnvironment() error = %v", err)
+	}
+	if err := q.InsertRelease(ctx, ReleaseRow{
+		ID:            "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+		EnvironmentID: envID,
+		ManifestJSON:  `{}`,
+		OutputHashes:  `{}`,
+		BuildLog:      "ok",
+		Status:        "active",
+	}); err != nil {
+		t.Fatalf("InsertRelease() error = %v", err)
+	}
+
+	expiresAt := "2026-03-05T12:00:00.000000000Z"
+	if _, err := q.InsertReleasePreview(ctx, ReleasePreviewRow{
+		EnvironmentID: envID,
+		ReleaseID:     "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+		Hostname:      "boundary--staging--sample.preview.example.com",
+		CreatedBy:     "alice",
+		ExpiresAt:     expiresAt,
+	}); err != nil {
+		t.Fatalf("InsertReleasePreview() error = %v", err)
+	}
+
+	if _, err := q.GetActiveReleasePreviewByHostname(ctx, "boundary--staging--sample.preview.example.com", expiresAt); err == nil {
+		t.Fatalf("expected exact expiry boundary lookup to return no rows")
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("expected sql.ErrNoRows at expiry boundary, got %v", err)
+	}
+
+	deleted, err := q.DeleteExpiredReleasePreviews(ctx, expiresAt)
+	if err != nil {
+		t.Fatalf("DeleteExpiredReleasePreviews() error = %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("expected one deleted preview at expiry boundary, got %d", deleted)
+	}
+}

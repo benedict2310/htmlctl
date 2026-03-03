@@ -39,6 +39,15 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.Telemetry.RetentionDays != DefaultTelemetryRetentionDays {
 		t.Fatalf("expected telemetry retention default %d, got %d", DefaultTelemetryRetentionDays, cfg.Telemetry.RetentionDays)
 	}
+	if cfg.Preview.Enabled {
+		t.Fatalf("expected preview disabled by default")
+	}
+	if cfg.Preview.DefaultTTLHours != DefaultPreviewTTLHours {
+		t.Fatalf("expected preview default ttl %d, got %d", DefaultPreviewTTLHours, cfg.Preview.DefaultTTLHours)
+	}
+	if cfg.Preview.MaxTTLHours != DefaultPreviewMaxTTLHours {
+		t.Fatalf("expected preview max ttl %d, got %d", DefaultPreviewMaxTTLHours, cfg.Preview.MaxTTLHours)
+	}
 }
 
 func TestLoadConfigFromFile(t *testing.T) {
@@ -98,6 +107,10 @@ func TestLoadConfigEnvOverridesFile(t *testing.T) {
 	t.Setenv("HTMLSERVD_TELEMETRY_MAX_BODY_BYTES", "12345")
 	t.Setenv("HTMLSERVD_TELEMETRY_MAX_EVENTS", "25")
 	t.Setenv("HTMLSERVD_TELEMETRY_RETENTION_DAYS", "45")
+	t.Setenv("HTMLSERVD_PREVIEW_ENABLED", "true")
+	t.Setenv("HTMLSERVD_PREVIEW_BASE_DOMAIN", "preview.example.com")
+	t.Setenv("HTMLSERVD_PREVIEW_DEFAULT_TTL_HOURS", "48")
+	t.Setenv("HTMLSERVD_PREVIEW_MAX_TTL_HOURS", "168")
 
 	cfg, err := LoadConfig(path)
 	if err != nil {
@@ -111,6 +124,9 @@ func TestLoadConfigEnvOverridesFile(t *testing.T) {
 	}
 	if !cfg.Telemetry.Enabled || cfg.Telemetry.MaxBodyBytes != 12345 || cfg.Telemetry.MaxEvents != 25 || cfg.Telemetry.RetentionDays != 45 {
 		t.Fatalf("unexpected telemetry overrides: %#v", cfg.Telemetry)
+	}
+	if !cfg.Preview.Enabled || cfg.Preview.BaseDomain != "preview.example.com" || cfg.Preview.DefaultTTLHours != 48 || cfg.Preview.MaxTTLHours != 168 {
+		t.Fatalf("unexpected preview overrides: %#v", cfg.Preview)
 	}
 }
 
@@ -190,6 +206,18 @@ func TestLoadConfigInvalidEnvTelemetryNumbers(t *testing.T) {
 	if _, err := LoadConfig(""); err == nil || !strings.Contains(err.Error(), "HTMLSERVD_TELEMETRY_RETENTION_DAYS") {
 		t.Fatalf("expected retention parse error, got %v", err)
 	}
+
+	t.Setenv("HTMLSERVD_TELEMETRY_RETENTION_DAYS", "")
+	t.Setenv("HTMLSERVD_PREVIEW_DEFAULT_TTL_HOURS", "not-a-number")
+	if _, err := LoadConfig(""); err == nil || !strings.Contains(err.Error(), "HTMLSERVD_PREVIEW_DEFAULT_TTL_HOURS") {
+		t.Fatalf("expected preview default ttl parse error, got %v", err)
+	}
+
+	t.Setenv("HTMLSERVD_PREVIEW_DEFAULT_TTL_HOURS", "")
+	t.Setenv("HTMLSERVD_PREVIEW_MAX_TTL_HOURS", "not-a-number")
+	if _, err := LoadConfig(""); err == nil || !strings.Contains(err.Error(), "HTMLSERVD_PREVIEW_MAX_TTL_HOURS") {
+		t.Fatalf("expected preview max ttl parse error, got %v", err)
+	}
 }
 
 func TestConfigValidateErrors(t *testing.T) {
@@ -203,6 +231,10 @@ func TestConfigValidateErrors(t *testing.T) {
 		{BindAddr: "127.0.0.1", Port: 9400, DataDir: "/tmp/x", LogLevel: "info", Telemetry: TelemetryConfig{MaxBodyBytes: -1}},
 		{BindAddr: "127.0.0.1", Port: 9400, DataDir: "/tmp/x", LogLevel: "info", Telemetry: TelemetryConfig{MaxEvents: -1}},
 		{BindAddr: "127.0.0.1", Port: 9400, DataDir: "/tmp/x", LogLevel: "info", Telemetry: TelemetryConfig{RetentionDays: -1}},
+		{BindAddr: "127.0.0.1", Port: 9400, DataDir: "/tmp/x", LogLevel: "info", Preview: PreviewConfig{Enabled: true}},
+		{BindAddr: "127.0.0.1", Port: 9400, DataDir: "/tmp/x", LogLevel: "info", Preview: PreviewConfig{Enabled: true, BaseDomain: strings.Repeat("a", maxPreviewBaseDomainLength+1) + ".com"}},
+		{BindAddr: "127.0.0.1", Port: 9400, DataDir: "/tmp/x", LogLevel: "info", Preview: PreviewConfig{Enabled: true, BaseDomain: "preview.example.com", DefaultTTLHours: -1, MaxTTLHours: 24}},
+		{BindAddr: "127.0.0.1", Port: 9400, DataDir: "/tmp/x", LogLevel: "info", Preview: PreviewConfig{Enabled: true, BaseDomain: "preview.example.com", DefaultTTLHours: 72, MaxTTLHours: 24}},
 	}
 	for i, cfg := range tests {
 		if err := cfg.Validate(); err == nil {
@@ -224,5 +256,23 @@ func TestConfigValidateAllowsTelemetryWithNestedAPIToken(t *testing.T) {
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected nested api.token to satisfy telemetry auth requirement, got %v", err)
+	}
+}
+
+func TestConfigValidateAllowsPreviewWhenConfigured(t *testing.T) {
+	cfg := Config{
+		BindAddr: "127.0.0.1",
+		Port:     9400,
+		DataDir:  "/tmp/x",
+		LogLevel: "info",
+		Preview: PreviewConfig{
+			Enabled:         true,
+			BaseDomain:      "preview.example.com",
+			DefaultTTLHours: 72,
+			MaxTTLHours:     168,
+		},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected preview validation success, got %v", err)
 	}
 }

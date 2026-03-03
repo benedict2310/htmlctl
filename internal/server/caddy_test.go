@@ -193,6 +193,110 @@ func TestGenerateCaddyConfigIncludesTelemetryProxyWhenEnabled(t *testing.T) {
 	}
 }
 
+func TestGenerateCaddyConfigIncludesPreviewSites(t *testing.T) {
+	srv := startTestServer(t)
+	srv.cfg.Preview.Enabled = true
+	srv.cfg.Preview.BaseDomain = "preview.example.com"
+	srv.cfg.Telemetry.Enabled = true
+	srv.cfg.Port = 9400
+
+	q := dbpkg.NewQueries(srv.db)
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, dbpkg.WebsiteRow{
+		Name:               "sample",
+		DefaultStyleBundle: "default",
+		BaseTemplate:       "default",
+	})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	envID, err := q.InsertEnvironment(ctx, dbpkg.EnvironmentRow{WebsiteID: websiteID, Name: "staging"})
+	if err != nil {
+		t.Fatalf("InsertEnvironment(staging) error = %v", err)
+	}
+	if _, err := q.InsertDomainBinding(ctx, dbpkg.DomainBindingRow{
+		Domain:        "staging.example.com",
+		EnvironmentID: envID,
+	}); err != nil {
+		t.Fatalf("InsertDomainBinding() error = %v", err)
+	}
+	if err := q.InsertRelease(ctx, dbpkg.ReleaseRow{
+		ID:            "R1",
+		EnvironmentID: envID,
+		ManifestJSON:  `{}`,
+		OutputHashes:  `{}`,
+		BuildLog:      "ok",
+		Status:        "active",
+	}); err != nil {
+		t.Fatalf("InsertRelease() error = %v", err)
+	}
+	if _, err := q.InsertReleasePreview(ctx, dbpkg.ReleasePreviewRow{
+		EnvironmentID: envID,
+		ReleaseID:     "R1",
+		Hostname:      "abc123--staging--sample.preview.example.com",
+		CreatedBy:     "alice",
+		ExpiresAt:     "2099-01-01T00:00:00Z",
+	}); err != nil {
+		t.Fatalf("InsertReleasePreview() error = %v", err)
+	}
+	if err := q.InsertRelease(ctx, dbpkg.ReleaseRow{
+		ID:            "R0",
+		EnvironmentID: envID,
+		ManifestJSON:  `{}`,
+		OutputHashes:  `{}`,
+		BuildLog:      "ok",
+		Status:        "active",
+	}); err != nil {
+		t.Fatalf("InsertRelease(expired) error = %v", err)
+	}
+	if _, err := q.InsertReleasePreview(ctx, dbpkg.ReleasePreviewRow{
+		EnvironmentID: envID,
+		ReleaseID:     "R0",
+		Hostname:      "expired--staging--sample.preview.example.com",
+		CreatedBy:     "alice",
+		ExpiresAt:     "2000-01-01T00:00:00Z",
+	}); err != nil {
+		t.Fatalf("InsertReleasePreview(expired) error = %v", err)
+	}
+	if err := q.UpsertBackend(ctx, dbpkg.BackendRow{
+		EnvironmentID: envID,
+		PathPrefix:    "/api/*",
+		Upstream:      "https://api.example.com",
+	}); err != nil {
+		t.Fatalf("UpsertBackend() error = %v", err)
+	}
+
+	cfg, err := srv.generateCaddyConfig(ctx)
+	if err != nil {
+		t.Fatalf("generateCaddyConfig() error = %v", err)
+	}
+	if !strings.Contains(cfg, "abc123--staging--sample.preview.example.com {") {
+		t.Fatalf("expected preview site block, got:\n%s", cfg)
+	}
+	if !strings.Contains(cfg, "*.preview.example.com {") {
+		t.Fatalf("expected preview wildcard fallback block, got:\n%s", cfg)
+	}
+	if strings.Contains(cfg, "expired--staging--sample.preview.example.com {") {
+		t.Fatalf("did not expect expired preview site block, got:\n%s", cfg)
+	}
+	if !strings.Contains(cfg, "/websites/sample/envs/staging/releases/R1") {
+		t.Fatalf("expected preview site to point at release root, got:\n%s", cfg)
+	}
+	if !strings.Contains(cfg, `header X-Robots-Tag "noindex, nofollow, noarchive"`) {
+		t.Fatalf("expected robots header in preview site, got:\n%s", cfg)
+	}
+	if !strings.Contains(cfg, "\trespond 404") {
+		t.Fatalf("expected wildcard preview fallback to respond 404, got:\n%s", cfg)
+	}
+	if !strings.Contains(cfg, "reverse_proxy /api/* https://api.example.com") {
+		t.Fatalf("expected preview site to keep backend routing, got:\n%s", cfg)
+	}
+	if !strings.Contains(cfg, "handle /collect/v1/events*") {
+		t.Fatalf("expected preview site to keep telemetry proxying, got:\n%s", cfg)
+	}
+}
+
 func TestGenerateCaddyConfigOmitsTelemetryProxyWhenDisabled(t *testing.T) {
 	srv := startTestServer(t)
 	srv.cfg.Telemetry.Enabled = false

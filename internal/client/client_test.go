@@ -587,6 +587,66 @@ func TestBackendClientMethods(t *testing.T) {
 	}
 }
 
+func TestPreviewClientMethods(t *testing.T) {
+	call := 0
+	mock := &mockTransport{
+		doFn: func(ctx context.Context, req *http.Request) (*http.Response, error) {
+			call++
+			switch call {
+			case 1:
+				if req.Method != http.MethodPost || req.URL.Path != "/api/v1/websites/sample/environments/staging/previews" {
+					t.Fatalf("unexpected create request: %s %s", req.Method, req.URL.String())
+				}
+				if req.Header.Get("Content-Type") != "application/json" {
+					t.Fatalf("expected JSON content type, got %q", req.Header.Get("Content-Type"))
+				}
+				body, err := io.ReadAll(req.Body)
+				if err != nil {
+					t.Fatalf("read create request body: %v", err)
+				}
+				if got := string(body); !strings.Contains(got, `"releaseId":"R1"`) || !strings.Contains(got, `"ttl":"72h"`) {
+					t.Fatalf("unexpected create request body %s", got)
+				}
+				return jsonResponse(http.StatusCreated, `{"id":7,"releaseId":"R1","hostname":"abc123--staging--sample.preview.example.com","website":"sample","environment":"staging","createdBy":"alice","expiresAt":"2026-03-06T12:00:00Z","createdAt":"2026-03-03T12:00:00Z"}`), nil
+			case 2:
+				if req.Method != http.MethodGet || req.URL.Path != "/api/v1/websites/sample/environments/staging/previews" {
+					t.Fatalf("unexpected list request: %s %s", req.Method, req.URL.String())
+				}
+				return jsonResponse(http.StatusOK, `{"website":"sample","environment":"staging","previews":[{"id":7,"releaseId":"R1","hostname":"abc123--staging--sample.preview.example.com","expiresAt":"2026-03-06T12:00:00Z","createdAt":"2026-03-03T12:00:00Z"}]}`), nil
+			case 3:
+				if req.Method != http.MethodDelete || req.URL.Path != "/api/v1/websites/sample/environments/staging/previews/7" {
+					t.Fatalf("unexpected remove request: %s %s", req.Method, req.URL.String())
+				}
+				return jsonResponse(http.StatusNoContent, ``), nil
+			default:
+				t.Fatalf("unexpected call count %d", call)
+				return nil, nil
+			}
+		},
+	}
+
+	api := New(mock)
+	created, err := api.CreatePreview(context.Background(), "sample", "staging", "R1", "72h")
+	if err != nil {
+		t.Fatalf("CreatePreview() error = %v", err)
+	}
+	if created.ID != 7 || created.Hostname == "" {
+		t.Fatalf("unexpected CreatePreview response: %#v", created)
+	}
+
+	listed, err := api.ListPreviews(context.Background(), "sample", "staging")
+	if err != nil {
+		t.Fatalf("ListPreviews() error = %v", err)
+	}
+	if len(listed.Previews) != 1 || listed.Previews[0].ID != 7 {
+		t.Fatalf("unexpected ListPreviews response: %#v", listed)
+	}
+
+	if err := api.RemovePreview(context.Background(), "sample", "staging", 7); err != nil {
+		t.Fatalf("RemovePreview() error = %v", err)
+	}
+}
+
 type mockTransport struct {
 	doFn func(ctx context.Context, req *http.Request) (*http.Response, error)
 }

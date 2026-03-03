@@ -16,9 +16,11 @@ type Backend struct {
 }
 
 type Site struct {
-	Domain   string
-	Root     string
-	Backends []Backend
+	Domain        string
+	Root          string
+	Backends      []Backend
+	Headers       map[string]string
+	RespondStatus int
 }
 
 type ConfigOptions struct {
@@ -37,6 +39,11 @@ func GenerateConfigWithOptions(sites []Site, opts ConfigOptions) (string, error)
 
 	ordered := append([]Site(nil), sites...)
 	sort.Slice(ordered, func(i, j int) bool {
+		iWildcard := strings.HasPrefix(strings.TrimSpace(ordered[i].Domain), "*.")
+		jWildcard := strings.HasPrefix(strings.TrimSpace(ordered[j].Domain), "*.")
+		if iWildcard != jWildcard {
+			return !iWildcard
+		}
 		return ordered[i].Domain < ordered[j].Domain
 	})
 
@@ -57,17 +64,25 @@ func GenerateConfigWithOptions(sites []Site, opts ConfigOptions) (string, error)
 		if domain == "" {
 			return "", fmt.Errorf("site domain is required")
 		}
-		if root == "" {
+		if site.RespondStatus == 0 && root == "" {
 			return "", fmt.Errorf("site root is required for domain %q", domain)
 		}
-		if strings.ContainsAny(root, "\n{}") {
+		if root != "" && strings.ContainsAny(root, "\n{}") {
 			return "", fmt.Errorf("site root for domain %q contains forbidden characters", domain)
+		}
+		if site.RespondStatus < 0 || site.RespondStatus > 999 {
+			return "", fmt.Errorf("site response status for domain %q must be in range 0..999", domain)
 		}
 		siteAddress := domain
 		if opts.DisableAutoHTTPS {
 			siteAddress = "http://" + domain
 		}
 		backends := append([]Backend(nil), site.Backends...)
+		headers := make([]string, 0, len(site.Headers))
+		for key := range site.Headers {
+			headers = append(headers, key)
+		}
+		sort.Strings(headers)
 		sort.Slice(backends, func(i, j int) bool {
 			return backends[i].PathPrefix < backends[j].PathPrefix
 		})
@@ -81,6 +96,21 @@ func GenerateConfigWithOptions(sites []Site, opts ConfigOptions) (string, error)
 		}
 
 		fmt.Fprintf(&b, "%s {\n", siteAddress)
+		for _, key := range headers {
+			headerValue := strings.TrimSpace(site.Headers[key])
+			if strings.TrimSpace(key) == "" {
+				return "", fmt.Errorf("site header name is required for domain %q", domain)
+			}
+			if strings.ContainsAny(key, "\n\r{}") || strings.ContainsAny(headerValue, "\n\r{}") {
+				return "", fmt.Errorf("site header for domain %q contains forbidden characters", domain)
+			}
+			fmt.Fprintf(&b, "\theader %s %q\n", key, headerValue)
+		}
+		if site.RespondStatus > 0 {
+			fmt.Fprintf(&b, "\trespond %d\n", site.RespondStatus)
+			b.WriteString("}\n\n")
+			continue
+		}
 		fmt.Fprintf(&b, "\troot * %s\n", root)
 		if opts.TelemetryPort > 0 {
 			b.WriteString("\thandle /collect/v1/events* {\n")

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	domainpkg "github.com/benedict2310/htmlctl/internal/domain"
 	"gopkg.in/yaml.v3"
 )
 
@@ -20,6 +21,9 @@ const (
 	DefaultTelemetryMaxBodyBytes  = 64 * 1024
 	DefaultTelemetryMaxEvents     = 50
 	DefaultTelemetryRetentionDays = 90
+	DefaultPreviewTTLHours        = 72
+	DefaultPreviewMaxTTLHours     = 720
+	maxPreviewBaseDomainLength    = 253 - (previewHostnameTokenLen + 2 + previewHostnameLabelPart + 2 + previewHostnameLabelPart + 1)
 )
 
 type Config struct {
@@ -36,6 +40,7 @@ type Config struct {
 	APIToken              string          `yaml:"apiToken,omitempty"`
 	API                   APIConfig       `yaml:"api,omitempty"`
 	Telemetry             TelemetryConfig `yaml:"telemetry,omitempty"`
+	Preview               PreviewConfig   `yaml:"preview,omitempty"`
 }
 
 type APIConfig struct {
@@ -47,6 +52,13 @@ type TelemetryConfig struct {
 	MaxBodyBytes  int  `yaml:"maxBodyBytes"`
 	MaxEvents     int  `yaml:"maxEvents"`
 	RetentionDays int  `yaml:"retentionDays"`
+}
+
+type PreviewConfig struct {
+	Enabled         bool   `yaml:"enabled"`
+	BaseDomain      string `yaml:"baseDomain"`
+	DefaultTTLHours int    `yaml:"defaultTTLHours"`
+	MaxTTLHours     int    `yaml:"maxTTLHours"`
 }
 
 func DefaultConfig() Config {
@@ -68,6 +80,12 @@ func DefaultConfig() Config {
 			MaxBodyBytes:  DefaultTelemetryMaxBodyBytes,
 			MaxEvents:     DefaultTelemetryMaxEvents,
 			RetentionDays: DefaultTelemetryRetentionDays,
+		},
+		Preview: PreviewConfig{
+			Enabled:         false,
+			BaseDomain:      "",
+			DefaultTTLHours: DefaultPreviewTTLHours,
+			MaxTTLHours:     DefaultPreviewMaxTTLHours,
 		},
 	}
 }
@@ -167,6 +185,30 @@ func LoadConfig(configPath string) (Config, error) {
 		}
 		cfg.Telemetry.RetentionDays = parsed
 	}
+	if v := strings.TrimSpace(os.Getenv("HTMLSERVD_PREVIEW_ENABLED")); v != "" {
+		parsed, err := strconv.ParseBool(v)
+		if err != nil {
+			return cfg, fmt.Errorf("parse HTMLSERVD_PREVIEW_ENABLED=%q: %w", v, err)
+		}
+		cfg.Preview.Enabled = parsed
+	}
+	if v := strings.TrimSpace(os.Getenv("HTMLSERVD_PREVIEW_BASE_DOMAIN")); v != "" {
+		cfg.Preview.BaseDomain = v
+	}
+	if v := strings.TrimSpace(os.Getenv("HTMLSERVD_PREVIEW_DEFAULT_TTL_HOURS")); v != "" {
+		parsed, err := strconv.Atoi(v)
+		if err != nil {
+			return cfg, fmt.Errorf("parse HTMLSERVD_PREVIEW_DEFAULT_TTL_HOURS=%q: %w", v, err)
+		}
+		cfg.Preview.DefaultTTLHours = parsed
+	}
+	if v := strings.TrimSpace(os.Getenv("HTMLSERVD_PREVIEW_MAX_TTL_HOURS")); v != "" {
+		parsed, err := strconv.Atoi(v)
+		if err != nil {
+			return cfg, fmt.Errorf("parse HTMLSERVD_PREVIEW_MAX_TTL_HOURS=%q: %w", v, err)
+		}
+		cfg.Preview.MaxTTLHours = parsed
+	}
 
 	if err := cfg.Validate(); err != nil {
 		return cfg, err
@@ -204,6 +246,32 @@ func (c Config) Validate() error {
 	}
 	if c.Telemetry.RetentionDays < 0 {
 		return fmt.Errorf("telemetry retentionDays must be >= 0")
+	}
+	if c.Preview.Enabled {
+		normalizedBaseDomain, err := domainpkg.Normalize(c.Preview.BaseDomain)
+		if err != nil {
+			return fmt.Errorf("preview baseDomain invalid: %w", err)
+		}
+		if len(normalizedBaseDomain) > maxPreviewBaseDomainLength {
+			return fmt.Errorf("preview baseDomain exceeds maximum length of %d characters", maxPreviewBaseDomainLength)
+		}
+	}
+	if c.Preview.DefaultTTLHours < 0 {
+		return fmt.Errorf("preview defaultTTLHours must be >= 0")
+	}
+	if c.Preview.MaxTTLHours < 0 {
+		return fmt.Errorf("preview maxTTLHours must be >= 0")
+	}
+	defaultTTLHours := c.Preview.DefaultTTLHours
+	if defaultTTLHours <= 0 {
+		defaultTTLHours = DefaultPreviewTTLHours
+	}
+	maxTTLHours := c.Preview.MaxTTLHours
+	if maxTTLHours <= 0 {
+		maxTTLHours = DefaultPreviewMaxTTLHours
+	}
+	if defaultTTLHours > maxTTLHours {
+		return fmt.Errorf("preview defaultTTLHours must be <= maxTTLHours")
 	}
 	return nil
 }

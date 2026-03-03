@@ -94,6 +94,40 @@ func TestGenerateConfigWithTelemetryProxy(t *testing.T) {
 	}
 }
 
+func TestGenerateConfigWithSiteHeaders(t *testing.T) {
+	cfg, err := GenerateConfig([]Site{
+		{
+			Domain: "preview.example.com",
+			Root:   "/srv/sample/prod/releases/R1",
+			Headers: map[string]string{
+				"X-Robots-Tag": "noindex, nofollow, noarchive",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("GenerateConfig() error = %v", err)
+	}
+	if !strings.Contains(cfg, `header X-Robots-Tag "noindex, nofollow, noarchive"`) {
+		t.Fatalf("expected robots header directive, got:\n%s", cfg)
+	}
+}
+
+func TestGenerateConfigWithResponseOnlySite(t *testing.T) {
+	cfg, err := GenerateConfigWithOptions([]Site{
+		{Domain: "example.com", Root: "/srv/sample/current"},
+		{Domain: "*.preview.example.com", RespondStatus: 404},
+	}, ConfigOptions{DisableAutoHTTPS: true})
+	if err != nil {
+		t.Fatalf("GenerateConfigWithOptions() error = %v", err)
+	}
+	if !strings.Contains(cfg, "http://*.preview.example.com {\n\trespond 404\n}") {
+		t.Fatalf("expected response-only preview fallback, got:\n%s", cfg)
+	}
+	if strings.Contains(cfg, "http://*.preview.example.com {\n\troot *") {
+		t.Fatalf("did not expect root directive in response-only site, got:\n%s", cfg)
+	}
+}
+
 func TestGenerateConfigWithBackends(t *testing.T) {
 	cfg, err := GenerateConfig([]Site{
 		{
@@ -168,6 +202,27 @@ func TestGenerateConfigRejectsInvalidTelemetryPort(t *testing.T) {
 		{Domain: "example.com", Root: "/srv/sample/prod/current"},
 	}, ConfigOptions{TelemetryPort: 70000}); err == nil {
 		t.Fatalf("expected invalid telemetry port error")
+	}
+}
+
+func TestGenerateConfigRejectsInvalidHeader(t *testing.T) {
+	if _, err := GenerateConfig([]Site{{
+		Domain: "example.com",
+		Root:   "/srv/sample/prod/current",
+		Headers: map[string]string{
+			"Bad\nHeader": "value",
+		},
+	}}); err == nil {
+		t.Fatalf("expected invalid header error")
+	}
+}
+
+func TestGenerateConfigRejectsInvalidResponseStatus(t *testing.T) {
+	if _, err := GenerateConfig([]Site{{
+		Domain:        "*.preview.example.com",
+		RespondStatus: 1000,
+	}}); err == nil {
+		t.Fatalf("expected invalid response status error")
 	}
 }
 

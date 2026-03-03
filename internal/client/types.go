@@ -151,6 +151,23 @@ type BackendsResponse struct {
 	Backends    []Backend `json:"backends" yaml:"backends"`
 }
 
+type Preview struct {
+	ID          int64  `json:"id" yaml:"id"`
+	ReleaseID   string `json:"releaseId" yaml:"releaseId"`
+	Hostname    string `json:"hostname" yaml:"hostname"`
+	Website     string `json:"website,omitempty" yaml:"website,omitempty"`
+	Environment string `json:"environment,omitempty" yaml:"environment,omitempty"`
+	CreatedBy   string `json:"createdBy,omitempty" yaml:"createdBy,omitempty"`
+	ExpiresAt   string `json:"expiresAt" yaml:"expiresAt"`
+	CreatedAt   string `json:"createdAt" yaml:"createdAt"`
+}
+
+type PreviewsResponse struct {
+	Website     string    `json:"website,omitempty" yaml:"website,omitempty"`
+	Environment string    `json:"environment,omitempty" yaml:"environment,omitempty"`
+	Previews    []Preview `json:"previews" yaml:"previews"`
+}
+
 type LogsResponse struct {
 	Entries []AuditLogEntry `json:"entries" yaml:"entries"`
 	Total   int             `json:"total" yaml:"total"`

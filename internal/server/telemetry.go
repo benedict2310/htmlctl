@@ -600,10 +600,20 @@ func (s *Server) resolveTelemetryEnvironmentID(ctx context.Context, host string)
 	q := dbpkg.NewQueries(s.db)
 	row, err := q.GetDomainBindingByDomain(ctx, host)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return 0, err
+		}
+		if !s.cfg.Preview.Enabled {
 			return 0, errTelemetryHostNotBound
 		}
-		return 0, err
+		previewRow, previewErr := q.GetActiveReleasePreviewByHostname(ctx, host, formatPreviewTimestamp(time.Now().UTC()))
+		if previewErr != nil {
+			if errors.Is(previewErr, sql.ErrNoRows) {
+				return 0, errTelemetryHostNotBound
+			}
+			return 0, previewErr
+		}
+		return previewRow.EnvironmentID, nil
 	}
 	return row.EnvironmentID, nil
 }

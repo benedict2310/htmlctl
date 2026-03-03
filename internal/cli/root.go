@@ -104,6 +104,7 @@ func NewRootCmd(version string) *cobra.Command {
 	cmd.AddCommand(newPromoteCmd())
 	cmd.AddCommand(newDomainCmd())
 	cmd.AddCommand(newBackendCmd())
+	cmd.AddCommand(newPreviewCmd())
 	cmd.AddCommand(newLogsCmd())
 	cmd.AddCommand(newVersionCmd(version))
 	cmd.AddCommand(newDoctorCmd(version))
@@ -215,6 +216,15 @@ func validateTransportContextRequirements(cmd *cobra.Command, args []string, res
 			return err
 		}
 	case "htmlctl backend add", "htmlctl backend list", "htmlctl backend remove":
+		if _, err := resolveRemoteWebsiteValue(args, resolved.Website); err != nil {
+			return err
+		}
+		if strings.TrimSpace(cmd.Flag("env").Value.String()) == "" {
+			if _, err := requireContextEnvironmentValue(resolved.Environment); err != nil {
+				return fmt.Errorf("no environment selected: pass --env <environment> or run 'htmlctl context set <name> --environment <environment>'")
+			}
+		}
+	case "htmlctl preview create", "htmlctl preview list", "htmlctl preview remove":
 		if _, err := resolveRemoteWebsiteValue(args, resolved.Website); err != nil {
 			return err
 		}

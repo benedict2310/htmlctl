@@ -109,6 +109,28 @@ type ReleaseRow struct {
 	CreatedAt     string
 }
 
+type ReleasePreviewRow struct {
+	ID            int64
+	EnvironmentID int64
+	ReleaseID     string
+	Hostname      string
+	CreatedBy     string
+	ExpiresAt     string
+	CreatedAt     string
+}
+
+type ReleasePreviewResolvedRow struct {
+	ID              int64
+	EnvironmentID   int64
+	ReleaseID       string
+	Hostname        string
+	CreatedBy       string
+	ExpiresAt       string
+	CreatedAt       string
+	WebsiteName     string
+	EnvironmentName string
+}
+
 type AuditLogRow struct {
 	ID              int64
 	Actor           string

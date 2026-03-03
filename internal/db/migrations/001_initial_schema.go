@@ -143,5 +143,10 @@ func All() []Migration {
 			Name:    "environment_backends",
 			UpSQL:   environmentBackendsMigrationSQL,
 		},
+		{
+			Version: 8,
+			Name:    "release_previews",
+			UpSQL:   releasePreviewsMigrationSQL,
+		},
 	}
 }

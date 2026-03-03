@@ -34,6 +34,10 @@ type Server struct {
 
 	telemetryCleanupStop chan struct{}
 	telemetryCleanupDone chan struct{}
+	previewCleanupStop   chan struct{}
+	previewCleanupDone   chan struct{}
+	previewReloadMu      sync.Mutex
+	previewReloadPending bool
 
 	auditLogger       audit.Logger
 	applyLockStripes  [256]sync.Mutex
@@ -152,6 +156,7 @@ func (s *Server) Start() error {
 		s.logger.Warn("telemetry ingest attribution is only trustworthy when bound to loopback", "bind", s.cfg.BindAddr)
 	}
 	s.startTelemetryRetentionCleanupLoop()
+	s.startPreviewCleanupLoop()
 
 	s.logger.Info("htmlservd starting",
 		"listen_addr", ln.Addr().String(),
@@ -218,6 +223,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 	if err := s.stopTelemetryRetentionCleanupLoop(ctx); err != nil {
 		return fmt.Errorf("stop telemetry retention loop: %w", err)
+	}
+	if err := s.stopPreviewCleanupLoop(ctx); err != nil {
+		return fmt.Errorf("stop preview cleanup loop: %w", err)
 	}
 	if s.db != nil {
 		if err := s.db.Close(); err != nil {

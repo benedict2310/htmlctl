@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/benedict2310/htmlctl/internal/caddy"
 	dbpkg "github.com/benedict2310/htmlctl/internal/db"
@@ -36,6 +38,13 @@ func (s *Server) generateCaddyConfig(ctx context.Context) (string, error) {
 			Upstream:   backendRow.Upstream,
 		})
 	}
+	previewRows := []dbpkg.ReleasePreviewResolvedRow{}
+	if s.cfg.Preview.Enabled {
+		previewRows, err = q.ListReleasePreviews(ctx, formatPreviewTimestamp(time.Now().UTC()))
+		if err != nil {
+			return "", err
+		}
+	}
 	sites := make([]caddy.Site, 0, len(rows))
 	for _, row := range rows {
 		root := filepath.Join(s.dataPaths.WebsitesRoot, row.WebsiteName, "envs", row.EnvironmentName, "current")
@@ -43,6 +52,23 @@ func (s *Server) generateCaddyConfig(ctx context.Context) (string, error) {
 			Domain:   row.Domain,
 			Root:     filepath.ToSlash(root),
 			Backends: append([]caddy.Backend(nil), backendsByEnvironment[row.EnvironmentID]...),
+		})
+	}
+	for _, row := range previewRows {
+		root := filepath.Join(s.dataPaths.WebsitesRoot, row.WebsiteName, "envs", row.EnvironmentName, "releases", row.ReleaseID)
+		sites = append(sites, caddy.Site{
+			Domain:   row.Hostname,
+			Root:     filepath.ToSlash(root),
+			Backends: append([]caddy.Backend(nil), backendsByEnvironment[row.EnvironmentID]...),
+			Headers: map[string]string{
+				"X-Robots-Tag": "noindex, nofollow, noarchive",
+			},
+		})
+	}
+	if s.cfg.Preview.Enabled && strings.TrimSpace(s.previewBaseDomain()) != "" {
+		sites = append(sites, caddy.Site{
+			Domain:        "*." + s.previewBaseDomain(),
+			RespondStatus: http.StatusNotFound,
 		})
 	}
 	return caddy.GenerateConfigWithOptions(sites, caddy.ConfigOptions{

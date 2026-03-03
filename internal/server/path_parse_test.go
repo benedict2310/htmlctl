@@ -24,6 +24,12 @@ func TestParsePathsWithValidNames(t *testing.T) {
 	if gotWebsite, gotEnv, ok, err := parseBackendsPath("/api/v1/websites/" + website + "/environments/" + env + "/backends"); !ok || err != nil || gotWebsite != website || gotEnv != env {
 		t.Fatalf("parseBackendsPath() = (%q, %q, %v, %v)", gotWebsite, gotEnv, ok, err)
 	}
+	if gotWebsite, gotEnv, ok, err := parsePreviewsCollectionPath("/api/v1/websites/" + website + "/environments/" + env + "/previews"); !ok || err != nil || gotWebsite != website || gotEnv != env {
+		t.Fatalf("parsePreviewsCollectionPath() = (%q, %q, %v, %v)", gotWebsite, gotEnv, ok, err)
+	}
+	if gotWebsite, gotEnv, id, ok, err := parsePreviewItemPath("/api/v1/websites/" + website + "/environments/" + env + "/previews/7"); !ok || err != nil || gotWebsite != website || gotEnv != env || id != 7 {
+		t.Fatalf("parsePreviewItemPath() = (%q, %q, %d, %v, %v)", gotWebsite, gotEnv, id, ok, err)
+	}
 	if gotWebsite, gotEnv, envScoped, ok, err := parseLogsPath("/api/v1/websites/" + website + "/environments/" + env + "/logs"); !ok || err != nil || !envScoped || gotWebsite != website || gotEnv != env {
 		t.Fatalf("parseLogsPath(env) = (%q, %q, %v, %v, %v)", gotWebsite, gotEnv, envScoped, ok, err)
 	}
@@ -62,6 +68,12 @@ func TestParsePathsRejectInvalidNames(t *testing.T) {
 	}
 	if _, _, ok, err := parseBackendsPath("/api/v1/websites/sample/environments/staging%1/backends"); ok || err == nil {
 		t.Fatalf("expected backends path name validation error, got ok=%v err=%v", ok, err)
+	}
+	if _, _, ok, err := parsePreviewsCollectionPath("/api/v1/websites/sample/environments/staging%1/previews"); ok || err == nil {
+		t.Fatalf("expected previews collection path name validation error, got ok=%v err=%v", ok, err)
+	}
+	if _, _, _, ok, err := parsePreviewItemPath("/api/v1/websites/sample/environments/staging/previews/not-a-number"); ok || err == nil {
+		t.Fatalf("expected preview item id validation error, got ok=%v err=%v", ok, err)
 	}
 	if _, _, _, ok, err := parseLogsPath("/api/v1/websites/future%lab/logs"); ok || err == nil {
 		t.Fatalf("expected website logs path name validation error, got ok=%v err=%v", ok, err)

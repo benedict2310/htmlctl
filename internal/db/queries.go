@@ -407,6 +407,181 @@ func (q *Queries) listReleasesByEnvironment(ctx context.Context, environmentID i
 	return out, nil
 }
 
+func (q *Queries) InsertReleasePreview(ctx context.Context, in ReleasePreviewRow) (int64, error) {
+	res, err := q.db.ExecContext(ctx, `
+INSERT INTO release_previews(environment_id, release_id, hostname, created_by, expires_at)
+VALUES(?, ?, ?, ?, ?)
+`, in.EnvironmentID, strings.TrimSpace(in.ReleaseID), strings.TrimSpace(in.Hostname), strings.TrimSpace(in.CreatedBy), strings.TrimSpace(in.ExpiresAt))
+	if err != nil {
+		return 0, fmt.Errorf("insert release preview: %w", err)
+	}
+	return lastInsertID("insert release preview", res)
+}
+
+func (q *Queries) GetReleasePreviewByID(ctx context.Context, environmentID, id int64) (ReleasePreviewRow, error) {
+	var out ReleasePreviewRow
+	err := q.db.QueryRowContext(ctx, `
+SELECT
+  id,
+  environment_id,
+  release_id,
+  hostname,
+  created_by,
+  expires_at,
+  created_at
+FROM release_previews
+WHERE environment_id = ? AND id = ?
+`, environmentID, id).Scan(
+		&out.ID,
+		&out.EnvironmentID,
+		&out.ReleaseID,
+		&out.Hostname,
+		&out.CreatedBy,
+		&out.ExpiresAt,
+		&out.CreatedAt,
+	)
+	if err != nil {
+		return out, fmt.Errorf("get release preview by id: %w", err)
+	}
+	return out, nil
+}
+
+func (q *Queries) GetActiveReleasePreviewByHostname(ctx context.Context, hostname, now string) (ReleasePreviewRow, error) {
+	var out ReleasePreviewRow
+	err := q.db.QueryRowContext(ctx, `
+SELECT
+  id,
+  environment_id,
+  release_id,
+  hostname,
+  created_by,
+  expires_at,
+  created_at
+FROM release_previews
+WHERE hostname = ? AND expires_at > ?
+`, strings.TrimSpace(hostname), strings.TrimSpace(now)).Scan(
+		&out.ID,
+		&out.EnvironmentID,
+		&out.ReleaseID,
+		&out.Hostname,
+		&out.CreatedBy,
+		&out.ExpiresAt,
+		&out.CreatedAt,
+	)
+	if err != nil {
+		return out, fmt.Errorf("get active release preview by hostname: %w", err)
+	}
+	return out, nil
+}
+
+func (q *Queries) ListReleasePreviewsByEnvironment(ctx context.Context, environmentID int64, now string) ([]ReleasePreviewRow, error) {
+	rows, err := q.db.QueryContext(ctx, `
+SELECT
+  id,
+  environment_id,
+  release_id,
+  hostname,
+  created_by,
+  expires_at,
+  created_at
+FROM release_previews
+WHERE environment_id = ? AND expires_at > ?
+ORDER BY created_at DESC, id DESC
+`, environmentID, strings.TrimSpace(now))
+	if err != nil {
+		return nil, fmt.Errorf("list release previews by environment: %w", err)
+	}
+	defer rows.Close()
+
+	out, err := scanReleasePreviewRows(rows)
+	if err != nil {
+		return nil, fmt.Errorf("list release previews by environment: %w", err)
+	}
+	return out, nil
+}
+
+func (q *Queries) ListReleasePreviews(ctx context.Context, now string) ([]ReleasePreviewResolvedRow, error) {
+	rows, err := q.db.QueryContext(ctx, `
+SELECT
+  p.id,
+  p.environment_id,
+  p.release_id,
+  p.hostname,
+  p.created_by,
+  p.expires_at,
+  p.created_at,
+  w.name AS website_name,
+  e.name AS environment_name
+FROM release_previews p
+JOIN environments e ON e.id = p.environment_id
+JOIN websites w ON w.id = e.website_id
+WHERE p.expires_at > ?
+ORDER BY p.hostname ASC
+`, strings.TrimSpace(now))
+	if err != nil {
+		return nil, fmt.Errorf("list release previews: %w", err)
+	}
+	defer rows.Close()
+
+	out := []ReleasePreviewResolvedRow{}
+	for rows.Next() {
+		var row ReleasePreviewResolvedRow
+		if err := rows.Scan(
+			&row.ID,
+			&row.EnvironmentID,
+			&row.ReleaseID,
+			&row.Hostname,
+			&row.CreatedBy,
+			&row.ExpiresAt,
+			&row.CreatedAt,
+			&row.WebsiteName,
+			&row.EnvironmentName,
+		); err != nil {
+			return nil, fmt.Errorf("scan release preview row: %w", err)
+		}
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate release preview rows: %w", err)
+	}
+	return out, nil
+}
+
+func (q *Queries) DeleteReleasePreviewByID(ctx context.Context, environmentID, id int64) (bool, error) {
+	res, err := q.db.ExecContext(ctx, `DELETE FROM release_previews WHERE environment_id = ? AND id = ?`, environmentID, id)
+	if err != nil {
+		return false, fmt.Errorf("delete release preview: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("release preview rows affected: %w", err)
+	}
+	return affected > 0, nil
+}
+
+func (q *Queries) RestoreReleasePreview(ctx context.Context, in ReleasePreviewRow) error {
+	_, err := q.db.ExecContext(ctx, `
+INSERT INTO release_previews(id, environment_id, release_id, hostname, created_by, expires_at, created_at)
+VALUES(?, ?, ?, ?, ?, ?, ?)
+`, in.ID, in.EnvironmentID, strings.TrimSpace(in.ReleaseID), strings.TrimSpace(in.Hostname), strings.TrimSpace(in.CreatedBy), strings.TrimSpace(in.ExpiresAt), strings.TrimSpace(in.CreatedAt))
+	if err != nil {
+		return fmt.Errorf("restore release preview: %w", err)
+	}
+	return nil
+}
+
+func (q *Queries) DeleteExpiredReleasePreviews(ctx context.Context, now string) (int64, error) {
+	res, err := q.db.ExecContext(ctx, `DELETE FROM release_previews WHERE expires_at <= ?`, strings.TrimSpace(now))
+	if err != nil {
+		return 0, fmt.Errorf("delete expired release previews: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("expired release preview rows affected: %w", err)
+	}
+	return affected, nil
+}
+
 func (q *Queries) ListLatestReleaseActors(ctx context.Context, environmentID int64, releaseIDs []string) (map[string]string, error) {
 	actors := map[string]string{}
 	if len(releaseIDs) == 0 {
@@ -720,6 +895,29 @@ func scanBackendRows(rows *sql.Rows) ([]BackendRow, error) {
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate backend rows: %w", err)
+	}
+	return out, nil
+}
+
+func scanReleasePreviewRows(rows *sql.Rows) ([]ReleasePreviewRow, error) {
+	out := []ReleasePreviewRow{}
+	for rows.Next() {
+		var row ReleasePreviewRow
+		if err := rows.Scan(
+			&row.ID,
+			&row.EnvironmentID,
+			&row.ReleaseID,
+			&row.Hostname,
+			&row.CreatedBy,
+			&row.ExpiresAt,
+			&row.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan release preview row: %w", err)
+		}
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate release preview rows: %w", err)
 	}
 	return out, nil
 }

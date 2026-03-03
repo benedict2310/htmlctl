@@ -403,6 +403,67 @@ func (c *APIClient) RemoveBackend(ctx context.Context, website, environment, pat
 	return c.do(req, nil)
 }
 
+func (c *APIClient) CreatePreview(ctx context.Context, website, environment, releaseID, ttl string) (Preview, error) {
+	pathValue := fmt.Sprintf(
+		"/api/v1/websites/%s/environments/%s/previews",
+		url.PathEscape(strings.TrimSpace(website)),
+		url.PathEscape(strings.TrimSpace(environment)),
+	)
+	payload := map[string]string{
+		"releaseId": strings.TrimSpace(releaseID),
+	}
+	if v := strings.TrimSpace(ttl); v != "" {
+		payload["ttl"] = v
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return Preview{}, fmt.Errorf("marshal preview payload: %w", err)
+	}
+	req, err := c.newRequest(ctx, http.MethodPost, pathValue, bytes.NewReader(body))
+	if err != nil {
+		return Preview{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	var out Preview
+	if err := c.do(req, &out); err != nil {
+		return Preview{}, err
+	}
+	return out, nil
+}
+
+func (c *APIClient) ListPreviews(ctx context.Context, website, environment string) (PreviewsResponse, error) {
+	pathValue := fmt.Sprintf(
+		"/api/v1/websites/%s/environments/%s/previews",
+		url.PathEscape(strings.TrimSpace(website)),
+		url.PathEscape(strings.TrimSpace(environment)),
+	)
+	req, err := c.newRequest(ctx, http.MethodGet, pathValue, nil)
+	if err != nil {
+		return PreviewsResponse{}, err
+	}
+
+	var out PreviewsResponse
+	if err := c.do(req, &out); err != nil {
+		return PreviewsResponse{}, err
+	}
+	return out, nil
+}
+
+func (c *APIClient) RemovePreview(ctx context.Context, website, environment string, id int64) error {
+	pathValue := fmt.Sprintf(
+		"/api/v1/websites/%s/environments/%s/previews/%d",
+		url.PathEscape(strings.TrimSpace(website)),
+		url.PathEscape(strings.TrimSpace(environment)),
+		id,
+	)
+	req, err := c.newRequest(ctx, http.MethodDelete, pathValue, nil)
+	if err != nil {
+		return err
+	}
+	return c.do(req, nil)
+}
+
 func (c *APIClient) GetLogs(ctx context.Context, website, environment string, limit int) (LogsResponse, error) {
 	path := fmt.Sprintf(
 		"/api/v1/websites/%s/environments/%s/logs",

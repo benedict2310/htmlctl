@@ -34,6 +34,10 @@ docker run -d \
   -e HTMLSERVD_API_TOKEN="$API_TOKEN" \
   -e HTMLSERVD_CADDY_AUTO_HTTPS=false \
   -e HTMLSERVD_TELEMETRY_ENABLED=true \
+  -e HTMLSERVD_PREVIEW_ENABLED=true \
+  -e HTMLSERVD_PREVIEW_BASE_DOMAIN=preview.127.0.0.1.nip.io \
+  -e HTMLSERVD_PREVIEW_DEFAULT_TTL_HOURS=72 \
+  -e HTMLSERVD_PREVIEW_MAX_TTL_HOURS=168 \
   -v "$PWD/.tmp/first-deploy/data:/var/lib/htmlservd" \
   -v "$PWD/.tmp/first-deploy/caddy:/etc/caddy" \
   htmlservd-ssh:local
@@ -246,7 +250,43 @@ After removal, the same path should no longer resolve:
 curl -i http://127.0.0.1.nip.io:18080/api/ping
 ```
 
-## 7. Optional: Run `htmlctl` in Docker
+## 7. Optional: Verify Preview URLs
+
+Preview URLs pin a specific release directory without changing the environment's active `current` release. For local Docker verification, use a wildcard-capable base domain such as `preview.127.0.0.1.nip.io`, which resolves `*.preview.127.0.0.1.nip.io` back to loopback.
+
+Create a preview for the latest staging release:
+
+```bash
+RELEASE_ID="$(HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
+HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
+htmlctl rollout history website/sample --context local-staging -o json | jq -r '.releases[0].releaseId')"
+```
+
+```bash
+HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
+HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
+htmlctl preview create website/sample --env staging --release "$RELEASE_ID" --ttl 72h --context local-staging
+```
+
+List previews:
+
+```bash
+HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
+HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
+htmlctl preview list website/sample --env staging --context local-staging
+```
+
+Open the returned hostname and confirm it serves the expected release. Preview hosts always emit `X-Robots-Tag: noindex, nofollow, noarchive`.
+
+When done, remove the preview:
+
+```bash
+HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
+HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
+htmlctl preview remove website/sample --env staging --id <preview-id> --context local-staging
+```
+
+## 8. Optional: Run `htmlctl` in Docker
 
 `htmlctl:local` can use mounted key files (agent not required):
 
@@ -278,14 +318,14 @@ contexts:
 YAML
 ```
 
-## 8. Cleanup
+## 9. Cleanup
 
 ```bash
 docker rm -f htmlservd-first-deploy
 docker network rm htmlctl-net
 ```
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 - `ssh host key verification failed`: regenerate `.tmp/first-deploy/known_hosts` with `ssh-keyscan`.
 - `ssh agent unavailable`: `htmlctl` now supports key-file fallback; mount/provide `~/.ssh/id_ed25519` or set `HTMLCTL_SSH_KEY_PATH`.

@@ -1,7 +1,7 @@
 # E11-S3 — Remote Diagnostics and Version Awareness
 
 **Epic:** Epic 11 — CLI UX Polish  
-**Status:** Planned  
+**Status:** Completed  
 **Priority:** P1  
 **Estimated Effort:** 2-3 days  
 **Dependencies:** E2-S1 (health/version endpoints), E8-S3 (promote warnings), E8/E9 operator drift findings  
@@ -92,12 +92,12 @@ Add:
 
 ## 7. Acceptance Criteria
 
-- [ ] AC-1: `htmlctl version --remote` reports both local CLI and remote server version.
-- [ ] AC-2: `htmlctl doctor` checks config, transport, health, readiness, and version using the selected context.
-- [ ] AC-3: Diagnostics output is available in table/json/yaml.
-- [ ] AC-4: Failure messages are actionable and do not expose token material.
-- [ ] AC-5: `doctor` groups failures by layer and includes a next-step hint for each failed check.
-- [ ] AC-6: `.agent/skills/htmlctl-publish/references/commands.md` has a Diagnostics section covering `version --remote` and `doctor`.
+- [x] AC-1: `htmlctl version --remote` reports both local CLI and remote server version.
+- [x] AC-2: `htmlctl doctor` checks config, transport, health, readiness, and version using the selected context.
+- [x] AC-3: Diagnostics output is available in table/json/yaml.
+- [x] AC-4: Failure messages are actionable and do not expose token material.
+- [x] AC-5: `doctor` groups failures by layer and includes a next-step hint for each failed check.
+- [x] AC-6: `.agent/skills/htmlctl-publish/references/commands.md` has a Diagnostics section covering `version --remote` and `doctor`.
 
 ## 8. Risks and Open Questions
 

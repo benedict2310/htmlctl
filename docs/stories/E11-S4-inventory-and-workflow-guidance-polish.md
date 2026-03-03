@@ -1,7 +1,7 @@
 # E11-S4 — Inventory and Workflow Guidance Polish
 
 **Epic:** Epic 11 — CLI UX Polish  
-**Status:** Planned  
+**Status:** Completed  
 **Priority:** P2  
 **Estimated Effort:** 3-4 days  
 **Dependencies:** E3-S3 (core remote commands), E5-S4 (domain CLI), E9-S3 (backend CLI)  
@@ -117,15 +117,15 @@ These are warnings only; the operation still proceeds.
 
 ## 7. Acceptance Criteria
 
-- [ ] AC-1: `htmlctl get domains` and `htmlctl get backends` are supported.
-- [ ] AC-2: `domain list` and `backend list` remain available.
-- [ ] AC-3: `backend add` prints useful next-step guidance in table mode.
-- [ ] AC-4: obviously risky backend prefixes emit warnings without blocking the operation.
-- [ ] AC-5: common inventory/ref errors are actionable and name the expected input or next command.
-- [ ] AC-6: structured output remains deterministic and machine-parseable.
-- [ ] AC-7: `.agent/skills/htmlctl-publish/references/commands.md` lists `get domains` and `get backends` and has an accurate supported-resource-types list.
-- [ ] AC-8: `.agent/skills/htmlctl-publish/SKILL.md` reflects context-aware defaulting in its workflow examples and safety checklist.
-- [ ] AC-9: `.agent/skills/htmlctl-publish/` is synced to `~/.claude/skills/htmlctl-publish/`.
+- [x] AC-1: `htmlctl get domains` and `htmlctl get backends` are supported.
+- [x] AC-2: `domain list` and `backend list` remain available.
+- [x] AC-3: `backend add` prints useful next-step guidance in table mode.
+- [x] AC-4: obviously risky backend prefixes emit warnings without blocking the operation.
+- [x] AC-5: common inventory/ref errors are actionable and name the expected input or next command.
+- [x] AC-6: structured output remains deterministic and machine-parseable.
+- [x] AC-7: `.agent/skills/htmlctl-publish/references/commands.md` lists `get domains` and `get backends` and has an accurate supported-resource-types list.
+- [x] AC-8: `.agent/skills/htmlctl-publish/SKILL.md` reflects context-aware defaulting in its workflow examples and safety checklist.
+- [x] AC-9: `.agent/skills/htmlctl-publish/` is synced to `~/.claude/skills/htmlctl-publish/`.
 
 ## 8. Risks and Open Questions
 

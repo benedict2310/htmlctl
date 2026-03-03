@@ -1,7 +1,7 @@
 # E11-S1 — Safe Context Lifecycle and Config UX
 
 **Epic:** Epic 11 — CLI UX Polish  
-**Status:** Planned  
+**Status:** Completed  
 **Priority:** P1  
 **Estimated Effort:** 2-3 days  
 **Dependencies:** E3-S1 (context config), E6-S1 (auth)  
@@ -106,14 +106,14 @@ Common failure paths must tell the operator what to do next:
 
 ## 7. Acceptance Criteria
 
-- [ ] AC-1: `htmlctl context list` and `htmlctl context use <name>` exist and work against the current config file.
-- [ ] AC-2: `htmlctl context create` can create a valid context entry without manual YAML editing.
-- [ ] AC-3: `htmlctl config view` redacts bearer tokens by default.
-- [ ] AC-4: `htmlctl config view --show-secrets` exists for explicit secret inspection.
-- [ ] AC-5: Existing `config use-context` continues to work.
-- [ ] AC-6: No command/help/error path prints tokens unintentionally.
-- [ ] AC-7: Common config/context failure states suggest the next likely recovery command.
-- [ ] AC-8: `.agent/skills/htmlctl-publish/references/commands.md` documents `context create` and `config view --show-secrets`.
+- [x] AC-1: `htmlctl context list` and `htmlctl context use <name>` exist and work against the current config file.
+- [x] AC-2: `htmlctl context create` can create a valid context entry without manual YAML editing.
+- [x] AC-3: `htmlctl config view` redacts bearer tokens by default.
+- [x] AC-4: `htmlctl config view --show-secrets` exists for explicit secret inspection.
+- [x] AC-5: Existing `config use-context` continues to work.
+- [x] AC-6: No command/help/error path prints tokens unintentionally.
+- [x] AC-7: Common config/context failure states suggest the next likely recovery command.
+- [x] AC-8: `.agent/skills/htmlctl-publish/references/commands.md` documents `context create` and `config view --show-secrets`.
 
 ## 8. Risks and Open Questions
 

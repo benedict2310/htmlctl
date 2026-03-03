@@ -1,7 +1,7 @@
 # E11-S2 — Context-Aware Defaults for Remote Commands
 
 **Epic:** Epic 11 — CLI UX Polish  
-**Status:** Planned  
+**Status:** Completed  
 **Priority:** P1  
 **Estimated Effort:** 2-3 days  
 **Dependencies:** E3-S1 (context config), E3-S3 (core remote commands), E9-S3 (backend CLI)  
@@ -88,12 +88,12 @@ still resolve to the active context target.
 
 ## 7. Acceptance Criteria
 
-- [ ] AC-1: `status`, `logs`, and `rollout` commands can operate without an explicit website ref when the context provides one.
-- [ ] AC-2: backend commands default `--env` from the active context.
-- [ ] AC-3: Explicit website refs and `--env` overrides still work and win over context defaults.
-- [ ] AC-4: Help output documents the defaulting behavior clearly.
-- [ ] AC-5: Missing default website/environment state produces actionable recovery guidance.
-- [ ] AC-6: `.agent/skills/htmlctl-publish/references/commands.md` shows both explicit and context-default forms for `status`, `logs`, `rollout`, and `backend` commands.
+- [x] AC-1: `status`, `logs`, and `rollout` commands can operate without an explicit website ref when the context provides one.
+- [x] AC-2: backend commands default `--env` from the active context.
+- [x] AC-3: Explicit website refs and `--env` overrides still work and win over context defaults.
+- [x] AC-4: Help output documents the defaulting behavior clearly.
+- [x] AC-5: Missing default website/environment state produces actionable recovery guidance.
+- [x] AC-6: `.agent/skills/htmlctl-publish/references/commands.md` shows both explicit and context-default forms for `status`, `logs`, `rollout`, and `backend` commands.
 
 ## 8. Risks and Open Questions
 

@@ -20,6 +20,7 @@
 
 - `docs/operations/domain-hardening.md` - domain rollback metadata preservation and same-domain concurrency locking behavior.
 - Environment backends are environment-scoped runtime config managed with `htmlctl backend add/list/remove`; see `docs/technical-spec.md` and the optional backend-routing verification in `docs/guides/first-deploy-docker.md`.
+- Environment auth policies are environment-scoped runtime config managed with `htmlctl authpolicy add/list/remove`; they are enforced by Caddy and are not copied by `promote`.
 - `scripts/clean-dev-state.sh` - clean `.tmp` dev/runtime state safely when mixed ownership appears.
 
 ## Review Logs

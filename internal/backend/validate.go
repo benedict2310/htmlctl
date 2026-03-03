@@ -73,3 +73,27 @@ func ValidateUpstreamURL(raw string) (string, error) {
 
 	return value, nil
 }
+
+func PathPrefixesOverlap(a, b string) bool {
+	a = strings.TrimSuffix(strings.TrimSpace(a), "/*")
+	b = strings.TrimSuffix(strings.TrimSpace(b), "/*")
+	if a == "" || b == "" {
+		return false
+	}
+	if a == b {
+		return true
+	}
+	return strings.HasPrefix(a, b+"/") || strings.HasPrefix(b, a+"/")
+}
+
+func PathPrefixOverlapsPath(pathPrefix, pathValue string) bool {
+	prefix := strings.TrimSuffix(strings.TrimSpace(pathPrefix), "/*")
+	pathValue = strings.TrimSpace(pathValue)
+	if prefix == "" || pathValue == "" {
+		return false
+	}
+	if prefix == pathValue {
+		return true
+	}
+	return strings.HasPrefix(pathValue, prefix+"/") || strings.HasPrefix(prefix, pathValue+"/")
+}

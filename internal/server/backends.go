@@ -133,6 +133,11 @@ func (s *Server) handleAddBackend(w http.ResponseWriter, r *http.Request, websit
 		return
 	}
 
+	if err := validateBackendPathOverlap(r.Context(), q, envRow.ID, pathPrefix); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid backend pathPrefix", []string{err.Error()})
+		return
+	}
+
 	if err := q.UpsertBackend(r.Context(), dbpkg.BackendRow{
 		EnvironmentID: envRow.ID,
 		PathPrefix:    pathPrefix,
@@ -224,6 +229,19 @@ func (s *Server) handleRemoveBackend(w http.ResponseWriter, r *http.Request, web
 
 	s.logBackendAudit(r.Context(), actorFromRequest(r), audit.OperationBackendRemove, envRow.ID, website, env, row.PathPrefix, "")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func validateBackendPathOverlap(ctx context.Context, q *dbpkg.Queries, environmentID int64, pathPrefix string) error {
+	policies, err := q.ListAuthPoliciesByEnvironment(ctx, environmentID)
+	if err != nil {
+		return fmt.Errorf("list auth policies: %w", err)
+	}
+	for _, policy := range policies {
+		if backendpkg.PathPrefixesOverlap(policy.PathPrefix, pathPrefix) && policy.PathPrefix != pathPrefix {
+			return fmt.Errorf("path prefix %q overlaps auth policy %q; only exact matches are allowed", pathPrefix, policy.PathPrefix)
+		}
+	}
+	return nil
 }
 
 func lookupEnvironmentRow(ctx context.Context, q *dbpkg.Queries, website, env string) (dbpkg.EnvironmentRow, error) {

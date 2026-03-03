@@ -242,6 +242,50 @@ Backend rules:
 
 ---
 
+## Auth Policies
+
+Environment auth policies are runtime routing config, not bundle content. `apply`, `diff`, and `promote` do not create, copy, or remove them.
+
+```bash
+# Add or update a Basic Auth policy using the active context website/environment
+printf 'secret\n' | htmlctl authpolicy add \
+  --path /docs/* \
+  --username reviewer \
+  --password-stdin \
+  --context staging
+
+# Add or update a Basic Auth policy for an explicit website/environment
+printf 'secret\n' | htmlctl authpolicy add website/<name> \
+  --env staging \
+  --path /docs/* \
+  --username reviewer \
+  --password-stdin \
+  --context staging
+
+# List configured auth policies for the active context website/environment
+htmlctl authpolicy list --context staging
+
+# List configured auth policies for an explicit website/environment
+htmlctl authpolicy list website/<name> --env staging --context staging
+
+# Remove an auth policy by path using the active context website/environment
+htmlctl authpolicy remove --path /docs/* --context staging
+
+# Remove an auth policy by path for an explicit website/environment
+htmlctl authpolicy remove website/<name> --env staging --path /docs/* --context staging
+```
+
+Auth policy rules:
+- `--path` must use canonical prefix form such as `/docs/*`
+- `--username` must be printable ASCII without `:`
+- `authpolicy add` requires `--password-stdin` and hashes the password locally with bcrypt before upload
+- `authpolicy list` never prints password-hash material
+- overlapping auth policy prefixes in the same environment are rejected
+- backend overlap is allowed only on an exact same-prefix match, so Caddy challenges before `reverse_proxy`
+- after `authpolicy add`, verify the route returns a Basic Auth challenge and then verify valid credentials unlock the expected static or proxied content
+
+---
+
 ## Diagnostics
 
 ```bash

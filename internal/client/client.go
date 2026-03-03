@@ -403,6 +403,65 @@ func (c *APIClient) RemoveBackend(ctx context.Context, website, environment, pat
 	return c.do(req, nil)
 }
 
+func (c *APIClient) AddAuthPolicy(ctx context.Context, website, environment, pathPrefix, username, passwordHash string) (AuthPolicy, error) {
+	pathValue := fmt.Sprintf(
+		"/api/v1/websites/%s/environments/%s/auth-policies",
+		url.PathEscape(strings.TrimSpace(website)),
+		url.PathEscape(strings.TrimSpace(environment)),
+	)
+	payload, err := json.Marshal(map[string]string{
+		"pathPrefix":   strings.TrimSpace(pathPrefix),
+		"username":     strings.TrimSpace(username),
+		"passwordHash": strings.TrimSpace(passwordHash),
+	})
+	if err != nil {
+		return AuthPolicy{}, fmt.Errorf("marshal auth policy payload: %w", err)
+	}
+	req, err := c.newRequest(ctx, http.MethodPost, pathValue, bytes.NewReader(payload))
+	if err != nil {
+		return AuthPolicy{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	var out AuthPolicy
+	if err := c.do(req, &out); err != nil {
+		return AuthPolicy{}, err
+	}
+	return out, nil
+}
+
+func (c *APIClient) ListAuthPolicies(ctx context.Context, website, environment string) (AuthPoliciesResponse, error) {
+	pathValue := fmt.Sprintf(
+		"/api/v1/websites/%s/environments/%s/auth-policies",
+		url.PathEscape(strings.TrimSpace(website)),
+		url.PathEscape(strings.TrimSpace(environment)),
+	)
+	req, err := c.newRequest(ctx, http.MethodGet, pathValue, nil)
+	if err != nil {
+		return AuthPoliciesResponse{}, err
+	}
+
+	var out AuthPoliciesResponse
+	if err := c.do(req, &out); err != nil {
+		return AuthPoliciesResponse{}, err
+	}
+	return out, nil
+}
+
+func (c *APIClient) RemoveAuthPolicy(ctx context.Context, website, environment, pathPrefix string) error {
+	pathValue := fmt.Sprintf(
+		"/api/v1/websites/%s/environments/%s/auth-policies?path=%s",
+		url.PathEscape(strings.TrimSpace(website)),
+		url.PathEscape(strings.TrimSpace(environment)),
+		url.QueryEscape(strings.TrimSpace(pathPrefix)),
+	)
+	req, err := c.newRequest(ctx, http.MethodDelete, pathValue, nil)
+	if err != nil {
+		return err
+	}
+	return c.do(req, nil)
+}
+
 func (c *APIClient) CreatePreview(ctx context.Context, website, environment, releaseID, ttl string) (Preview, error) {
 	pathValue := fmt.Sprintf(
 		"/api/v1/websites/%s/environments/%s/previews",

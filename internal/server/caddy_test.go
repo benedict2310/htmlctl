@@ -101,9 +101,9 @@ func TestGenerateCaddyConfigIncludesEnvironmentBackends(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generateCaddyConfig() error = %v", err)
 	}
-	apiIndex := strings.Index(cfg, "reverse_proxy /api/* https://api.example.com")
-	authIndex := strings.Index(cfg, "reverse_proxy /auth/* https://auth.example.com")
-	fileServerIndex := strings.Index(cfg, "\tfile_server")
+	apiIndex := strings.Index(cfg, "\thandle /api/* {\n\t\treverse_proxy https://api.example.com\n\t}")
+	authIndex := strings.Index(cfg, "\thandle /auth/* {\n\t\treverse_proxy https://auth.example.com\n\t}")
+	fileServerIndex := strings.Index(cfg, "\thandle {\n\t\troot * ")
 	if apiIndex == -1 || authIndex == -1 || fileServerIndex == -1 {
 		t.Fatalf("expected backend directives and file_server, got:\n%s", cfg)
 	}
@@ -149,7 +149,7 @@ func TestGenerateCaddyConfigSharesEnvironmentBackendsAcrossDomains(t *testing.T)
 	if err != nil {
 		t.Fatalf("generateCaddyConfig() error = %v", err)
 	}
-	if strings.Count(cfg, "reverse_proxy /api/* https://api.example.com") != 2 {
+	if strings.Count(cfg, "\thandle /api/* {\n\t\treverse_proxy https://api.example.com\n\t}") != 2 {
 		t.Fatalf("expected backend directive in both site blocks, got:\n%s", cfg)
 	}
 }
@@ -289,7 +289,7 @@ func TestGenerateCaddyConfigIncludesPreviewSites(t *testing.T) {
 	if !strings.Contains(cfg, "\trespond 404") {
 		t.Fatalf("expected wildcard preview fallback to respond 404, got:\n%s", cfg)
 	}
-	if !strings.Contains(cfg, "reverse_proxy /api/* https://api.example.com") {
+	if !strings.Contains(cfg, "\thandle /api/* {\n\t\treverse_proxy https://api.example.com\n\t}") {
 		t.Fatalf("expected preview site to keep backend routing, got:\n%s", cfg)
 	}
 	if !strings.Contains(cfg, "handle /collect/v1/events*") {

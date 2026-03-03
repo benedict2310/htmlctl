@@ -157,6 +157,33 @@ HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
 htmlctl backend remove website/sample --env staging --path /api/* --context local-staging
 ```
 
+### Optional: verify environment auth policy routing
+
+Auth policies are environment-scoped runtime config. They are not part of `site/` and are not copied by `promote`.
+
+```bash
+printf 'docs-secret\n' | \
+HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
+HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
+htmlctl authpolicy add website/sample \
+  --env staging \
+  --path /docs/* \
+  --username reviewer \
+  --password-stdin \
+  --context local-staging
+
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1.nip.io:18080/docs/
+curl -sf -u reviewer:docs-secret http://127.0.0.1.nip.io:18080/docs/
+
+HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
+HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
+htmlctl authpolicy list website/sample --env staging --context local-staging
+
+HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
+HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
+htmlctl authpolicy remove website/sample --env staging --path /docs/* --context local-staging
+```
+
 ### Run htmlctl inside Docker (key-file auth, no agent required)
 
 ```bash

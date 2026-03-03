@@ -148,5 +148,10 @@ func All() []Migration {
 			Name:    "release_previews",
 			UpSQL:   releasePreviewsMigrationSQL,
 		},
+		{
+			Version: 9,
+			Name:    "auth_policies",
+			UpSQL:   authPoliciesMigrationSQL,
+		},
 	}
 }

@@ -98,3 +98,50 @@ func TestValidateUpstreamURL(t *testing.T) {
 		})
 	}
 }
+
+func TestPathPrefixesOverlap(t *testing.T) {
+	tests := []struct {
+		name string
+		a    string
+		b    string
+		want bool
+	}{
+		{name: "equal", a: "/docs/*", b: "/docs/*", want: true},
+		{name: "nested child", a: "/docs/*", b: "/docs/api/*", want: true},
+		{name: "nested parent", a: "/docs/api/*", b: "/docs/*", want: true},
+		{name: "sibling", a: "/docs/*", b: "/blog/*", want: false},
+		{name: "prefix text only", a: "/doc/*", b: "/docs/*", want: false},
+		{name: "trimmed", a: " /docs/* ", b: "/docs/api/*", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := PathPrefixesOverlap(tt.a, tt.b); got != tt.want {
+				t.Fatalf("PathPrefixesOverlap(%q, %q) = %v, want %v", tt.a, tt.b, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPathPrefixOverlapsPath(t *testing.T) {
+	tests := []struct {
+		name       string
+		pathPrefix string
+		pathValue  string
+		want       bool
+	}{
+		{name: "parent prefix", pathPrefix: "/collect/*", pathValue: "/collect/v1/events", want: true},
+		{name: "intermediate prefix", pathPrefix: "/collect/v1/*", pathValue: "/collect/v1/events", want: true},
+		{name: "exact endpoint prefix", pathPrefix: "/collect/v1/events/*", pathValue: "/collect/v1/events", want: true},
+		{name: "child prefix", pathPrefix: "/collect/v1/events/private/*", pathValue: "/collect/v1/events", want: true},
+		{name: "no overlap", pathPrefix: "/docs/*", pathValue: "/collect/v1/events", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := PathPrefixOverlapsPath(tt.pathPrefix, tt.pathValue); got != tt.want {
+				t.Fatalf("PathPrefixOverlapsPath(%q, %q) = %v, want %v", tt.pathPrefix, tt.pathValue, got, tt.want)
+			}
+		})
+	}
+}

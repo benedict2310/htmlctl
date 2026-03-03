@@ -86,6 +86,18 @@ Environment backends let a static site call dynamic services through relative pa
 - `htmlctl backend add` prints follow-up guidance after success. In table mode it also warns on suspicious static-content prefixes such as `/styles/*`, `/scripts/*`, `/assets/*`, and `/favicon...`.
 - After changing a backend, verify the route on that environment directly. Do not assume a staging backend exists in prod.
 
+## Runtime Auth Policies
+
+Environment auth policies let you challenge selected paths such as `/docs/*` or `/preview/*` with HTTP Basic Auth.
+
+- Manage them with `htmlctl authpolicy add`, `htmlctl authpolicy list`, and `htmlctl authpolicy remove`.
+- Auth policy paths must use the canonical prefix form `/<segment>/*`.
+- Auth policies are environment-scoped runtime routing state, not site content. They are not stored in `site/`, are not affected by `htmlctl apply`, and are not copied by `htmlctl promote`.
+- `htmlctl authpolicy add` requires `--password-stdin` and hashes the password locally with bcrypt before sending it to the server.
+- `htmlctl authpolicy list` never returns password-hash material.
+- Overlapping auth-policy prefixes are rejected. Backend overlap is allowed only on an exact same-prefix match so auth can run before the proxy.
+- After changing an auth policy, verify the challenged route on that environment directly. Do not assume a staging auth policy exists in prod.
+
 ## Workflow Decision
 
 | Change type | Workflow |
@@ -94,6 +106,7 @@ Environment backends let a static site call dynamic services through relative pa
 | New standalone subpage (new component + new page, no changes to shared components) | Apply directly to staging → verify → promote to prod |
 | Website-level metadata change (`website.yaml`, `branding/`, favicon, robots, sitemap) | Verify server version first → apply to staging → verify generated artifacts → promote to prod |
 | Environment backend change (`htmlctl backend add/remove`) | Update the target environment directly → verify the proxied route on that environment |
+| Environment auth policy change (`htmlctl authpolicy add/remove`) | Update the target environment directly → verify the challenged route on that environment |
 | Inventory / operator drift check | Run `htmlctl doctor --context <ctx>`, then use `htmlctl get domains --context <ctx>` or `htmlctl get backends --context <ctx>` before making changes |
 | Structural change to shared components, layout redesign, style overhaul | Test locally with Docker → apply to staging → promote to prod |
 

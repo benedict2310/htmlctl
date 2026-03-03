@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	authpolicypkg "github.com/benedict2310/htmlctl/internal/authpolicy"
 	backendpkg "github.com/benedict2310/htmlctl/internal/backend"
 )
 
@@ -15,10 +16,17 @@ type Backend struct {
 	Upstream   string
 }
 
+type AuthPolicy struct {
+	PathPrefix   string
+	Username     string
+	PasswordHash string
+}
+
 type Site struct {
 	Domain        string
 	Root          string
 	Backends      []Backend
+	AuthPolicies  []AuthPolicy
 	Headers       map[string]string
 	RespondStatus int
 }
@@ -78,13 +86,17 @@ func GenerateConfigWithOptions(sites []Site, opts ConfigOptions) (string, error)
 			siteAddress = "http://" + domain
 		}
 		backends := append([]Backend(nil), site.Backends...)
+		authPolicies := append([]AuthPolicy(nil), site.AuthPolicies...)
 		headers := make([]string, 0, len(site.Headers))
 		for key := range site.Headers {
 			headers = append(headers, key)
 		}
 		sort.Strings(headers)
 		sort.Slice(backends, func(i, j int) bool {
-			return backends[i].PathPrefix < backends[j].PathPrefix
+			return comparePathPrefixSpecificity(backends[i].PathPrefix, backends[j].PathPrefix)
+		})
+		sort.Slice(authPolicies, func(i, j int) bool {
+			return authPolicies[i].PathPrefix < authPolicies[j].PathPrefix
 		})
 		for _, backend := range backends {
 			if _, err := backendpkg.ValidatePathPrefix(backend.PathPrefix); err != nil {
@@ -92,6 +104,37 @@ func GenerateConfigWithOptions(sites []Site, opts ConfigOptions) (string, error)
 			}
 			if _, err := backendpkg.ValidateUpstreamURL(backend.Upstream); err != nil {
 				return "", fmt.Errorf("invalid backend upstream for domain %q: %w", domain, err)
+			}
+		}
+		for _, policy := range authPolicies {
+			if _, err := backendpkg.ValidatePathPrefix(policy.PathPrefix); err != nil {
+				return "", fmt.Errorf("invalid auth policy path prefix for domain %q: %w", domain, err)
+			}
+			if _, err := authpolicypkg.ValidateUsername(policy.Username); err != nil {
+				return "", fmt.Errorf("invalid auth policy username for domain %q: %w", domain, err)
+			}
+			if _, err := authpolicypkg.ValidatePasswordHash(policy.PasswordHash); err != nil {
+				return "", fmt.Errorf("invalid auth policy password hash for domain %q: %w", domain, err)
+			}
+			if strings.ContainsAny(policy.PasswordHash, "\n\r{}") {
+				return "", fmt.Errorf("auth policy password hash for domain %q contains forbidden characters", domain)
+			}
+			if opts.TelemetryPort > 0 && backendpkg.PathPrefixOverlapsPath(policy.PathPrefix, "/collect/v1/events") {
+				return "", fmt.Errorf("auth policy prefix %q overlaps reserved telemetry endpoint for domain %q", policy.PathPrefix, domain)
+			}
+		}
+		for i := 0; i < len(authPolicies); i++ {
+			for j := i + 1; j < len(authPolicies); j++ {
+				if backendpkg.PathPrefixesOverlap(authPolicies[i].PathPrefix, authPolicies[j].PathPrefix) {
+					return "", fmt.Errorf("overlapping auth policy prefixes for domain %q: %s and %s", domain, authPolicies[i].PathPrefix, authPolicies[j].PathPrefix)
+				}
+			}
+		}
+		for _, policy := range authPolicies {
+			for _, backend := range backends {
+				if backendpkg.PathPrefixesOverlap(policy.PathPrefix, backend.PathPrefix) && policy.PathPrefix != backend.PathPrefix {
+					return "", fmt.Errorf("auth policy prefix %q overlaps backend prefix %q for domain %q; only exact matches are allowed", policy.PathPrefix, backend.PathPrefix, domain)
+				}
 			}
 		}
 
@@ -117,13 +160,51 @@ func GenerateConfigWithOptions(sites []Site, opts ConfigOptions) (string, error)
 			fmt.Fprintf(&b, "\t\treverse_proxy 127.0.0.1:%d\n", opts.TelemetryPort)
 			b.WriteString("\t}\n")
 		}
+		protectedBackends := make(map[string]Backend, len(authPolicies))
 		for _, backend := range backends {
-			fmt.Fprintf(&b, "\treverse_proxy %s %s\n", backend.PathPrefix, backend.Upstream)
+			protectedBackends[backend.PathPrefix] = backend
 		}
-		b.WriteString("\tfile_server\n")
+		protectedBackendPaths := map[string]bool{}
+		for _, policy := range authPolicies {
+			fmt.Fprintf(&b, "\thandle %s {\n", policy.PathPrefix)
+			b.WriteString("\t\tbasic_auth {\n")
+			fmt.Fprintf(&b, "\t\t\t%s %s\n", policy.Username, policy.PasswordHash)
+			b.WriteString("\t\t}\n")
+			if backend, ok := protectedBackends[policy.PathPrefix]; ok {
+				fmt.Fprintf(&b, "\t\treverse_proxy %s\n", backend.Upstream)
+				protectedBackendPaths[policy.PathPrefix] = true
+			} else {
+				fmt.Fprintf(&b, "\t\troot * %s\n", root)
+				b.WriteString("\t\tfile_server\n")
+			}
+			b.WriteString("\t}\n")
+		}
+		for _, backend := range backends {
+			if protectedBackendPaths[backend.PathPrefix] {
+				continue
+			}
+			fmt.Fprintf(&b, "\thandle %s {\n", backend.PathPrefix)
+			fmt.Fprintf(&b, "\t\treverse_proxy %s\n", backend.Upstream)
+			b.WriteString("\t}\n")
+		}
+		b.WriteString("\thandle {\n")
+		fmt.Fprintf(&b, "\t\troot * %s\n", root)
+		b.WriteString("\t\tfile_server\n")
+		b.WriteString("\t}\n")
 		b.WriteString("}\n\n")
 	}
 	return strings.TrimRight(b.String(), "\n") + "\n", nil
+}
+
+func comparePathPrefixSpecificity(a, b string) bool {
+	aPrefix := strings.TrimSuffix(strings.TrimSpace(a), "/*")
+	bPrefix := strings.TrimSuffix(strings.TrimSpace(b), "/*")
+	aDepth := strings.Count(aPrefix, "/")
+	bDepth := strings.Count(bPrefix, "/")
+	if aDepth != bDepth {
+		return aDepth > bDepth
+	}
+	return a < b
 }
 
 func WriteConfig(path string, content string) error {

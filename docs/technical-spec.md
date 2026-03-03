@@ -446,6 +446,7 @@ Remote defaults:
 - `htmlctl status [website/<name>]` and `htmlctl logs [website/<name>]` default the website from the active context when omitted.
 - `htmlctl rollout history [website/<name>]` and `htmlctl rollout undo [website/<name>]` default the website from the active context when omitted.
 - `htmlctl backend add|list|remove [website/<name>]` default both website and `--env` from the active context when omitted.
+- `htmlctl authpolicy add|list|remove [website/<name>]` default both website and `--env` from the active context when omitted.
 - `htmlctl preview create|list|remove [website/<name>]` default both website and `--env` from the active context when omitted.
 - `htmlctl get environments|releases|domains|backends` default website and/or environment from the active context when omitted by the command shape.
 - Explicit `website/<name>` args and `--env` flags always take precedence over context defaults.
@@ -472,6 +473,9 @@ Remote ops:
 - `htmlctl backend add website/sample --env staging --path /api/* --upstream https://staging-api.example.com --context staging`
 - `htmlctl backend list website/sample --env staging --context staging`
 - `htmlctl backend remove website/sample --env staging --path /api/* --context staging`
+- `printf 'secret\n' | htmlctl authpolicy add website/sample --env staging --path /docs/* --username reviewer --password-stdin --context staging`
+- `htmlctl authpolicy list website/sample --env staging --context staging`
+- `htmlctl authpolicy remove website/sample --env staging --path /docs/* --context staging`
 - `htmlctl preview create website/sample --env staging --release R1 --ttl 72h --context staging`
 - `htmlctl preview list website/sample --env staging --context staging`
 - `htmlctl preview remove website/sample --env staging --id 7 --context staging`
@@ -482,6 +486,12 @@ Inventory and guidance:
 - Unsupported `get` resource types and malformed `website/<name>` refs must return fix-oriented guidance.
 - In table output, `backend add` prints follow-up guidance (`backend list`, live-URL verification) after success.
 - In table output, `backend add` emits non-blocking warnings for suspicious static-content prefixes such as `/styles/*`, `/scripts/*`, `/assets/*`, and `/favicon...`.
+- `authpolicy add` requires `--password-stdin`, hashes the password on the CLI with bcrypt, and sends only the resulting bcrypt hash to the server.
+- `authpolicy list` must omit password-hash material from both table and structured output.
+- Auth policies are environment-scoped runtime routing config like backends. `apply`, `diff`, and `promote` do not create, copy, or remove them.
+- Auth policy path prefixes must use the same canonical matcher form as backends (`/<segment>/*`).
+- Overlapping auth policy prefixes in one environment must be rejected.
+- Auth policy overlap with backends is allowed only for an exact same-prefix match, so Caddy can challenge before `reverse_proxy`.
 - `apply --from-git` resolves the Git source on the CLI side only, requires a pinned commit SHA, and then reuses the normal tar bundle upload path.
 - Git-source bundle manifests may include optional provenance metadata:
   - `source.type = "git"`

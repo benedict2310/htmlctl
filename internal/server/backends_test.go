@@ -153,6 +153,50 @@ func TestBackendsValidationAndMissingPath(t *testing.T) {
 	}
 }
 
+func TestBackendsAuthPolicyOverlapValidation(t *testing.T) {
+	srv := startTestServer(t)
+	baseURL := "http://" + srv.Addr()
+	seedDomainWebsiteEnv(t, srv, "sample", "staging")
+	srv.caddyReloader = &fakeCaddyReloader{}
+
+	q := dbpkg.NewQueries(srv.db)
+	websiteRow, err := q.GetWebsiteByName(context.Background(), "sample")
+	if err != nil {
+		t.Fatalf("GetWebsiteByName() error = %v", err)
+	}
+	envRow, err := q.GetEnvironmentByName(context.Background(), websiteRow.ID, "staging")
+	if err != nil {
+		t.Fatalf("GetEnvironmentByName() error = %v", err)
+	}
+	if err := q.UpsertAuthPolicy(context.Background(), dbpkg.AuthPolicyRow{
+		EnvironmentID: envRow.ID,
+		PathPrefix:    "/docs/*",
+		Username:      "reviewer",
+		PasswordHash:  mustBcryptHash(t, "docs-secret"),
+	}); err != nil {
+		t.Fatalf("UpsertAuthPolicy() error = %v", err)
+	}
+
+	resp, err := http.Post(baseURL+"/api/v1/websites/sample/environments/staging/backends", "application/json", bytes.NewBufferString(`{"pathPrefix":"/docs/private/*","upstream":"https://api.example.com"}`))
+	if err != nil {
+		t.Fatalf("POST /backends overlap error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for backend/auth-policy overlap, got %d", resp.StatusCode)
+	}
+
+	resp, err = http.Post(baseURL+"/api/v1/websites/sample/environments/staging/backends", "application/json", bytes.NewBufferString(`{"pathPrefix":"/docs/*","upstream":"https://api.example.com"}`))
+	if err != nil {
+		t.Fatalf("POST /backends exact overlap error = %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201 for exact backend/auth-policy match, got %d body=%s", resp.StatusCode, string(body))
+	}
+}
+
 func TestBackendsDeleteMalformedQueryAndNotFound(t *testing.T) {
 	srv := startTestServer(t)
 	baseURL := "http://" + srv.Addr()

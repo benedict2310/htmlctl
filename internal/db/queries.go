@@ -877,6 +877,123 @@ func (q *Queries) DeleteBackendByPathPrefix(ctx context.Context, environmentID i
 	return affected > 0, nil
 }
 
+func (q *Queries) UpsertAuthPolicy(ctx context.Context, in AuthPolicyRow) error {
+	_, err := q.db.ExecContext(ctx, `
+INSERT INTO auth_policies(environment_id, path_prefix, username, password_hash)
+VALUES(?, ?, ?, ?)
+ON CONFLICT(environment_id, path_prefix) DO UPDATE SET
+  username=excluded.username,
+  password_hash=excluded.password_hash,
+  updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+`, in.EnvironmentID, in.PathPrefix, in.Username, in.PasswordHash)
+	if err != nil {
+		return fmt.Errorf("upsert auth policy: %w", err)
+	}
+	return nil
+}
+
+func (q *Queries) ListAuthPoliciesByEnvironment(ctx context.Context, environmentID int64) ([]AuthPolicyRow, error) {
+	rows, err := q.db.QueryContext(ctx, `
+SELECT
+  id,
+  environment_id,
+  path_prefix,
+  username,
+  password_hash,
+  created_at,
+  updated_at
+FROM auth_policies
+WHERE environment_id = ?
+ORDER BY path_prefix ASC
+`, environmentID)
+	if err != nil {
+		return nil, fmt.Errorf("list auth policies by environment: %w", err)
+	}
+	defer rows.Close()
+
+	out, err := scanAuthPolicyRows(rows)
+	if err != nil {
+		return nil, fmt.Errorf("list auth policies by environment: %w", err)
+	}
+	return out, nil
+}
+
+func (q *Queries) GetAuthPolicyByPathPrefix(ctx context.Context, environmentID int64, pathPrefix string) (AuthPolicyRow, error) {
+	var out AuthPolicyRow
+	err := q.db.QueryRowContext(ctx, `
+SELECT
+  id,
+  environment_id,
+  path_prefix,
+  username,
+  password_hash,
+  created_at,
+  updated_at
+FROM auth_policies
+WHERE environment_id = ? AND path_prefix = ?
+`, environmentID, pathPrefix).Scan(
+		&out.ID,
+		&out.EnvironmentID,
+		&out.PathPrefix,
+		&out.Username,
+		&out.PasswordHash,
+		&out.CreatedAt,
+		&out.UpdatedAt,
+	)
+	if err != nil {
+		return out, fmt.Errorf("get auth policy by path prefix: %w", err)
+	}
+	return out, nil
+}
+
+func (q *Queries) ListAuthPolicies(ctx context.Context) ([]AuthPolicyRow, error) {
+	rows, err := q.db.QueryContext(ctx, `
+SELECT
+  id,
+  environment_id,
+  path_prefix,
+  username,
+  password_hash,
+  created_at,
+  updated_at
+FROM auth_policies
+ORDER BY environment_id ASC, path_prefix ASC
+`)
+	if err != nil {
+		return nil, fmt.Errorf("list auth policies: %w", err)
+	}
+	defer rows.Close()
+
+	out, err := scanAuthPolicyRows(rows)
+	if err != nil {
+		return nil, fmt.Errorf("list auth policies: %w", err)
+	}
+	return out, nil
+}
+
+func (q *Queries) DeleteAuthPolicyByPathPrefix(ctx context.Context, environmentID int64, pathPrefix string) (bool, error) {
+	res, err := q.db.ExecContext(ctx, `DELETE FROM auth_policies WHERE environment_id = ? AND path_prefix = ?`, environmentID, pathPrefix)
+	if err != nil {
+		return false, fmt.Errorf("delete auth policy: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("auth policy rows affected: %w", err)
+	}
+	return affected > 0, nil
+}
+
+func (q *Queries) RestoreAuthPolicy(ctx context.Context, in AuthPolicyRow) error {
+	_, err := q.db.ExecContext(ctx, `
+INSERT INTO auth_policies(id, environment_id, path_prefix, username, password_hash, created_at, updated_at)
+VALUES(?, ?, ?, ?, ?, ?, ?)
+`, in.ID, in.EnvironmentID, in.PathPrefix, in.Username, in.PasswordHash, in.CreatedAt, in.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("restore auth policy: %w", err)
+	}
+	return nil
+}
+
 func scanBackendRows(rows *sql.Rows) ([]BackendRow, error) {
 	out := []BackendRow{}
 	for rows.Next() {
@@ -895,6 +1012,29 @@ func scanBackendRows(rows *sql.Rows) ([]BackendRow, error) {
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate backend rows: %w", err)
+	}
+	return out, nil
+}
+
+func scanAuthPolicyRows(rows *sql.Rows) ([]AuthPolicyRow, error) {
+	out := []AuthPolicyRow{}
+	for rows.Next() {
+		var row AuthPolicyRow
+		if err := rows.Scan(
+			&row.ID,
+			&row.EnvironmentID,
+			&row.PathPrefix,
+			&row.Username,
+			&row.PasswordHash,
+			&row.CreatedAt,
+			&row.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan auth policy row: %w", err)
+		}
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate auth policy rows: %w", err)
 	}
 	return out, nil
 }

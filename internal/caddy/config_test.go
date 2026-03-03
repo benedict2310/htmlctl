@@ -143,9 +143,9 @@ func TestGenerateConfigWithBackends(t *testing.T) {
 		t.Fatalf("GenerateConfig() error = %v", err)
 	}
 
-	apiIndex := strings.Index(cfg, "\treverse_proxy /api/* https://api.example.com")
-	authIndex := strings.Index(cfg, "\treverse_proxy /auth/* https://auth.example.com")
-	fileServerIndex := strings.Index(cfg, "\tfile_server")
+	apiIndex := strings.Index(cfg, "\thandle /api/* {\n\t\treverse_proxy https://api.example.com\n\t}")
+	authIndex := strings.Index(cfg, "\thandle /auth/* {\n\t\treverse_proxy https://auth.example.com\n\t}")
+	fileServerIndex := strings.Index(cfg, "\thandle {\n\t\troot * /srv/sample/prod/current\n\t\tfile_server\n\t}")
 	if apiIndex == -1 || authIndex == -1 || fileServerIndex == -1 {
 		t.Fatalf("expected backend directives and file_server, got:\n%s", cfg)
 	}
@@ -171,17 +171,138 @@ func TestGenerateConfigMixedBackendSites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateConfig() error = %v", err)
 	}
-	if strings.Count(cfg, "reverse_proxy /api/* https://api.example.com") != 1 {
+	if strings.Count(cfg, "\thandle /api/* {\n\t\treverse_proxy https://api.example.com\n\t}") != 1 {
 		t.Fatalf("expected one backend directive, got:\n%s", cfg)
 	}
-	staticBlockStart := strings.Index(cfg, "static.example.com {")
-	staticBlockEnd := strings.Index(cfg[staticBlockStart:], "}\n")
-	if staticBlockStart == -1 || staticBlockEnd == -1 {
-		t.Fatalf("expected static.example.com block, got:\n%s", cfg)
+	expectedStaticBlock := "static.example.com {\n\troot * /srv/sample/static/current\n\thandle {\n\t\troot * /srv/sample/static/current\n\t\tfile_server\n\t}\n}"
+	if !strings.Contains(cfg, expectedStaticBlock) {
+		t.Fatalf("expected static-only site block, got:\n%s", cfg)
 	}
-	staticBlock := cfg[staticBlockStart : staticBlockStart+staticBlockEnd]
-	if strings.Contains(staticBlock, "reverse_proxy /api/* https://api.example.com") {
-		t.Fatalf("did not expect backend directive in static-only site block, got:\n%s", staticBlock)
+}
+
+func TestGenerateConfigOrdersMoreSpecificBackendsFirst(t *testing.T) {
+	cfg, err := GenerateConfig([]Site{{
+		Domain: "example.com",
+		Root:   "/srv/sample/prod/current",
+		Backends: []Backend{
+			{PathPrefix: "/api/*", Upstream: "https://api.example.com"},
+			{PathPrefix: "/api/internal/*", Upstream: "https://internal.example.com"},
+		},
+	}})
+	if err != nil {
+		t.Fatalf("GenerateConfig() error = %v", err)
+	}
+
+	internalIndex := strings.Index(cfg, "\thandle /api/internal/* {\n\t\treverse_proxy https://internal.example.com\n\t}")
+	apiIndex := strings.Index(cfg, "\thandle /api/* {\n\t\treverse_proxy https://api.example.com\n\t}")
+	if internalIndex == -1 || apiIndex == -1 {
+		t.Fatalf("expected both backend handle blocks, got:\n%s", cfg)
+	}
+	if internalIndex > apiIndex {
+		t.Fatalf("expected more specific backend to be emitted first, got:\n%s", cfg)
+	}
+}
+
+func TestGenerateConfigWithProtectedBackend(t *testing.T) {
+	cfg, err := GenerateConfig([]Site{{
+		Domain: "example.com",
+		Root:   "/srv/sample/prod/current",
+		Backends: []Backend{
+			{PathPrefix: "/api/*", Upstream: "https://api.example.com"},
+		},
+		AuthPolicies: []AuthPolicy{
+			{PathPrefix: "/api/*", Username: "reviewer", PasswordHash: "$2a$10$7EqJtq98hPqEX7fNZaFWoO5M4FQ8Q6H4L9Xn1w1s8T8a1mYg0sB7e"},
+		},
+	}})
+	if err != nil {
+		t.Fatalf("GenerateConfig() error = %v", err)
+	}
+	if !strings.Contains(cfg, "\thandle /api/* {\n\t\tbasic_auth {\n\t\t\treviewer ") {
+		t.Fatalf("expected protected backend basic auth stanza, got:\n%s", cfg)
+	}
+	if !strings.Contains(cfg, "\t\treverse_proxy https://api.example.com\n\t}") {
+		t.Fatalf("expected protected backend reverse_proxy stanza, got:\n%s", cfg)
+	}
+}
+
+func TestGenerateConfigWithProtectedStaticPath(t *testing.T) {
+	cfg, err := GenerateConfig([]Site{{
+		Domain: "example.com",
+		Root:   "/srv/sample/prod/current",
+		AuthPolicies: []AuthPolicy{
+			{PathPrefix: "/docs/*", Username: "reviewer", PasswordHash: "$2a$10$7EqJtq98hPqEX7fNZaFWoO5M4FQ8Q6H4L9Xn1w1s8T8a1mYg0sB7e"},
+		},
+	}})
+	if err != nil {
+		t.Fatalf("GenerateConfig() error = %v", err)
+	}
+	if !strings.Contains(cfg, "\thandle /docs/* {\n\t\tbasic_auth {\n\t\t\treviewer ") {
+		t.Fatalf("expected protected static basic auth stanza, got:\n%s", cfg)
+	}
+	if !strings.Contains(cfg, "\t\troot * /srv/sample/prod/current\n\t\tfile_server\n\t}") {
+		t.Fatalf("expected protected static file_server stanza, got:\n%s", cfg)
+	}
+}
+
+func TestGenerateConfigRejectsOverlappingAuthPolicies(t *testing.T) {
+	_, err := GenerateConfig([]Site{{
+		Domain: "example.com",
+		Root:   "/srv/sample/prod/current",
+		AuthPolicies: []AuthPolicy{
+			{PathPrefix: "/docs/*", Username: "reviewer", PasswordHash: "$2a$10$7EqJtq98hPqEX7fNZaFWoO5M4FQ8Q6H4L9Xn1w1s8T8a1mYg0sB7e"},
+			{PathPrefix: "/docs/private/*", Username: "admin", PasswordHash: "$2a$10$7EqJtq98hPqEX7fNZaFWoO5M4FQ8Q6H4L9Xn1w1s8T8a1mYg0sB7e"},
+		},
+	}})
+	if err == nil {
+		t.Fatalf("expected overlapping auth policy error")
+	}
+}
+
+func TestGenerateConfigRejectsAuthPolicyBackendOverlap(t *testing.T) {
+	_, err := GenerateConfig([]Site{{
+		Domain: "example.com",
+		Root:   "/srv/sample/prod/current",
+		Backends: []Backend{
+			{PathPrefix: "/api/internal/*", Upstream: "https://api.example.com"},
+		},
+		AuthPolicies: []AuthPolicy{
+			{PathPrefix: "/api/*", Username: "reviewer", PasswordHash: "$2a$10$7EqJtq98hPqEX7fNZaFWoO5M4FQ8Q6H4L9Xn1w1s8T8a1mYg0sB7e"},
+		},
+	}})
+	if err == nil {
+		t.Fatalf("expected auth/backend overlap error")
+	}
+}
+
+func TestGenerateConfigAllowsExactAuthPolicyBackendMatch(t *testing.T) {
+	cfg, err := GenerateConfig([]Site{{
+		Domain: "example.com",
+		Root:   "/srv/sample/prod/current",
+		Backends: []Backend{
+			{PathPrefix: "/api/*", Upstream: "https://api.example.com"},
+		},
+		AuthPolicies: []AuthPolicy{
+			{PathPrefix: "/api/*", Username: "reviewer", PasswordHash: "$2a$10$7EqJtq98hPqEX7fNZaFWoO5M4FQ8Q6H4L9Xn1w1s8T8a1mYg0sB7e"},
+		},
+	}})
+	if err != nil {
+		t.Fatalf("GenerateConfig() error = %v", err)
+	}
+	if !strings.Contains(cfg, "\thandle /api/* {\n\t\tbasic_auth {") || !strings.Contains(cfg, "\t\treverse_proxy https://api.example.com\n\t}") {
+		t.Fatalf("expected exact-match protected backend stanza, got:\n%s", cfg)
+	}
+}
+
+func TestGenerateConfigRejectsTelemetryAuthPolicyOverlap(t *testing.T) {
+	_, err := GenerateConfigWithOptions([]Site{{
+		Domain: "example.com",
+		Root:   "/srv/sample/prod/current",
+		AuthPolicies: []AuthPolicy{
+			{PathPrefix: "/collect/*", Username: "reviewer", PasswordHash: "$2a$10$7EqJtq98hPqEX7fNZaFWoO5M4FQ8Q6H4L9Xn1w1s8T8a1mYg0sB7e"},
+		},
+	}}, ConfigOptions{TelemetryPort: 9400})
+	if err == nil {
+		t.Fatalf("expected telemetry overlap error")
 	}
 }
 

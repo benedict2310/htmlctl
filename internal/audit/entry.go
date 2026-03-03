@@ -6,15 +6,17 @@ import (
 )
 
 const (
-	OperationApply           = "apply"
-	OperationReleaseBuild    = "release.build"
-	OperationReleaseActivate = "release.activate"
-	OperationRollback        = "rollback"
-	OperationPromote         = "promote"
-	OperationDomainAdd       = "domain.add"
-	OperationDomainRemove    = "domain.remove"
-	OperationBackendAdd      = "backend.add"
-	OperationBackendRemove   = "backend.remove"
+	OperationApply            = "apply"
+	OperationReleaseBuild     = "release.build"
+	OperationReleaseActivate  = "release.activate"
+	OperationRollback         = "rollback"
+	OperationPromote          = "promote"
+	OperationDomainAdd        = "domain.add"
+	OperationDomainRemove     = "domain.remove"
+	OperationBackendAdd       = "backend.add"
+	OperationBackendRemove    = "backend.remove"
+	OperationAuthPolicyAdd    = "authpolicy.add"
+	OperationAuthPolicyRemove = "authpolicy.remove"
 )
 
 type Entry struct {

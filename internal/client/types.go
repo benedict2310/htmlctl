@@ -151,6 +151,22 @@ type BackendsResponse struct {
 	Backends    []Backend `json:"backends" yaml:"backends"`
 }
 
+type AuthPolicy struct {
+	ID          int64  `json:"id,omitempty" yaml:"id,omitempty"`
+	PathPrefix  string `json:"pathPrefix" yaml:"pathPrefix"`
+	Username    string `json:"username" yaml:"username"`
+	CreatedAt   string `json:"createdAt,omitempty" yaml:"createdAt,omitempty"`
+	UpdatedAt   string `json:"updatedAt,omitempty" yaml:"updatedAt,omitempty"`
+	Website     string `json:"website,omitempty" yaml:"website,omitempty"`
+	Environment string `json:"environment,omitempty" yaml:"environment,omitempty"`
+}
+
+type AuthPoliciesResponse struct {
+	Website      string       `json:"website,omitempty" yaml:"website,omitempty"`
+	Environment  string       `json:"environment,omitempty" yaml:"environment,omitempty"`
+	AuthPolicies []AuthPolicy `json:"authPolicies" yaml:"authPolicies"`
+}
+
 type Preview struct {
 	ID          int64  `json:"id" yaml:"id"`
 	ReleaseID   string `json:"releaseId" yaml:"releaseId"`

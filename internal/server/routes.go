@@ -28,6 +28,8 @@ func (s *Server) handleWebsiteAPI(w http.ResponseWriter, r *http.Request) {
 		s.handleLogs(w, r)
 	case strings.HasSuffix(r.URL.Path, "/backends"):
 		s.handleBackends(w, r)
+	case strings.HasSuffix(r.URL.Path, "/auth-policies"):
+		s.handleAuthPolicies(w, r)
 	case isPreviewPath(r.URL.EscapedPath()):
 		s.handlePreviews(w, r)
 	case strings.HasSuffix(r.URL.Path, "/status"):

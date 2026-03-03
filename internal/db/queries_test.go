@@ -1248,6 +1248,121 @@ func TestBackendCRUD(t *testing.T) {
 	}
 }
 
+func TestAuthPolicyCRUD(t *testing.T) {
+	q, cleanup := setupDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	stagingID, err := q.InsertEnvironment(ctx, EnvironmentRow{WebsiteID: websiteID, Name: "staging"})
+	if err != nil {
+		t.Fatalf("InsertEnvironment(staging) error = %v", err)
+	}
+	prodID, err := q.InsertEnvironment(ctx, EnvironmentRow{WebsiteID: websiteID, Name: "prod"})
+	if err != nil {
+		t.Fatalf("InsertEnvironment(prod) error = %v", err)
+	}
+
+	if err := q.UpsertAuthPolicy(ctx, AuthPolicyRow{
+		EnvironmentID: stagingID,
+		PathPrefix:    "/docs/*",
+		Username:      "reviewer",
+		PasswordHash:  "$2a$10$M0U8B3Q3R2J6lgj4knM.QeZPwR1pUSL.pG4CjKB3Y7NP0Q7tge8Hy",
+	}); err != nil {
+		t.Fatalf("UpsertAuthPolicy(/docs/*) error = %v", err)
+	}
+	if err := q.UpsertAuthPolicy(ctx, AuthPolicyRow{
+		EnvironmentID: stagingID,
+		PathPrefix:    "/private/*",
+		Username:      "ops",
+		PasswordHash:  "$2a$10$A1JlzFsS2KflNl8bLQ1b8eQAR0fM5sV9Yed3A80v64DafJwoA2tQO",
+	}); err != nil {
+		t.Fatalf("UpsertAuthPolicy(/private/*) error = %v", err)
+	}
+	if err := q.UpsertAuthPolicy(ctx, AuthPolicyRow{
+		EnvironmentID: prodID,
+		PathPrefix:    "/docs/*",
+		Username:      "prod-reviewer",
+		PasswordHash:  "$2a$10$8D2WlHh2p.yA3sfH8QkKjeY2VP7Z28M4NOv.L0tkBOiM6fS8BC4Wu",
+	}); err != nil {
+		t.Fatalf("UpsertAuthPolicy(prod /docs/*) error = %v", err)
+	}
+
+	rows, err := q.ListAuthPoliciesByEnvironment(ctx, stagingID)
+	if err != nil {
+		t.Fatalf("ListAuthPoliciesByEnvironment(staging) error = %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 staging auth policies, got %d", len(rows))
+	}
+	if rows[0].PathPrefix != "/docs/*" || rows[1].PathPrefix != "/private/*" {
+		t.Fatalf("expected auth policies sorted by path prefix, got %#v", rows)
+	}
+	got, err := q.GetAuthPolicyByPathPrefix(ctx, stagingID, "/docs/*")
+	if err != nil {
+		t.Fatalf("GetAuthPolicyByPathPrefix(/docs/*) error = %v", err)
+	}
+	if got.Username != "reviewer" {
+		t.Fatalf("unexpected auth policy row: %#v", got)
+	}
+	createdAt := rows[0].CreatedAt
+	updatedAt := rows[0].UpdatedAt
+
+	time.Sleep(10 * time.Millisecond)
+
+	if err := q.UpsertAuthPolicy(ctx, AuthPolicyRow{
+		EnvironmentID: stagingID,
+		PathPrefix:    "/docs/*",
+		Username:      "reviewer2",
+		PasswordHash:  "$2a$10$zUggxCZTi2r8t8L7j0fEvuS7p5M8DvUmmq3Jv7b6f0J0x4PL0n0ri",
+	}); err != nil {
+		t.Fatalf("UpsertAuthPolicy(update /docs/*) error = %v", err)
+	}
+
+	rows, err = q.ListAuthPoliciesByEnvironment(ctx, stagingID)
+	if err != nil {
+		t.Fatalf("ListAuthPoliciesByEnvironment(staging second) error = %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 staging auth policies after update, got %d", len(rows))
+	}
+	if rows[0].Username != "reviewer2" {
+		t.Fatalf("expected updated username, got %#v", rows[0])
+	}
+	if rows[0].CreatedAt != createdAt {
+		t.Fatalf("expected created_at to remain stable, got %q want %q", rows[0].CreatedAt, createdAt)
+	}
+	if rows[0].UpdatedAt == updatedAt {
+		t.Fatalf("expected updated_at to change after conflict update")
+	}
+
+	prodRows, err := q.ListAuthPoliciesByEnvironment(ctx, prodID)
+	if err != nil {
+		t.Fatalf("ListAuthPoliciesByEnvironment(prod) error = %v", err)
+	}
+	if len(prodRows) != 1 || prodRows[0].Username != "prod-reviewer" {
+		t.Fatalf("unexpected prod auth policies: %#v", prodRows)
+	}
+
+	deleted, err := q.DeleteAuthPolicyByPathPrefix(ctx, stagingID, "/private/*")
+	if err != nil {
+		t.Fatalf("DeleteAuthPolicyByPathPrefix(/private/*) error = %v", err)
+	}
+	if !deleted {
+		t.Fatalf("expected deleted=true for existing auth policy")
+	}
+	deleted, err = q.DeleteAuthPolicyByPathPrefix(ctx, stagingID, "/missing/*")
+	if err != nil {
+		t.Fatalf("DeleteAuthPolicyByPathPrefix(/missing/*) error = %v", err)
+	}
+	if deleted {
+		t.Fatalf("expected deleted=false for missing auth policy")
+	}
+}
+
 func TestReleasePreviewCRUD(t *testing.T) {
 	q, cleanup := setupDB(t)
 	defer cleanup()

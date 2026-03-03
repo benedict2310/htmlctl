@@ -58,6 +58,15 @@
 | `502 Bad Gateway` on `/api/...` | Upstream is down or unreachable from htmlservd/Caddy | Confirm the upstream is listening and reachable; for host-side Docker tests use `http://host.docker.internal:<port>` |
 | Backend missing in prod after successful promote | Expected backend state to move with the release | Recreate it with `htmlctl backend add ... --env prod ...`; backends are per-environment and not promoted |
 
+### Auth Policies
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `400` when adding `/docs/private/*` after `/docs/*` | Overlapping auth-policy prefixes are not supported in v1 | Collapse to a single prefix or pick non-overlapping protected paths |
+| `400` when adding `/api/*` auth policy | A backend already overlaps on a different prefix such as `/api/internal/*` | Use an exact same-prefix backend/auth pair or split the backend paths so they no longer overlap |
+| Browser never prompts for credentials | The policy was added to a different environment or path than the request being tested | Confirm with `htmlctl authpolicy list --context <ctx>` and test the exact protected path on that environment |
+| Prompt appears but valid credentials fail | Wrong username/password was entered after a successful update | Re-run `authpolicy add` with `--password-stdin` and verify with `curl -u <user>:<password> ...` |
+
 ---
 
 ## Pre-Apply Safety Checklist

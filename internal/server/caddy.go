@@ -28,6 +28,7 @@ func (s *Server) generateCaddyConfig(ctx context.Context) (string, error) {
 		return "", err
 	}
 	backendsByEnvironment := map[int64][]caddy.Backend{}
+	authPoliciesByEnvironment := map[int64][]caddy.AuthPolicy{}
 	backendRows, err := q.ListBackends(ctx)
 	if err != nil {
 		return "", err
@@ -36,6 +37,17 @@ func (s *Server) generateCaddyConfig(ctx context.Context) (string, error) {
 		backendsByEnvironment[backendRow.EnvironmentID] = append(backendsByEnvironment[backendRow.EnvironmentID], caddy.Backend{
 			PathPrefix: backendRow.PathPrefix,
 			Upstream:   backendRow.Upstream,
+		})
+	}
+	authPolicyRows, err := q.ListAuthPolicies(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, row := range authPolicyRows {
+		authPoliciesByEnvironment[row.EnvironmentID] = append(authPoliciesByEnvironment[row.EnvironmentID], caddy.AuthPolicy{
+			PathPrefix:   row.PathPrefix,
+			Username:     row.Username,
+			PasswordHash: row.PasswordHash,
 		})
 	}
 	previewRows := []dbpkg.ReleasePreviewResolvedRow{}
@@ -49,17 +61,19 @@ func (s *Server) generateCaddyConfig(ctx context.Context) (string, error) {
 	for _, row := range rows {
 		root := filepath.Join(s.dataPaths.WebsitesRoot, row.WebsiteName, "envs", row.EnvironmentName, "current")
 		sites = append(sites, caddy.Site{
-			Domain:   row.Domain,
-			Root:     filepath.ToSlash(root),
-			Backends: append([]caddy.Backend(nil), backendsByEnvironment[row.EnvironmentID]...),
+			Domain:       row.Domain,
+			Root:         filepath.ToSlash(root),
+			Backends:     append([]caddy.Backend(nil), backendsByEnvironment[row.EnvironmentID]...),
+			AuthPolicies: append([]caddy.AuthPolicy(nil), authPoliciesByEnvironment[row.EnvironmentID]...),
 		})
 	}
 	for _, row := range previewRows {
 		root := filepath.Join(s.dataPaths.WebsitesRoot, row.WebsiteName, "envs", row.EnvironmentName, "releases", row.ReleaseID)
 		sites = append(sites, caddy.Site{
-			Domain:   row.Hostname,
-			Root:     filepath.ToSlash(root),
-			Backends: append([]caddy.Backend(nil), backendsByEnvironment[row.EnvironmentID]...),
+			Domain:       row.Hostname,
+			Root:         filepath.ToSlash(root),
+			Backends:     append([]caddy.Backend(nil), backendsByEnvironment[row.EnvironmentID]...),
+			AuthPolicies: append([]caddy.AuthPolicy(nil), authPoliciesByEnvironment[row.EnvironmentID]...),
 			Headers: map[string]string{
 				"X-Robots-Tag": "noindex, nofollow, noarchive",
 			},

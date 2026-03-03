@@ -317,6 +317,16 @@ Rules:
 Backend paths must use the canonical prefix form `/<segment>/*`. They are runtime routing config, not bundle content, so `promote` does not copy or mutate backend definitions.
 In human output, `backend add` now warns about obviously risky prefixes such as `/styles/*`, `/scripts/*`, `/assets/*`, and `/favicon...`, and suggests the next verification commands.
 
+### Auth Policies
+
+| Command | Description |
+|---------|-------------|
+| `htmlctl authpolicy add [website/<name>] --path /docs/* --username <user> --password-stdin [--env <env>]` | Add or update an environment-scoped Basic Auth policy for a path prefix; omit website ref and `--env` to use the active context defaults |
+| `htmlctl authpolicy list [website/<name>] [--env <env>]` | List configured auth policies for an environment; omit website ref and `--env` to use the active context defaults |
+| `htmlctl authpolicy remove [website/<name>] --path /docs/* [--env <env>]` | Remove an auth policy by path; omit website ref and `--env` to use the active context defaults |
+
+Auth policies are environment-scoped runtime config, not bundle content, so `promote` does not copy or mutate them. Passwords are hashed client-side with bcrypt before upload, `list` never returns hash material, overlapping auth-policy prefixes are rejected, and backend overlap is allowed only on an exact same-prefix match.
+
 ### Context
 
 | Command | Description |

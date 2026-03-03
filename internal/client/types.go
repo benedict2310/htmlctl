@@ -8,6 +8,14 @@ type Website struct {
 	UpdatedAt          string `json:"updatedAt" yaml:"updatedAt"`
 }
 
+type HealthResponse struct {
+	Status string `json:"status" yaml:"status"`
+}
+
+type VersionResponse struct {
+	Version string `json:"version" yaml:"version"`
+}
+
 type WebsitesResponse struct {
 	Websites []Website `json:"websites" yaml:"websites"`
 }

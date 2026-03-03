@@ -413,6 +413,13 @@ Remote defaults:
 - `htmlctl backend add|list|remove [website/<name>]` default both website and `--env` from the active context when omitted.
 - Explicit `website/<name>` args and `--env` flags always take precedence over context defaults.
 
+Diagnostics:
+
+- `htmlctl version` prints the local CLI build version only.
+- `htmlctl version --remote` resolves the selected context, opens the SSH transport, and reports both local and remote `/version` values.
+- `htmlctl doctor` performs read-only diagnostics for config resolution, SSH transport, authenticated API access, `/healthz`, `/readyz`, and `/version`.
+- Diagnostic output must never include bearer token material; action hints should identify the failing layer and the next fix to try.
+
 Remote ops:
 
 - `htmlctl diff -f ./site --context staging`

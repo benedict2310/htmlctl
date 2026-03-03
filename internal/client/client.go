@@ -18,6 +18,8 @@ import (
 
 const defaultBaseURL = "http://htmlservd"
 
+var ErrUnauthorized = errors.New("unauthorized")
+
 type APIClient struct {
 	transport transport.Transport
 	baseURL   string
@@ -44,6 +46,42 @@ func NewWithAuth(tr transport.Transport, actor, token string) *APIClient {
 		actor:     actor,
 		token:     token,
 	}
+}
+
+func (c *APIClient) GetHealth(ctx context.Context) (HealthResponse, error) {
+	req, err := c.newRequest(ctx, http.MethodGet, "/healthz", nil)
+	if err != nil {
+		return HealthResponse{}, err
+	}
+	var out HealthResponse
+	if err := c.do(req, &out); err != nil {
+		return HealthResponse{}, err
+	}
+	return out, nil
+}
+
+func (c *APIClient) GetReady(ctx context.Context) (HealthResponse, error) {
+	req, err := c.newRequest(ctx, http.MethodGet, "/readyz", nil)
+	if err != nil {
+		return HealthResponse{}, err
+	}
+	var out HealthResponse
+	if err := c.do(req, &out); err != nil {
+		return HealthResponse{}, err
+	}
+	return out, nil
+}
+
+func (c *APIClient) GetVersion(ctx context.Context) (VersionResponse, error) {
+	req, err := c.newRequest(ctx, http.MethodGet, "/version", nil)
+	if err != nil {
+		return VersionResponse{}, err
+	}
+	var out VersionResponse
+	if err := c.do(req, &out); err != nil {
+		return VersionResponse{}, err
+	}
+	return out, nil
 }
 
 func (c *APIClient) ListWebsites(ctx context.Context) (WebsitesResponse, error) {
@@ -443,7 +481,7 @@ func mapAPIError(resp *http.Response) error {
 	case http.StatusBadRequest:
 		return fmt.Errorf("invalid request: %s", msg)
 	case http.StatusUnauthorized:
-		return fmt.Errorf("unauthorized: %s (configure context token or check server api token)", msg)
+		return fmt.Errorf("%w: %s (configure context token or check server api token)", ErrUnauthorized, msg)
 	case http.StatusNotFound:
 		return fmt.Errorf("resource not found: %s (check website/environment and --context)", msg)
 	case http.StatusConflict:
@@ -456,6 +494,10 @@ func mapAPIError(resp *http.Response) error {
 		}
 		return fmt.Errorf("request failed (%d): %s", resp.StatusCode, msg)
 	}
+}
+
+func IsUnauthorized(err error) bool {
+	return errors.Is(err, ErrUnauthorized)
 }
 
 func mapTransportError(err error) error {

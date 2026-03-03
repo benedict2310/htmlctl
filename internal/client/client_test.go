@@ -56,6 +56,58 @@ func TestNewWithAuthAddsAuthorizationAndActorHeaders(t *testing.T) {
 	}
 }
 
+func TestDiagnosticsEndpointsBuildExpectedRequests(t *testing.T) {
+	call := 0
+	mock := &mockTransport{
+		doFn: func(ctx context.Context, req *http.Request) (*http.Response, error) {
+			call++
+			switch call {
+			case 1:
+				if req.URL.Path != "/healthz" {
+					t.Fatalf("unexpected health path %s", req.URL.Path)
+				}
+				return jsonResponse(http.StatusOK, `{"status":"ok"}`), nil
+			case 2:
+				if req.URL.Path != "/readyz" {
+					t.Fatalf("unexpected ready path %s", req.URL.Path)
+				}
+				return jsonResponse(http.StatusOK, `{"status":"ok"}`), nil
+			case 3:
+				if req.URL.Path != "/version" {
+					t.Fatalf("unexpected version path %s", req.URL.Path)
+				}
+				return jsonResponse(http.StatusOK, `{"version":"1.2.3"}`), nil
+			default:
+				t.Fatalf("unexpected call %d", call)
+				return nil, nil
+			}
+		},
+	}
+
+	api := New(mock)
+	health, err := api.GetHealth(context.Background())
+	if err != nil {
+		t.Fatalf("GetHealth() error = %v", err)
+	}
+	if health.Status != "ok" {
+		t.Fatalf("unexpected health response: %#v", health)
+	}
+	ready, err := api.GetReady(context.Background())
+	if err != nil {
+		t.Fatalf("GetReady() error = %v", err)
+	}
+	if ready.Status != "ok" {
+		t.Fatalf("unexpected ready response: %#v", ready)
+	}
+	version, err := api.GetVersion(context.Background())
+	if err != nil {
+		t.Fatalf("GetVersion() error = %v", err)
+	}
+	if version.Version != "1.2.3" {
+		t.Fatalf("unexpected version response: %#v", version)
+	}
+}
+
 func TestApplyBundleSetsContentTypeAndDryRunQuery(t *testing.T) {
 	var body []byte
 	mock := &mockTransport{
@@ -143,6 +195,26 @@ func TestListReleasesMapsConflictAndServerErrors(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+func TestListWebsitesMapsUnauthorizedError(t *testing.T) {
+	mock := &mockTransport{
+		doFn: func(ctx context.Context, req *http.Request) (*http.Response, error) {
+			return jsonResponse(http.StatusUnauthorized, `{"error":"unauthorized"}`), nil
+		},
+	}
+
+	api := NewWithAuth(mock, "staging", "secret-token")
+	_, err := api.ListWebsites(context.Background())
+	if err == nil {
+		t.Fatalf("expected unauthorized error")
+	}
+	if !IsUnauthorized(err) {
+		t.Fatalf("expected unauthorized sentinel, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "configure context token or check server api token") {
+		t.Fatalf("unexpected unauthorized error: %v", err)
 	}
 }
 

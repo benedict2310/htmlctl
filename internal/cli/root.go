@@ -106,6 +106,7 @@ func NewRootCmd(version string) *cobra.Command {
 	cmd.AddCommand(newBackendCmd())
 	cmd.AddCommand(newLogsCmd())
 	cmd.AddCommand(newVersionCmd(version))
+	cmd.AddCommand(newDoctorCmd(version))
 
 	return cmd
 }

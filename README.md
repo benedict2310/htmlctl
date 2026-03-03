@@ -327,6 +327,14 @@ Backend paths must use the canonical prefix form `/<segment>/*`. They are runtim
 | `htmlctl config view --show-secrets` | Print current config including tokens |
 | `htmlctl config use-context <name>` | Switch active context (legacy alias; prefer `context use`) |
 
+### Diagnostics
+
+| Command | Description |
+|---------|-------------|
+| `htmlctl version` | Print the local `htmlctl` build version |
+| `htmlctl version --remote` | Print both the local CLI version and the selected remote `htmlservd` version |
+| `htmlctl doctor` | Check context resolution, SSH transport, authenticated API access, health, readiness, and version skew for the selected context |
+
 All commands accept `--output json` or `--output yaml` for machine-parseable output.
 
 ---

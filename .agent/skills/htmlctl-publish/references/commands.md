@@ -225,3 +225,26 @@ Backend rules:
 - `--path` must use canonical prefix form such as `/api/*`
 - upstreams must be absolute `http://` or `https://` URLs
 - matching backend prefixes are routed before static file serving
+
+---
+
+## Diagnostics
+
+```bash
+# Show the local CLI version
+htmlctl version
+
+# Show both the local CLI version and the selected remote htmlservd version
+htmlctl version --remote --context staging
+
+# Run read-only diagnostics for config, SSH transport, authenticated API access, health, readiness, and version
+htmlctl doctor --context staging
+
+# Structured diagnostics output for automation
+htmlctl doctor --context staging --output json
+```
+
+Common failure hints:
+- `ssh host key verification failed`: refresh `known_hosts` with `ssh-keyscan`, then rerun `htmlctl doctor`.
+- `ssh authentication failed`: load the correct key into your agent or set `HTMLCTL_SSH_KEY_PATH`.
+- version mismatch: update either `htmlctl` or `htmlservd` so both sides run compatible builds before using newer CLI features.

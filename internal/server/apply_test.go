@@ -18,8 +18,27 @@ import (
 	"testing"
 	"time"
 
+	"github.com/benedict2310/htmlctl/internal/audit"
+	"github.com/benedict2310/htmlctl/internal/bundle"
 	dbpkg "github.com/benedict2310/htmlctl/internal/db"
 )
+
+type captureApplyAuditLogger struct {
+	entry audit.Entry
+}
+
+func (c *captureApplyAuditLogger) Log(ctx context.Context, entry audit.Entry) error {
+	c.entry = entry
+	return nil
+}
+
+func (c *captureApplyAuditLogger) Query(ctx context.Context, filter audit.Filter) (audit.QueryResult, error) {
+	return audit.QueryResult{}, nil
+}
+
+func (c *captureApplyAuditLogger) WaitIdle(ctx context.Context) error {
+	return nil
+}
 
 func TestApplyEndpointSuccessAndAutoCreate(t *testing.T) {
 	srv := startTestServer(t)
@@ -136,6 +155,46 @@ func TestApplyEndpointDryRunDoesNotPersist(t *testing.T) {
 	_, err := q.GetWebsiteByName(context.Background(), "sample")
 	if err == nil || !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("expected website to not persist in dry_run, got err=%v", err)
+	}
+}
+
+func TestApplyEndpointAuditIncludesSourceMetadata(t *testing.T) {
+	srv := startTestServer(t)
+	auditLogger := &captureApplyAuditLogger{}
+	srv.auditLogger = auditLogger
+	baseURL := "http://" + srv.Addr()
+
+	component := []byte("<section id=\"header\">Header</section>")
+	body := tarBody(t, map[string][]byte{
+		"components/header.html": component,
+	}, map[string]any{
+		"apiVersion": "htmlctl.dev/v1",
+		"kind":       "Bundle",
+		"mode":       "partial",
+		"website":    "sample",
+		"source": map[string]any{
+			"type":   "git",
+			"repo":   "git@github.com:org/repo.git",
+			"ref":    "01abcdef",
+			"subdir": "site",
+		},
+		"resources": []map[string]any{
+			{"kind": "Component", "name": "header", "file": "components/header.html", "hash": "sha256:" + sha256Hex(component)},
+		},
+	})
+
+	resp := postBundle(t, baseURL+"/api/v1/websites/sample/environments/staging/apply", body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	source, ok := auditLogger.entry.Metadata["source"].(*bundle.Source)
+	if !ok {
+		t.Fatalf("expected source metadata, got %#v", auditLogger.entry.Metadata["source"])
+	}
+	if source.Type != "git" || source.Ref != "01abcdef" {
+		t.Fatalf("unexpected source metadata %#v", source)
 	}
 }
 

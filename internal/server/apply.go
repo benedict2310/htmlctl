@@ -123,6 +123,9 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 					"acceptedCount": len(result.Accepted),
 					"changes":       result.Changes,
 				}
+				if b.Manifest.Source != nil {
+					metadata["source"] = b.Manifest.Source
+				}
 				if err := s.auditLogger.Log(r.Context(), audit.Entry{
 					Actor:           actorFromRequest(r),
 					EnvironmentID:   &envRow.ID,

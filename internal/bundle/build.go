@@ -21,8 +21,17 @@ import (
 
 const maxBundleSizeBytes = 100 * 1024 * 1024
 
+type BuildOptions struct {
+	Source *Source
+}
+
 // BuildTarFromDir validates a site directory and produces a full-apply tar bundle.
 func BuildTarFromDir(dir string, website string) ([]byte, Manifest, error) {
+	return BuildTarFromDirWithOptions(dir, website, BuildOptions{})
+}
+
+// BuildTarFromDirWithOptions validates a site directory and produces a full-apply tar bundle.
+func BuildTarFromDirWithOptions(dir string, website string, opts BuildOptions) ([]byte, Manifest, error) {
 	website = strings.TrimSpace(website)
 	if website == "" {
 		return nil, Manifest{}, fmt.Errorf("website is required")
@@ -208,6 +217,7 @@ func BuildTarFromDir(dir string, website string) ([]byte, Manifest, error) {
 		Kind:       "Bundle",
 		Mode:       ApplyModeFull,
 		Website:    website,
+		Source:     opts.Source,
 		Resources:  resources,
 	}
 	if err := manifest.Validate(); err != nil {

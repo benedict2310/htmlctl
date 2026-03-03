@@ -283,6 +283,7 @@ Rules:
 |---------|-------------|
 | `htmlctl apply -f ./site` | Upload and activate a new release |
 | `htmlctl apply -f ./site --dry-run` | Show diff without deploying |
+| `htmlctl apply --from-git <repo> --ref <commit-sha> [--subdir site]` | Resolve a pinned Git commit locally, then upload the resulting site |
 | `htmlctl diff -f ./site` | Show file-level diff against current desired state |
 | `htmlctl status [website/<name>]` | Show active release and environment status; omit website ref to use the active context website |
 | `htmlctl get <resource-type>` | List inventory for `websites`, `environments`, `releases`, `domains`, or `backends` |

@@ -75,15 +75,21 @@ Push desired state to the server. The server validates, renders, and creates an 
 # Apply full site directory
 htmlctl apply -f site/ --context staging
 
+# Apply from a pinned Git commit without a manual checkout
+htmlctl apply --from-git /path/to/repo --ref <commit-sha> --context staging
+htmlctl apply --from-git git@github.com:org/repo.git --ref <commit-sha> --subdir site --context staging
+
 # Apply a single changed file (server merges into current desired state)
 htmlctl apply -f components/hero.html --context staging
 htmlctl apply -f styles/default.css --context staging
 
 # Dry run — validate and show what would change, no release created
 htmlctl apply -f site/ --context staging --dry-run
+htmlctl apply --from-git /path/to/repo --ref <commit-sha> --context staging --dry-run
 ```
 
 On first deploy, `apply` bootstraps the environment. The output includes a hint pointing to the next domain-binding command.
+`--from` and `--from-git` are mutually exclusive. `--ref` is mandatory for Git mode and must be a pinned commit SHA, not a branch name.
 
 ---
 

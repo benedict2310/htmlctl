@@ -83,6 +83,36 @@ func TestApplyCommandLocalValidationFailsBeforeUpload(t *testing.T) {
 	}
 }
 
+func TestApplyCommandFromGitIncludesSourceMetadata(t *testing.T) {
+	repoDir, head := createGitSiteRepo(t, "")
+
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			switch call {
+			case 0:
+				b, err := bundle.ReadTar(bytes.NewReader(req.Body))
+				if err != nil {
+					t.Fatalf("bundle.ReadTar() error = %v", err)
+				}
+				if b.Manifest.Source == nil || b.Manifest.Source.Type != "git" || b.Manifest.Source.Ref != head {
+					t.Fatalf("unexpected bundle source %#v", b.Manifest.Source)
+				}
+				return jsonHTTPResponse(200, `{"website":"sample","environment":"staging","mode":"full","dryRun":false,"acceptedResources":[{"kind":"Component","name":"header"}],"changes":{"created":1,"updated":0,"deleted":0}}`), nil
+			case 1:
+				return jsonHTTPResponse(201, `{"website":"sample","environment":"staging","releaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAV","status":"active"}`), nil
+			default:
+				t.Fatalf("unexpected transport call %d", call)
+				return nil, nil
+			}
+		},
+	}
+
+	_, _, err := runCommandWithTransport(t, []string{"apply", "--from-git", repoDir, "--ref", head, "--output", "json"}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+}
+
 func TestApplyCommandJSONOutputSuppressesProgress(t *testing.T) {
 	siteDir := writeApplySiteFixture(t)
 
@@ -137,6 +167,33 @@ func TestApplyCommandDryRunUsesDiffWithoutUpload(t *testing.T) {
 	}
 }
 
+func TestApplyCommandDryRunFromGitUsesDiffWithoutUpload(t *testing.T) {
+	repoDir, head := createGitSiteRepo(t, "")
+
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			if call != 0 {
+				t.Fatalf("unexpected transport call %d: %#v", call, req)
+			}
+			if req.Method != "GET" || req.Path != "/api/v1/websites/sample/environments/staging/manifest" {
+				t.Fatalf("unexpected dry-run request: %#v", req)
+			}
+			return jsonHTTPResponse(200, `{"website":"sample","environment":"staging","files":[]}`), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"apply", "--from-git", repoDir, "--ref", head, "--dry-run"}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if len(tr.requests) != 1 {
+		t.Fatalf("expected 1 request, got %d", len(tr.requests))
+	}
+	if !strings.Contains(out, "Dry run: no changes applied") {
+		t.Fatalf("expected dry-run message, got: %s", out)
+	}
+}
+
 func TestApplyCommandRequiresFromFlag(t *testing.T) {
 	tr := &scriptedTransport{
 		handle: func(call int, req recordedRequest) (*http.Response, error) {
@@ -149,7 +206,76 @@ func TestApplyCommandRequiresFromFlag(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected missing --from error")
 	}
-	if !strings.Contains(err.Error(), "required flag(s) \"from\" not set") {
+	if !strings.Contains(err.Error(), "one of --from or --from-git is required") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tr.requests) != 0 {
+		t.Fatalf("expected no API requests, got %d", len(tr.requests))
+	}
+}
+
+func TestApplyCommandRejectsFromAndFromGitTogether(t *testing.T) {
+	siteDir := writeApplySiteFixture(t)
+	tr := &scriptedTransport{}
+
+	_, _, err := runCommandWithTransport(t, []string{"apply", "-f", siteDir, "--from-git", siteDir, "--ref", "abc"}, tr)
+	if err == nil {
+		t.Fatalf("expected mutually exclusive source mode error")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestApplyCommandRequiresRefWithFromGit(t *testing.T) {
+	repoDir, _ := createGitSiteRepo(t, "")
+	tr := &scriptedTransport{}
+
+	_, _, err := runCommandWithTransport(t, []string{"apply", "--from-git", repoDir}, tr)
+	if err == nil {
+		t.Fatalf("expected missing --ref error")
+	}
+	if !strings.Contains(err.Error(), "--ref is required with --from-git") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestApplyCommandRejectsBranchRefWithFromGit(t *testing.T) {
+	repoDir, _ := createGitSiteRepo(t, "")
+	tr := &scriptedTransport{}
+
+	_, _, err := runCommandWithTransport(t, []string{"apply", "--from-git", repoDir, "--ref", "main"}, tr)
+	if err == nil {
+		t.Fatalf("expected pinned commit ref error")
+	}
+	if !strings.Contains(err.Error(), "pinned commit SHA") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestApplyCommandRejectsHexBranchRefWithFromGit(t *testing.T) {
+	repoDir, _ := createGitSiteRepo(t, "")
+	runGitTest(t, repoDir, "branch", "deadbeef")
+	tr := &scriptedTransport{}
+
+	_, _, err := runCommandWithTransport(t, []string{"apply", "--from-git", repoDir, "--ref", "deadbeef"}, tr)
+	if err == nil {
+		t.Fatalf("expected pinned commit ref error")
+	}
+	if !strings.Contains(err.Error(), "pinned commit SHA") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestApplyCommandFromGitSubdirValidationFailsBeforeUpload(t *testing.T) {
+	repoDir, head := createGitSiteRepo(t, "")
+	tr := &scriptedTransport{}
+
+	_, _, err := runCommandWithTransport(t, []string{"apply", "--from-git", repoDir, "--ref", head, "--subdir", "missing"}, tr)
+	if err == nil {
+		t.Fatalf("expected missing subdir error")
+	}
+	if !strings.Contains(err.Error(), "git source subdir") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(tr.requests) != 0 {

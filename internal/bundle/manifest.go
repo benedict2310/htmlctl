@@ -20,7 +20,15 @@ type Manifest struct {
 	Kind       string     `json:"kind"`
 	Mode       string     `json:"mode"`
 	Website    string     `json:"website"`
+	Source     *Source    `json:"source,omitempty"`
 	Resources  []Resource `json:"resources"`
+}
+
+type Source struct {
+	Type   string `json:"type"`
+	Repo   string `json:"repo"`
+	Ref    string `json:"ref"`
+	Subdir string `json:"subdir,omitempty"`
 }
 
 type Resource struct {
@@ -59,6 +67,11 @@ func (m Manifest) Validate() error {
 	if strings.TrimSpace(m.Website) == "" {
 		return fmt.Errorf("manifest.website is required")
 	}
+	if m.Source != nil {
+		if err := m.Source.Validate(); err != nil {
+			return fmt.Errorf("manifest.source: %w", err)
+		}
+	}
 	if len(m.Resources) == 0 {
 		return fmt.Errorf("manifest.resources must not be empty")
 	}
@@ -72,6 +85,26 @@ func (m Manifest) Validate() error {
 			return fmt.Errorf("manifest.resources[%d]: duplicate resource %s %q", i, r.Kind, r.Name)
 		}
 		seen[key] = struct{}{}
+	}
+	return nil
+}
+
+func (s Source) Validate() error {
+	switch strings.TrimSpace(strings.ToLower(s.Type)) {
+	case "git":
+	default:
+		return fmt.Errorf("type must be %q", "git")
+	}
+	if strings.TrimSpace(s.Repo) == "" {
+		return fmt.Errorf("repo is required")
+	}
+	if strings.TrimSpace(s.Ref) == "" {
+		return fmt.Errorf("ref is required")
+	}
+	if strings.TrimSpace(s.Subdir) != "" {
+		if err := validateBundlePath(s.Subdir); err != nil {
+			return fmt.Errorf("invalid subdir %q: %w", s.Subdir, err)
+		}
 	}
 	return nil
 }

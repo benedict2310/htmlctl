@@ -461,6 +461,7 @@ Remote ops:
 
 - `htmlctl diff -f ./site --context staging`
 - `htmlctl apply -f ./site --context staging [--dry-run]`
+- `htmlctl apply --from-git <repo> --ref <commit-sha> [--subdir site] --context staging [--dry-run]`
 - `htmlctl status website/sample --context staging`
 - `htmlctl get domains --context staging`
 - `htmlctl get backends --context staging`
@@ -481,6 +482,12 @@ Inventory and guidance:
 - Unsupported `get` resource types and malformed `website/<name>` refs must return fix-oriented guidance.
 - In table output, `backend add` prints follow-up guidance (`backend list`, live-URL verification) after success.
 - In table output, `backend add` emits non-blocking warnings for suspicious static-content prefixes such as `/styles/*`, `/scripts/*`, `/assets/*`, and `/favicon...`.
+- `apply --from-git` resolves the Git source on the CLI side only, requires a pinned commit SHA, and then reuses the normal tar bundle upload path.
+- Git-source bundle manifests may include optional provenance metadata:
+  - `source.type = "git"`
+  - `source.repo`
+  - `source.ref`
+  - `source.subdir`
 
 Domains:
 

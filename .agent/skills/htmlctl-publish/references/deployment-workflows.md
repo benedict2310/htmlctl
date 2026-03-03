@@ -87,8 +87,21 @@ htmlctl apply -f ./site --context local-staging
 
 HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
 HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
+htmlctl apply --from-git /path/to/repo --ref <commit-sha> --context local-staging
+
+HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
+HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
+htmlctl apply --from-git /path/to/repo --ref <commit-sha> --subdir site --context local-staging --dry-run
+
+HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
+HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
 htmlctl domain add 127.0.0.1.nip.io --context local-staging
 ```
+
+Git-input notes:
+- `htmlctl` resolves the repository locally with the system `git` binary, then uploads the normal tar bundle. `htmlservd` never clones repositories.
+- Use a pinned commit SHA for `--ref`; branch and symbolic refs are rejected.
+- `htmlctl logs ... -o json` includes Git provenance (`source.repo`, `source.ref`, optional `source.subdir`) for Git-backed applies.
 
 Open `http://127.0.0.1.nip.io:18080/`.
 

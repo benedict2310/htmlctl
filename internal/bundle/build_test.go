@@ -48,6 +48,25 @@ func TestBuildTarFromDirProducesValidBundle(t *testing.T) {
 	}
 }
 
+func TestBuildTarFromDirWithSourceMetadata(t *testing.T) {
+	siteDir := writeSiteFixture(t)
+
+	_, manifest, err := BuildTarFromDirWithOptions(siteDir, "sample", BuildOptions{
+		Source: &Source{
+			Type:   "git",
+			Repo:   "git@github.com:org/repo.git",
+			Ref:    "01abcdef",
+			Subdir: "site",
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildTarFromDirWithOptions() error = %v", err)
+	}
+	if manifest.Source == nil || manifest.Source.Type != "git" || manifest.Source.Ref != "01abcdef" {
+		t.Fatalf("unexpected source metadata %#v", manifest.Source)
+	}
+}
+
 func TestBuildTarFromDirIncludesWebsiteIcons(t *testing.T) {
 	root := t.TempDir()
 	for _, dir := range []string{"pages", "styles", "branding"} {

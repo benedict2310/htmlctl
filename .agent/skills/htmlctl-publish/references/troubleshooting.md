@@ -27,6 +27,9 @@
 | Validation error: script tag in component | `<script>` inside a component file | Move JS to `scripts/site.js` |
 | Validation error: event handler attribute | `onclick`, `onload`, etc. in component | Remove inline handlers; use `site.js` instead |
 | `apply -f` fails on individual file | Wrong path or file outside site dir | Provide correct relative path; `apply -f` accepts both files and directories |
+| `git binary not found; install git to use --from-git` | Git input mode used on a machine without `git` | Install the system `git` binary or switch to `apply -f` |
+| `--ref must be a pinned commit SHA, not a branch or symbolic ref` | Git input used a branch, tag, or hex-looking branch name | Resolve the exact commit first (`git rev-parse <branch>`) and pass that SHA to `--ref` |
+| `git clone ... failed` with repo URL but no secret shown | Git input mode failed while cloning a credentialed repo | Fix repo reachability or credentials; htmlctl redacts embedded URL credentials in surfaced errors |
 | `robots.txt` or `sitemap.xml` is 404 after successful apply | Server binary predates website SEO feature | Upgrade `htmlservd`, restart it, then re-apply the site |
 | favicon files missing after successful apply | `branding/` files not configured or server binary predates website icon feature | Add `spec.head.icons` plus `branding/*`, or upgrade `htmlservd` and re-apply |
 
@@ -68,9 +71,11 @@ htmlctl diff -f site/ --context staging
 
 # 3. For risky changes, dry-run first (validates + shows diff, no release created)
 htmlctl apply -f site/ --context staging --dry-run
+htmlctl apply --from-git /path/to/repo --ref <commit-sha> --context staging --dry-run
 
 # 4. Apply
 htmlctl apply -f site/ --context staging
+htmlctl apply --from-git /path/to/repo --ref <commit-sha> --context staging
 
 # 5. Verify
 htmlctl status website/mysite --context staging

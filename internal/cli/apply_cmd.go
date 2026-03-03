@@ -22,6 +22,9 @@ type applyDryRunResponse struct {
 
 func newApplyCmd() *cobra.Command {
 	var from string
+	var fromGit string
+	var ref string
+	var subdir string
 	var outputMode string
 	var dryRun bool
 
@@ -29,10 +32,14 @@ func newApplyCmd() *cobra.Command {
 		Use:   "apply -f <site-dir>",
 		Short: "Apply local site resources to a remote environment",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if strings.TrimSpace(from) == "" {
-				fmt.Fprint(cmd.ErrOrStderr(), cmd.UsageString())
-				return fmt.Errorf("required flag(s) \"from\" not set")
+			sourceDir, source, cleanup, err := resolveApplySource(cmd.Context(), from, fromGit, ref, subdir)
+			if err != nil {
+				if strings.Contains(err.Error(), "one of --from or --from-git is required") {
+					fmt.Fprint(cmd.ErrOrStderr(), cmd.UsageString())
+				}
+				return err
 			}
+			defer cleanup()
 
 			rt, api, err := runtimeAndClientFromCommand(cmd)
 			if err != nil {
@@ -52,7 +59,7 @@ func newApplyCmd() *cobra.Command {
 			}
 
 			if dryRun {
-				report, err := computeDesiredStateDiff(cmd.Context(), api, website, environment, from)
+				report, err := computeDesiredStateDiff(cmd.Context(), api, website, environment, sourceDir)
 				if err != nil {
 					return err
 				}
@@ -77,7 +84,7 @@ func newApplyCmd() *cobra.Command {
 			if format == output.FormatTable {
 				fmt.Fprintln(cmd.OutOrStdout(), "Bundling...")
 			}
-			archive, _, err := bundle.BuildTarFromDir(from, website)
+			archive, _, err := bundle.BuildTarFromDirWithOptions(sourceDir, website, bundle.BuildOptions{Source: source})
 			if err != nil {
 				return fmt.Errorf("local validation failed: %w", err)
 			}
@@ -129,6 +136,9 @@ func newApplyCmd() *cobra.Command {
 
 	markRequiresTransport(cmd)
 	cmd.Flags().StringVarP(&from, "from", "f", "", "Source site directory")
+	cmd.Flags().StringVar(&fromGit, "from-git", "", "Source Git repository (local path or remote URL)")
+	cmd.Flags().StringVar(&ref, "ref", "", "Pinned Git commit SHA for --from-git")
+	cmd.Flags().StringVar(&subdir, "subdir", "", "Repository subdirectory containing the site root")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show diff only; do not upload or create release")
 	cmd.Flags().StringVarP(&outputMode, "output", "o", "table", "Output format (table|json|yaml)")
 	return cmd

@@ -8,6 +8,7 @@ func TestParseManifestValid(t *testing.T) {
 		"kind":"Bundle",
 		"mode":"partial",
 		"website":"sample",
+		"source":{"type":"git","repo":"git@github.com:org/repo.git","ref":"01abcdef","subdir":"site"},
 		"resources":[
 			{"kind":"Component","name":"header","file":"components/header.html","hash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
 			{"kind":"StyleBundle","name":"default","files":[
@@ -22,6 +23,9 @@ func TestParseManifestValid(t *testing.T) {
 	}
 	if m.Mode != ApplyModePartial {
 		t.Fatalf("unexpected mode %q", m.Mode)
+	}
+	if m.Source == nil || m.Source.Type != "git" || m.Source.Ref != "01abcdef" {
+		t.Fatalf("unexpected source %#v", m.Source)
 	}
 	if len(m.Resources) != 2 {
 		t.Fatalf("expected 2 resources, got %d", len(m.Resources))
@@ -113,5 +117,19 @@ func TestParseManifestRejectsDuplicateResourceKindName(t *testing.T) {
 	}`)
 	if _, err := ParseManifest(data); err == nil {
 		t.Fatalf("expected duplicate resource validation error")
+	}
+}
+
+func TestParseManifestRejectsInvalidSource(t *testing.T) {
+	data := []byte(`{
+		"mode":"full",
+		"website":"sample",
+		"source":{"type":"git","repo":"","ref":"","subdir":"../site"},
+		"resources":[
+			{"kind":"Component","name":"header","file":"components/header.html","hash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+		]
+	}`)
+	if _, err := ParseManifest(data); err == nil {
+		t.Fatalf("expected invalid source validation error")
 	}
 }

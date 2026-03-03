@@ -53,7 +53,11 @@ func newGetCmd() *cobra.Command {
 				return output.WriteTable(cmd.OutOrStdout(), []string{"NAME", "DEFAULT_STYLE", "BASE_TEMPLATE", "UPDATED_AT"}, rows)
 
 			case "environments":
-				resp, err := api.ListEnvironments(cmd.Context(), rt.ResolvedContext.Website)
+				website, err := requireContextWebsite(rt)
+				if err != nil {
+					return err
+				}
+				resp, err := api.ListEnvironments(cmd.Context(), website)
 				if err != nil {
 					return err
 				}
@@ -75,7 +79,15 @@ func newGetCmd() *cobra.Command {
 				return output.WriteTable(cmd.OutOrStdout(), []string{"NAME", "ACTIVE_RELEASE", "UPDATED_AT"}, rows)
 
 			case "releases":
-				resp, err := api.ListReleases(cmd.Context(), rt.ResolvedContext.Website, rt.ResolvedContext.Environment)
+				website, err := requireContextWebsite(rt)
+				if err != nil {
+					return err
+				}
+				environment, err := requireContextEnvironment(rt)
+				if err != nil {
+					return err
+				}
+				resp, err := api.ListReleases(cmd.Context(), website, environment)
 				if err != nil {
 					return err
 				}

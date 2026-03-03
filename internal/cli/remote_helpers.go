@@ -20,6 +20,56 @@ func runtimeAndClientFromCommand(cmd *cobra.Command) (*commandRuntime, *client.A
 	return rt, client.NewWithAuth(rt.Transport, rt.ResolvedContext.Name, rt.ResolvedContext.Token), nil
 }
 
+func resolveRemoteWebsite(rt *commandRuntime, args []string) (string, error) {
+	return resolveRemoteWebsiteValue(args, rt.ResolvedContext.Website)
+}
+
+func resolveRemoteWebsiteValue(args []string, contextWebsite string) (string, error) {
+	if len(args) > 1 {
+		return "", fmt.Errorf("expected at most 1 website reference")
+	}
+	if len(args) == 1 {
+		return parseWebsiteRef(args[0])
+	}
+	return requireContextWebsiteValue(contextWebsite)
+}
+
+func resolveRemoteEnvironment(rt *commandRuntime, explicit string) (string, error) {
+	return resolveRemoteEnvironmentValue(explicit, rt.ResolvedContext.Environment)
+}
+
+func resolveRemoteEnvironmentValue(explicit, contextEnvironment string) (string, error) {
+	if env := strings.TrimSpace(explicit); env != "" {
+		return env, nil
+	}
+	if env, err := requireContextEnvironmentValue(contextEnvironment); err == nil {
+		return env, nil
+	}
+	return "", fmt.Errorf("no environment selected: pass --env <environment> or run 'htmlctl context set <name> --environment <environment>'")
+}
+
+func requireContextWebsite(rt *commandRuntime) (string, error) {
+	return requireContextWebsiteValue(rt.ResolvedContext.Website)
+}
+
+func requireContextWebsiteValue(contextWebsite string) (string, error) {
+	if website := strings.TrimSpace(contextWebsite); website != "" {
+		return website, nil
+	}
+	return "", fmt.Errorf("no website selected: run 'htmlctl context set <name> --website <website>'")
+}
+
+func requireContextEnvironment(rt *commandRuntime) (string, error) {
+	return requireContextEnvironmentValue(rt.ResolvedContext.Environment)
+}
+
+func requireContextEnvironmentValue(contextEnvironment string) (string, error) {
+	if env := strings.TrimSpace(contextEnvironment); env != "" {
+		return env, nil
+	}
+	return "", fmt.Errorf("no environment selected: run 'htmlctl context set <name> --environment <environment>'")
+}
+
 func parseWebsiteRef(v string) (string, error) {
 	raw := strings.TrimSpace(v)
 	if strings.HasPrefix(raw, "website/") {

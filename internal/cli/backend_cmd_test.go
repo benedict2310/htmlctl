@@ -29,6 +29,25 @@ func TestBackendAddCommand(t *testing.T) {
 	}
 }
 
+func TestBackendAddUsesContextDefaults(t *testing.T) {
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			if req.Method != http.MethodPost || req.Path != "/api/v1/websites/sample/environments/staging/backends" {
+				t.Fatalf("unexpected request: %#v", req)
+			}
+			return jsonHTTPResponse(201, `{"pathPrefix":"/api/*","upstream":"https://api.example.com","website":"sample","environment":"staging","createdAt":"2026-03-01T12:00:00Z","updatedAt":"2026-03-01T12:00:00Z"}`), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"backend", "add", "--path", "/api/*", "--upstream", "https://api.example.com"}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(out, "sample/staging") {
+		t.Fatalf("unexpected output: %s", out)
+	}
+}
+
 func TestBackendAddJSONOutput(t *testing.T) {
 	tr := &scriptedTransport{
 		handle: func(call int, req recordedRequest) (*http.Response, error) {
@@ -84,6 +103,44 @@ func TestBackendListAndRemoveCommands(t *testing.T) {
 	}
 }
 
+func TestBackendListUsesContextDefaults(t *testing.T) {
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			if req.Method != http.MethodGet || req.Path != "/api/v1/websites/sample/environments/staging/backends" {
+				t.Fatalf("unexpected request: %#v", req)
+			}
+			return jsonHTTPResponse(200, `{"website":"sample","environment":"staging","backends":[]}`), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"backend", "list"}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(out, "No backends configured.") {
+		t.Fatalf("unexpected output: %s", out)
+	}
+}
+
+func TestBackendRemoveUsesContextDefaults(t *testing.T) {
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			if req.Method != http.MethodDelete || req.Path != "/api/v1/websites/sample/environments/staging/backends" || req.Query != "path=%2Fapi%2F%2A" {
+				t.Fatalf("unexpected request: %#v", req)
+			}
+			return jsonHTTPResponse(204, ``), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"backend", "remove", "--path", "/api/*"}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(out, "backend /api/* removed from sample/staging") {
+		t.Fatalf("unexpected output: %s", out)
+	}
+}
+
 func TestBackendListEmptyAndRemoveJSON(t *testing.T) {
 	call := 0
 	tr := &scriptedTransport{
@@ -115,5 +172,66 @@ func TestBackendListEmptyAndRemoveJSON(t *testing.T) {
 	}
 	if !strings.Contains(out, `"removed": true`) {
 		t.Fatalf("unexpected remove JSON output: %s", out)
+	}
+}
+
+func TestBackendExplicitOverridesContextDefaults(t *testing.T) {
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			if req.Method != http.MethodGet || req.Path != "/api/v1/websites/other/environments/prod/backends" {
+				t.Fatalf("unexpected request: %#v", req)
+			}
+			return jsonHTTPResponse(200, `{"website":"other","environment":"prod","backends":[]}`), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"backend", "list", "website/other", "--env", "prod"}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(out, "No backends configured.") {
+		t.Fatalf("unexpected output: %s", out)
+	}
+}
+
+func TestBackendMissingContextEnvironmentProvidesGuidance(t *testing.T) {
+	configPath := writeRemoteCommandConfig(t, `apiVersion: htmlctl.dev/v1
+current-context: staging
+contexts:
+  - name: staging
+    server: ssh://root@staging.example.com
+    website: sample
+    environment: ""
+`)
+
+	tr := &scriptedTransport{}
+	_, _, err := runCommandWithTransportAndConfigPath(t, []string{"backend", "list"}, tr, configPath)
+	if err == nil {
+		t.Fatalf("expected missing environment error")
+	}
+	if !strings.Contains(err.Error(), "no environment selected") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "htmlctl context set <name> --environment <environment>") {
+		t.Fatalf("expected context set guidance, got %v", err)
+	}
+}
+
+func TestBackendHelpDocumentsContextDefaults(t *testing.T) {
+	cmd := NewRootCmd("test")
+	out := &strings.Builder{}
+	errOut := &strings.Builder{}
+	cmd.SetOut(out)
+	cmd.SetErr(errOut)
+	cmd.SetArgs([]string{"backend", "add", "--help"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(out.String(), "Omit website/<name> to use the active context website.") {
+		t.Fatalf("expected website default help text, got: %s", out.String())
+	}
+	if !strings.Contains(out.String(), "Omit --env to use the active context environment.") {
+		t.Fatalf("expected environment default help text, got: %s", out.String())
 	}
 }

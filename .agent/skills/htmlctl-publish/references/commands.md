@@ -90,6 +90,10 @@ On first deploy, `apply` bootstraps the environment. The output includes a hint 
 ## Status
 
 ```bash
+# Use the active context website
+htmlctl status --context staging
+
+# Override the website explicitly
 htmlctl status website/<name> --context staging
 htmlctl status website/<name> --context prod
 ```
@@ -119,7 +123,10 @@ htmlctl get environments --context staging
 ## Logs
 
 ```bash
-# View recent deploy log for a website/environment
+# View recent deploy log for the active context website/environment
+htmlctl logs --context prod
+
+# Override the website explicitly
 htmlctl logs website/<name> --context prod
 
 # Limit output lines
@@ -143,10 +150,16 @@ htmlctl promote website/<name> --from staging --to prod
 ## Rollback
 
 ```bash
-# View release history
+# View release history for the active context website/environment
+htmlctl rollout history --context prod
+
+# View release history for an explicit website
 htmlctl rollout history website/<name> --context prod
 
-# Undo last deploy (activates previous release — symlink switch, < 1 second)
+# Undo last deploy for the active context website/environment
+htmlctl rollout undo --context prod
+
+# Undo last deploy for an explicit website (activates previous release — symlink switch, < 1 second)
 htmlctl rollout undo website/<name> --context prod
 ```
 
@@ -182,17 +195,29 @@ Both must pass for `verify` to succeed. In local/no-TLS environments, TLS failur
 Environment backends are runtime routing config, not bundle content. `apply`, `diff`, and `promote` do not create, copy, or remove them.
 
 ```bash
-# Add a reverse-proxy backend for one environment
+# Add a reverse-proxy backend using the active context website/environment
+htmlctl backend add \
+  --path /api/* \
+  --upstream https://staging-api.example.com \
+  --context staging
+
+# Add a reverse-proxy backend for an explicit website/environment
 htmlctl backend add website/<name> \
   --env staging \
   --path /api/* \
   --upstream https://staging-api.example.com \
   --context staging
 
-# List configured backends for an environment
+# List configured backends for the active context website/environment
+htmlctl backend list --context staging
+
+# List configured backends for an explicit website/environment
 htmlctl backend list website/<name> --env staging --context staging
 
-# Remove a backend mapping by path
+# Remove a backend mapping by path using the active context website/environment
+htmlctl backend remove --path /api/* --context staging
+
+# Remove a backend mapping by path for an explicit website/environment
 htmlctl backend remove website/<name> --env staging --path /api/* --context staging
 ```
 

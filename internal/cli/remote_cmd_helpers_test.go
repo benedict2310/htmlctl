@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/benedict2310/htmlctl/internal/config"
@@ -60,6 +61,12 @@ func runCommandWithTransport(t *testing.T, args []string, tr *scriptedTransport)
 	t.Helper()
 
 	configPath := writeTestConfigFile(t, "staging")
+	return runCommandWithTransportAndConfigPath(t, args, tr, configPath)
+}
+
+func runCommandWithTransportAndConfigPath(t *testing.T, args []string, tr *scriptedTransport, configPath string) (string, string, error) {
+	t.Helper()
+
 	t.Setenv(config.EnvConfigPath, configPath)
 
 	prevFactory := buildTransportForContext
@@ -79,6 +86,144 @@ func runCommandWithTransport(t *testing.T, args []string, tr *scriptedTransport)
 
 	err := cmd.Execute()
 	return out.String(), errOut.String(), err
+}
+
+func writeRemoteCommandConfig(t *testing.T, content string) string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	return path
+}
+
+func TestRequireContextWebsite(t *testing.T) {
+	website, err := requireContextWebsite(&commandRuntime{
+		ResolvedContext: config.ContextInfo{Website: "sample"},
+	})
+	if err != nil {
+		t.Fatalf("requireContextWebsite() error = %v", err)
+	}
+	if website != "sample" {
+		t.Fatalf("expected sample, got %q", website)
+	}
+}
+
+func TestRequireContextWebsiteMissingProvidesGuidance(t *testing.T) {
+	_, err := requireContextWebsite(&commandRuntime{})
+	if err == nil {
+		t.Fatalf("expected missing website error")
+	}
+	if got := err.Error(); got != "no website selected: run 'htmlctl context set <name> --website <website>'" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRequireContextEnvironment(t *testing.T) {
+	environment, err := requireContextEnvironment(&commandRuntime{
+		ResolvedContext: config.ContextInfo{Environment: "staging"},
+	})
+	if err != nil {
+		t.Fatalf("requireContextEnvironment() error = %v", err)
+	}
+	if environment != "staging" {
+		t.Fatalf("expected staging, got %q", environment)
+	}
+}
+
+func TestRequireContextEnvironmentMissingProvidesGuidance(t *testing.T) {
+	_, err := requireContextEnvironment(&commandRuntime{})
+	if err == nil {
+		t.Fatalf("expected missing environment error")
+	}
+	if got := err.Error(); got != "no environment selected: run 'htmlctl context set <name> --environment <environment>'" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestResolveRemoteEnvironmentExplicitOverrideWins(t *testing.T) {
+	environment, err := resolveRemoteEnvironment(&commandRuntime{
+		ResolvedContext: config.ContextInfo{Environment: "staging"},
+	}, "prod")
+	if err != nil {
+		t.Fatalf("resolveRemoteEnvironment() error = %v", err)
+	}
+	if environment != "prod" {
+		t.Fatalf("expected prod, got %q", environment)
+	}
+}
+
+func TestStatusMissingContextWebsiteFailsBeforeTransport(t *testing.T) {
+	configPath := writeRemoteCommandConfig(t, `apiVersion: htmlctl.dev/v1
+current-context: staging
+contexts:
+  - name: staging
+    server: ssh://root@staging.example.com
+    website: ""
+    environment: staging
+`)
+	t.Setenv(config.EnvConfigPath, configPath)
+
+	called := false
+	prevFactory := buildTransportForContext
+	buildTransportForContext = func(ctx context.Context, info config.ContextInfo, cfg transport.SSHConfig) (transport.Transport, error) {
+		called = true
+		return nil, errors.New("transport should not be initialized")
+	}
+	t.Cleanup(func() {
+		buildTransportForContext = prevFactory
+	})
+
+	cmd := NewRootCmd("test")
+	cmd.SetArgs([]string{"status"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected missing website error")
+	}
+	if !strings.Contains(err.Error(), "no website selected") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if called {
+		t.Fatalf("expected transport initialization to be skipped")
+	}
+}
+
+func TestBackendListMissingContextEnvironmentFailsBeforeTransport(t *testing.T) {
+	configPath := writeRemoteCommandConfig(t, `apiVersion: htmlctl.dev/v1
+current-context: staging
+contexts:
+  - name: staging
+    server: ssh://root@staging.example.com
+    website: sample
+    environment: ""
+`)
+	t.Setenv(config.EnvConfigPath, configPath)
+
+	called := false
+	prevFactory := buildTransportForContext
+	buildTransportForContext = func(ctx context.Context, info config.ContextInfo, cfg transport.SSHConfig) (transport.Transport, error) {
+		called = true
+		return nil, errors.New("transport should not be initialized")
+	}
+	t.Cleanup(func() {
+		buildTransportForContext = prevFactory
+	})
+
+	cmd := NewRootCmd("test")
+	cmd.SetArgs([]string{"backend", "list"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected missing environment error")
+	}
+	if !strings.Contains(err.Error(), "no environment selected") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if called {
+		t.Fatalf("expected transport initialization to be skipped")
+	}
 }
 
 func TestRemoteCommandsSendContextTokenAsBearerHeader(t *testing.T) {

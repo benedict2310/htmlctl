@@ -163,6 +163,29 @@ func TestDomainAddInvalidDomain(t *testing.T) {
 	}
 }
 
+func TestDomainAddMissingContextEnvironmentProvidesGuidance(t *testing.T) {
+	configPath := writeRemoteCommandConfig(t, `apiVersion: htmlctl.dev/v1
+current-context: staging
+contexts:
+  - name: staging
+    server: ssh://root@staging.example.com
+    website: sample
+    environment: ""
+`)
+
+	tr := &scriptedTransport{}
+	_, _, err := runCommandWithTransportAndConfigPath(t, []string{"domain", "add", "example.com"}, tr, configPath)
+	if err == nil {
+		t.Fatalf("expected missing environment error")
+	}
+	if !strings.Contains(err.Error(), "no environment selected") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "htmlctl context set <name> --environment <environment>") {
+		t.Fatalf("expected context set guidance, got %v", err)
+	}
+}
+
 func TestDomainVerifyCommandSuccess(t *testing.T) {
 	configPath := writeTestConfigFile(t, "staging")
 	t.Setenv("HTMLCTL_CONFIG", configPath)

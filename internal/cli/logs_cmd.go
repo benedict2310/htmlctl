@@ -12,15 +12,22 @@ func newLogsCmd() *cobra.Command {
 	var limit int
 
 	cmd := &cobra.Command{
-		Use:   "logs website/<name>",
+		Use:   "logs [website/<name>]",
 		Short: "Show audit log entries for a website",
-		Args:  cobra.ExactArgs(1),
+		Long:  "Show audit log entries for a website. Omit website/<name> to use the active context website.",
+		Example: "  htmlctl logs website/sample\n" +
+			"  htmlctl logs",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rt, api, err := runtimeAndClientFromCommand(cmd)
 			if err != nil {
 				return err
 			}
-			website, err := parseWebsiteRef(args[0])
+			website, err := resolveRemoteWebsite(rt, args)
+			if err != nil {
+				return err
+			}
+			environment, err := requireContextEnvironment(rt)
 			if err != nil {
 				return err
 			}
@@ -29,14 +36,14 @@ func newLogsCmd() *cobra.Command {
 				return err
 			}
 
-			resp, err := api.GetLogs(cmd.Context(), website, rt.ResolvedContext.Environment, limit)
+			resp, err := api.GetLogs(cmd.Context(), website, environment, limit)
 			if err != nil {
 				return err
 			}
 			if format != output.FormatTable {
 				payload := map[string]any{
 					"website":     website,
-					"environment": rt.ResolvedContext.Environment,
+					"environment": environment,
 					"total":       resp.Total,
 					"entries":     resp.Entries,
 				}

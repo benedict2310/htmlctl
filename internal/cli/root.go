@@ -63,6 +63,9 @@ func NewRootCmd(version string) *cobra.Command {
 				if err != nil {
 					return err
 				}
+				if err := validateTransportContextRequirements(cmd, args, resolved); err != nil {
+					return err
+				}
 				tr, err := buildTransportForContext(ctx, resolved, transport.SSHConfig{})
 				if err != nil {
 					return err
@@ -167,4 +170,58 @@ func runtimeTransportFromCommand(cmd *cobra.Command) (transport.Transport, error
 		return nil, fmt.Errorf("internal: transport is not initialized")
 	}
 	return rt.Transport, nil
+}
+
+func validateTransportContextRequirements(cmd *cobra.Command, args []string, resolved config.ContextInfo) error {
+	switch cmd.CommandPath() {
+	case "htmlctl apply", "htmlctl diff", "htmlctl domain add":
+		if _, err := requireContextWebsiteValue(resolved.Website); err != nil {
+			return err
+		}
+		if _, err := requireContextEnvironmentValue(resolved.Environment); err != nil {
+			return err
+		}
+	case "htmlctl domain list":
+		if _, err := requireContextWebsiteValue(resolved.Website); err != nil {
+			return err
+		}
+	case "htmlctl get":
+		if len(args) == 0 {
+			return nil
+		}
+		resourceType, err := normalizeResourceType(args[0])
+		if err != nil {
+			return err
+		}
+		switch resourceType {
+		case "environments":
+			if _, err := requireContextWebsiteValue(resolved.Website); err != nil {
+				return err
+			}
+		case "releases":
+			if _, err := requireContextWebsiteValue(resolved.Website); err != nil {
+				return err
+			}
+			if _, err := requireContextEnvironmentValue(resolved.Environment); err != nil {
+				return err
+			}
+		}
+	case "htmlctl status", "htmlctl logs", "htmlctl rollout history", "htmlctl rollout undo":
+		if _, err := resolveRemoteWebsiteValue(args, resolved.Website); err != nil {
+			return err
+		}
+		if _, err := requireContextEnvironmentValue(resolved.Environment); err != nil {
+			return err
+		}
+	case "htmlctl backend add", "htmlctl backend list", "htmlctl backend remove":
+		if _, err := resolveRemoteWebsiteValue(args, resolved.Website); err != nil {
+			return err
+		}
+		if strings.TrimSpace(cmd.Flag("env").Value.String()) == "" {
+			if _, err := requireContextEnvironmentValue(resolved.Environment); err != nil {
+				return fmt.Errorf("no environment selected: pass --env <environment> or run 'htmlctl context set <name> --environment <environment>'")
+			}
+		}
+	}
+	return nil
 }

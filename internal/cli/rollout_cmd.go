@@ -28,15 +28,22 @@ func newRolloutHistoryCmd() *cobra.Command {
 	var offset int
 
 	cmd := &cobra.Command{
-		Use:   "history website/<name>",
+		Use:   "history [website/<name>]",
 		Short: "Show release history for a website environment",
-		Args:  cobra.ExactArgs(1),
+		Long:  "Show release history for a website environment. Omit website/<name> to use the active context website.",
+		Example: "  htmlctl rollout history website/sample\n" +
+			"  htmlctl rollout history",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rt, api, err := runtimeAndClientFromCommand(cmd)
 			if err != nil {
 				return err
 			}
-			website, err := parseWebsiteRef(args[0])
+			website, err := resolveRemoteWebsite(rt, args)
+			if err != nil {
+				return err
+			}
+			environment, err := requireContextEnvironment(rt)
 			if err != nil {
 				return err
 			}
@@ -51,7 +58,7 @@ func newRolloutHistoryCmd() *cobra.Command {
 				return fmt.Errorf("offset must be >= 0")
 			}
 
-			resp, err := api.ListReleasesPage(cmd.Context(), website, rt.ResolvedContext.Environment, limit, offset)
+			resp, err := api.ListReleasesPage(cmd.Context(), website, environment, limit, offset)
 			if err != nil {
 				return err
 			}
@@ -90,15 +97,22 @@ func newRolloutUndoCmd() *cobra.Command {
 	var outputMode string
 
 	cmd := &cobra.Command{
-		Use:   "undo website/<name>",
+		Use:   "undo [website/<name>]",
 		Short: "Roll back to the previous active release",
-		Args:  cobra.ExactArgs(1),
+		Long:  "Roll back to the previous active release. Omit website/<name> to use the active context website.",
+		Example: "  htmlctl rollout undo website/sample\n" +
+			"  htmlctl rollout undo",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rt, api, err := runtimeAndClientFromCommand(cmd)
 			if err != nil {
 				return err
 			}
-			website, err := parseWebsiteRef(args[0])
+			website, err := resolveRemoteWebsite(rt, args)
+			if err != nil {
+				return err
+			}
+			environment, err := requireContextEnvironment(rt)
 			if err != nil {
 				return err
 			}
@@ -107,7 +121,7 @@ func newRolloutUndoCmd() *cobra.Command {
 				return err
 			}
 
-			resp, err := api.Rollback(cmd.Context(), website, rt.ResolvedContext.Environment)
+			resp, err := api.Rollback(cmd.Context(), website, environment)
 			if err != nil {
 				return err
 			}

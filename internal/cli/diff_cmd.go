@@ -29,12 +29,20 @@ func newDiffCmd() *cobra.Command {
 			if err != nil {
 				return exitCodeError(2, err)
 			}
+			website, err := requireContextWebsite(rt)
+			if err != nil {
+				return exitCodeError(2, err)
+			}
+			environment, err := requireContextEnvironment(rt)
+			if err != nil {
+				return exitCodeError(2, err)
+			}
 			format, err := output.ParseFormat(outputMode)
 			if err != nil {
 				return exitCodeError(2, err)
 			}
 
-			report, err := computeDesiredStateDiff(cmd.Context(), api, rt.ResolvedContext.Website, rt.ResolvedContext.Environment, from)
+			report, err := computeDesiredStateDiff(cmd.Context(), api, website, environment, from)
 			if err != nil {
 				return exitCodeError(2, err)
 			}

@@ -95,6 +95,14 @@ func newDomainAddCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			website, err := requireContextWebsite(rt)
+			if err != nil {
+				return err
+			}
+			environment, err := requireContextEnvironment(rt)
+			if err != nil {
+				return err
+			}
 			format, err := output.ParseFormat(outputMode)
 			if err != nil {
 				return err
@@ -104,7 +112,7 @@ func newDomainAddCmd() *cobra.Command {
 				return err
 			}
 
-			resp, err := api.CreateDomainBinding(cmd.Context(), domainName, rt.ResolvedContext.Website, rt.ResolvedContext.Environment)
+			resp, err := api.CreateDomainBinding(cmd.Context(), domainName, website, environment)
 			if err != nil {
 				return err
 			}
@@ -136,12 +144,16 @@ func newDomainListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			website, err := requireContextWebsite(rt)
+			if err != nil {
+				return err
+			}
 			format, err := output.ParseFormat(outputMode)
 			if err != nil {
 				return err
 			}
 
-			resp, err := api.ListDomainBindings(cmd.Context(), rt.ResolvedContext.Website, "")
+			resp, err := api.ListDomainBindings(cmd.Context(), website, "")
 			if err != nil {
 				return err
 			}

@@ -138,3 +138,27 @@ func buildManifestPayloadForSite(t *testing.T, siteDir string) string {
 	}
 	return string(b)
 }
+
+func TestDiffCommandMissingContextEnvironmentProvidesGuidance(t *testing.T) {
+	configPath := writeRemoteCommandConfig(t, `apiVersion: htmlctl.dev/v1
+current-context: staging
+contexts:
+  - name: staging
+    server: ssh://root@staging.example.com
+    website: sample
+    environment: ""
+`)
+	siteDir := writeApplySiteFixture(t)
+
+	tr := &scriptedTransport{}
+	_, _, err := runCommandWithTransportAndConfigPath(t, []string{"diff", "-f", siteDir}, tr, configPath)
+	if err == nil {
+		t.Fatalf("expected missing environment error")
+	}
+	if !strings.Contains(err.Error(), "no environment selected") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "htmlctl context set <name> --environment <environment>") {
+		t.Fatalf("expected context set guidance, got %v", err)
+	}
+}

@@ -89,25 +89,28 @@ contexts: []
 	}
 }
 
-func TestLoadFromPathMissingRequiredField(t *testing.T) {
+func TestLoadFromPathAllowsEmptyWebsiteAndEnvironment(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	content := `current-context: staging
 contexts:
   - name: staging
     server: ssh://root@staging.example.com
     website: ""
-    environment: staging
+    environment: ""
 `
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write config file: %v", err)
 	}
 
-	_, err := LoadFromPath(path)
-	if err == nil {
-		t.Fatalf("expected missing required field error")
+	cfg, err := LoadFromPath(path)
+	if err != nil {
+		t.Fatalf("LoadFromPath() error = %v", err)
 	}
-	if !strings.Contains(err.Error(), "website is required") {
-		t.Fatalf("expected website required error, got %v", err)
+	if cfg.Contexts[0].Website != "" {
+		t.Fatalf("expected empty website to be preserved, got %q", cfg.Contexts[0].Website)
+	}
+	if cfg.Contexts[0].Environment != "" {
+		t.Fatalf("expected empty environment to be preserved, got %q", cfg.Contexts[0].Environment)
 	}
 }
 

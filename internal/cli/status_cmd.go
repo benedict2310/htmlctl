@@ -9,15 +9,22 @@ func newStatusCmd() *cobra.Command {
 	var outputMode string
 
 	cmd := &cobra.Command{
-		Use:   "status website/<name>",
+		Use:   "status [website/<name>]",
 		Short: "Show environment status for a website",
-		Args:  cobra.ExactArgs(1),
+		Long:  "Show environment status for a website. Omit website/<name> to use the active context website.",
+		Example: "  htmlctl status website/sample\n" +
+			"  htmlctl status",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rt, api, err := runtimeAndClientFromCommand(cmd)
 			if err != nil {
 				return err
 			}
-			website, err := parseWebsiteRef(args[0])
+			website, err := resolveRemoteWebsite(rt, args)
+			if err != nil {
+				return err
+			}
+			environment, err := requireContextEnvironment(rt)
 			if err != nil {
 				return err
 			}
@@ -26,7 +33,7 @@ func newStatusCmd() *cobra.Command {
 				return err
 			}
 
-			status, err := api.GetStatus(cmd.Context(), website, rt.ResolvedContext.Environment)
+			status, err := api.GetStatus(cmd.Context(), website, environment)
 			if err != nil {
 				return err
 			}

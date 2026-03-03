@@ -284,16 +284,16 @@ Rules:
 | `htmlctl apply -f ./site` | Upload and activate a new release |
 | `htmlctl apply -f ./site --dry-run` | Show diff without deploying |
 | `htmlctl diff -f ./site` | Show file-level diff against current desired state |
-| `htmlctl status website/<name>` | Show active release and environment status |
+| `htmlctl status [website/<name>]` | Show active release and environment status; omit website ref to use the active context website |
 | `htmlctl get website <name>` | Fetch a specific resource |
-| `htmlctl logs website/<name>` | Show audit log |
+| `htmlctl logs [website/<name>]` | Show audit log; omit website ref to use the active context website |
 
 ### Release lifecycle
 
 | Command | Description |
 |---------|-------------|
-| `htmlctl rollout history website/<name>` | List release history |
-| `htmlctl rollout undo website/<name>` | Rollback to the previous release (< 1 second) |
+| `htmlctl rollout history [website/<name>]` | List release history; omit website ref to use the active context website |
+| `htmlctl rollout undo [website/<name>]` | Rollback to the previous release (< 1 second); omit website ref to use the active context website |
 | `htmlctl promote website/<name> --from staging --to prod` | Copy release to another environment without rebuild |
 
 ### Domains
@@ -309,9 +309,9 @@ Rules:
 
 | Command | Description |
 |---------|-------------|
-| `htmlctl backend add website/<name> --env <env> --path /api/* --upstream <url>` | Declare an environment-scoped reverse proxy for a path prefix |
-| `htmlctl backend list website/<name> --env <env>` | List configured backends for an environment |
-| `htmlctl backend remove website/<name> --env <env> --path /api/*` | Remove a backend mapping by path |
+| `htmlctl backend add [website/<name>] --path /api/* --upstream <url> [--env <env>]` | Declare an environment-scoped reverse proxy for a path prefix; omit website ref and `--env` to use the active context defaults |
+| `htmlctl backend list [website/<name>] [--env <env>]` | List configured backends for an environment; omit website ref and `--env` to use the active context defaults |
+| `htmlctl backend remove [website/<name>] --path /api/* [--env <env>]` | Remove a backend mapping by path; omit website ref and `--env` to use the active context defaults |
 
 Backend paths must use the canonical prefix form `/<segment>/*`. They are runtime routing config, not bundle content, so `promote` does not copy or mutate backend definitions.
 

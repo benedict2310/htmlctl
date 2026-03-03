@@ -142,12 +142,6 @@ func (c Config) Validate() error {
 		if strings.TrimSpace(ctx.Server) == "" {
 			return fmt.Errorf("context %q: server is required", name)
 		}
-		if strings.TrimSpace(ctx.Website) == "" {
-			return fmt.Errorf("context %q: website is required", name)
-		}
-		if strings.TrimSpace(ctx.Environment) == "" {
-			return fmt.Errorf("context %q: environment is required", name)
-		}
 		if ctx.Port < 0 || ctx.Port > 65535 {
 			return fmt.Errorf("context %q: port must be in range 1..65535 (or 0 to use default)", name)
 		}

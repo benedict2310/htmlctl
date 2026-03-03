@@ -216,3 +216,27 @@ func TestApplyCommandDryRunJSONOutput(t *testing.T) {
 		t.Fatalf("unexpected dry-run json output: %s", out)
 	}
 }
+
+func TestApplyCommandMissingContextWebsiteProvidesGuidance(t *testing.T) {
+	configPath := writeRemoteCommandConfig(t, `apiVersion: htmlctl.dev/v1
+current-context: staging
+contexts:
+  - name: staging
+    server: ssh://root@staging.example.com
+    website: ""
+    environment: staging
+`)
+	siteDir := writeApplySiteFixture(t)
+
+	tr := &scriptedTransport{}
+	_, _, err := runCommandWithTransportAndConfigPath(t, []string{"apply", "-f", siteDir}, tr, configPath)
+	if err == nil {
+		t.Fatalf("expected missing website error")
+	}
+	if !strings.Contains(err.Error(), "no website selected") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "htmlctl context set <name> --website <website>") {
+		t.Fatalf("expected context set guidance, got %v", err)
+	}
+}

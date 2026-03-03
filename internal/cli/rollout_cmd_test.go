@@ -84,6 +84,25 @@ func TestRolloutHistoryShowsEmptyMessage(t *testing.T) {
 	}
 }
 
+func TestRolloutHistoryUsesContextWebsiteByDefault(t *testing.T) {
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			if req.Path != "/api/v1/websites/sample/environments/staging/releases" {
+				t.Fatalf("unexpected request path %s", req.Path)
+			}
+			return jsonHTTPResponse(200, `{"website":"sample","environment":"staging","limit":20,"offset":0,"releases":[]}`), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"rollout", "history"}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(out, "No releases found.") {
+		t.Fatalf("unexpected output: %s", out)
+	}
+}
+
 func TestRolloutHistoryRejectsNegativePagination(t *testing.T) {
 	tr := &scriptedTransport{}
 	_, _, err := runCommandWithTransport(t, []string{"rollout", "history", "website/sample", "--limit", "-1"}, tr)
@@ -151,6 +170,25 @@ func TestRolloutUndoJSONOutput(t *testing.T) {
 	}
 	if !strings.Contains(out, `"fromReleaseId": "A"`) || !strings.Contains(out, `"toReleaseId": "B"`) {
 		t.Fatalf("unexpected JSON output: %s", out)
+	}
+}
+
+func TestRolloutUndoUsesContextWebsiteByDefault(t *testing.T) {
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			if req.Path != "/api/v1/websites/sample/environments/staging/rollback" {
+				t.Fatalf("unexpected request path %s", req.Path)
+			}
+			return jsonHTTPResponse(200, `{"website":"sample","environment":"staging","fromReleaseId":"A","toReleaseId":"B"}`), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"rollout", "undo"}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(out, "Rolled back sample/staging") {
+		t.Fatalf("unexpected output: %s", out)
 	}
 }
 

@@ -406,6 +406,13 @@ Local:
 - `htmlctl render -f ./site -o ./dist`
 - `htmlctl serve ./dist --port 8080`
 
+Remote defaults:
+
+- `htmlctl status [website/<name>]` and `htmlctl logs [website/<name>]` default the website from the active context when omitted.
+- `htmlctl rollout history [website/<name>]` and `htmlctl rollout undo [website/<name>]` default the website from the active context when omitted.
+- `htmlctl backend add|list|remove [website/<name>]` default both website and `--env` from the active context when omitted.
+- Explicit `website/<name>` args and `--env` flags always take precedence over context defaults.
+
 Remote ops:
 
 - `htmlctl diff -f ./site --context staging`

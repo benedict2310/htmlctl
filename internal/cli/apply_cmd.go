@@ -38,13 +38,21 @@ func newApplyCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			website, err := requireContextWebsite(rt)
+			if err != nil {
+				return err
+			}
+			environment, err := requireContextEnvironment(rt)
+			if err != nil {
+				return err
+			}
 			format, err := output.ParseFormat(outputMode)
 			if err != nil {
 				return err
 			}
 
 			if dryRun {
-				report, err := computeDesiredStateDiff(cmd.Context(), api, rt.ResolvedContext.Website, rt.ResolvedContext.Environment, from)
+				report, err := computeDesiredStateDiff(cmd.Context(), api, website, environment, from)
 				if err != nil {
 					return err
 				}
@@ -69,7 +77,7 @@ func newApplyCmd() *cobra.Command {
 			if format == output.FormatTable {
 				fmt.Fprintln(cmd.OutOrStdout(), "Bundling...")
 			}
-			archive, _, err := bundle.BuildTarFromDir(from, rt.ResolvedContext.Website)
+			archive, _, err := bundle.BuildTarFromDir(from, website)
 			if err != nil {
 				return fmt.Errorf("local validation failed: %w", err)
 			}
@@ -80,8 +88,8 @@ func newApplyCmd() *cobra.Command {
 			}
 			uploadResp, err := api.ApplyBundle(
 				cmd.Context(),
-				rt.ResolvedContext.Website,
-				rt.ResolvedContext.Environment,
+				website,
+				environment,
 				bytes.NewReader(archive),
 				false,
 			)
@@ -93,15 +101,15 @@ func newApplyCmd() *cobra.Command {
 				fmt.Fprintln(cmd.OutOrStdout(), "Rendering...")
 				fmt.Fprintln(cmd.OutOrStdout(), "Activating...")
 			}
-			release, err := api.CreateRelease(cmd.Context(), rt.ResolvedContext.Website, rt.ResolvedContext.Environment)
+			release, err := api.CreateRelease(cmd.Context(), website, environment)
 			if err != nil {
 				return err
 			}
 			releaseResp := &release
 
 			out := client.ApplyCommandResponse{
-				Website:     rt.ResolvedContext.Website,
-				Environment: rt.ResolvedContext.Environment,
+				Website:     website,
+				Environment: environment,
 				DryRun:      false,
 				Upload:      uploadResp,
 				Release:     releaseResp,
@@ -112,7 +120,7 @@ func newApplyCmd() *cobra.Command {
 
 			fmt.Fprintf(cmd.OutOrStdout(), "Done. Release %s active.\n", releaseResp.ReleaseID)
 			if releaseResp.PreviousReleaseID == nil {
-				fmt.Fprintf(cmd.OutOrStdout(), "First deploy for %s/%s complete.\n", rt.ResolvedContext.Website, rt.ResolvedContext.Environment)
+				fmt.Fprintf(cmd.OutOrStdout(), "First deploy for %s/%s complete.\n", website, environment)
 				fmt.Fprintf(cmd.OutOrStdout(), "Next: run 'htmlctl domain add <domain> --context %s' to publish it.\n", rt.ResolvedContext.Name)
 			}
 			return nil

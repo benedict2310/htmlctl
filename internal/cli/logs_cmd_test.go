@@ -41,3 +41,22 @@ func TestLogsCommandYAMLOutput(t *testing.T) {
 		t.Fatalf("unexpected yaml output: %s", out)
 	}
 }
+
+func TestLogsCommandUsesContextWebsiteByDefault(t *testing.T) {
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			if req.Path != "/api/v1/websites/sample/environments/staging/logs" {
+				t.Fatalf("unexpected request path %s", req.Path)
+			}
+			return jsonHTTPResponse(200, `{"entries":[],"total":0,"limit":50,"offset":0}`), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"logs"}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(out, "No audit log entries found.") {
+		t.Fatalf("unexpected output: %s", out)
+	}
+}

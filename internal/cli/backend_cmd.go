@@ -28,11 +28,14 @@ func newBackendAddCmd() *cobra.Command {
 	var upstream string
 	var outputMode string
 	cmd := &cobra.Command{
-		Use:   "add <website-ref>",
+		Use:   "add [website/<name>]",
 		Short: "Add or update a backend for an environment",
-		Args:  cobra.ExactArgs(1),
+		Long:  "Add or update a backend for an environment. Omit website/<name> to use the active context website. Omit --env to use the active context environment.",
+		Example: "  htmlctl backend add website/sample --env staging --path /api/* --upstream https://api.example.com\n" +
+			"  htmlctl backend add --path /api/* --upstream https://api.example.com",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, api, err := runtimeAndClientFromCommand(cmd)
+			rt, api, err := runtimeAndClientFromCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -40,7 +43,11 @@ func newBackendAddCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			website, err := parseWebsiteRef(args[0])
+			website, err := resolveRemoteWebsite(rt, args)
+			if err != nil {
+				return err
+			}
+			envName, err := resolveRemoteEnvironment(rt, envName)
 			if err != nil {
 				return err
 			}
@@ -56,11 +63,10 @@ func newBackendAddCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&envName, "env", "", "Environment name")
+	cmd.Flags().StringVar(&envName, "env", "", "Environment name (defaults to context environment)")
 	cmd.Flags().StringVar(&pathPrefix, "path", "", "Backend path prefix (for example /api/*)")
 	cmd.Flags().StringVar(&upstream, "upstream", "", "Backend upstream URL")
 	cmd.Flags().StringVarP(&outputMode, "output", "o", "table", "Output format (table|json|yaml)")
-	_ = cmd.MarkFlagRequired("env")
 	_ = cmd.MarkFlagRequired("path")
 	_ = cmd.MarkFlagRequired("upstream")
 	return cmd
@@ -70,11 +76,14 @@ func newBackendListCmd() *cobra.Command {
 	var envName string
 	var outputMode string
 	cmd := &cobra.Command{
-		Use:   "list <website-ref>",
+		Use:   "list [website/<name>]",
 		Short: "List backends for an environment",
-		Args:  cobra.ExactArgs(1),
+		Long:  "List backends for an environment. Omit website/<name> to use the active context website. Omit --env to use the active context environment.",
+		Example: "  htmlctl backend list website/sample --env staging\n" +
+			"  htmlctl backend list",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, api, err := runtimeAndClientFromCommand(cmd)
+			rt, api, err := runtimeAndClientFromCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -82,7 +91,11 @@ func newBackendListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			website, err := parseWebsiteRef(args[0])
+			website, err := resolveRemoteWebsite(rt, args)
+			if err != nil {
+				return err
+			}
+			envName, err := resolveRemoteEnvironment(rt, envName)
 			if err != nil {
 				return err
 			}
@@ -105,9 +118,8 @@ func newBackendListCmd() *cobra.Command {
 			return output.WriteTable(cmd.OutOrStdout(), []string{"PATH PREFIX", "UPSTREAM", "CREATED"}, rows)
 		},
 	}
-	cmd.Flags().StringVar(&envName, "env", "", "Environment name")
+	cmd.Flags().StringVar(&envName, "env", "", "Environment name (defaults to context environment)")
 	cmd.Flags().StringVarP(&outputMode, "output", "o", "table", "Output format (table|json|yaml)")
-	_ = cmd.MarkFlagRequired("env")
 	return cmd
 }
 
@@ -116,11 +128,14 @@ func newBackendRemoveCmd() *cobra.Command {
 	var pathPrefix string
 	var outputMode string
 	cmd := &cobra.Command{
-		Use:   "remove <website-ref>",
+		Use:   "remove [website/<name>]",
 		Short: "Remove a backend from an environment",
-		Args:  cobra.ExactArgs(1),
+		Long:  "Remove a backend from an environment. Omit website/<name> to use the active context website. Omit --env to use the active context environment.",
+		Example: "  htmlctl backend remove website/sample --env staging --path /api/*\n" +
+			"  htmlctl backend remove --path /api/*",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, api, err := runtimeAndClientFromCommand(cmd)
+			rt, api, err := runtimeAndClientFromCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -128,7 +143,11 @@ func newBackendRemoveCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			website, err := parseWebsiteRef(args[0])
+			website, err := resolveRemoteWebsite(rt, args)
+			if err != nil {
+				return err
+			}
+			envName, err := resolveRemoteEnvironment(rt, envName)
 			if err != nil {
 				return err
 			}
@@ -147,10 +166,9 @@ func newBackendRemoveCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&envName, "env", "", "Environment name")
+	cmd.Flags().StringVar(&envName, "env", "", "Environment name (defaults to context environment)")
 	cmd.Flags().StringVar(&pathPrefix, "path", "", "Backend path prefix")
 	cmd.Flags().StringVarP(&outputMode, "output", "o", "table", "Output format (table|json|yaml)")
-	_ = cmd.MarkFlagRequired("env")
 	_ = cmd.MarkFlagRequired("path")
 	return cmd
 }

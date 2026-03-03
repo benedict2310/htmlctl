@@ -315,6 +315,19 @@ htmlctl status website/sample --context prod
 htmlctl logs website/sample --context prod --limit 20
 ```
 
+Retention maintenance:
+
+```bash
+htmlctl retention run website/sample --env staging --keep 20 --dry-run --context staging
+htmlctl retention run website/sample --env staging --keep 20 --blob-gc --context staging
+```
+
+Retention rules:
+- active release is always preserved
+- the newest previous non-failed release is always preserved so `rollout undo` still works
+- non-expired preview-pinned releases are always preserved
+- `--blob-gc` deletes only orphaned hash-named files under `blobs/sha256/`
+
 ## 10. Runbook RB-DOMAIN-01: Domain Binding + Verification
 
 Add/list/remove:
@@ -467,6 +480,9 @@ Backend operations:
 - `POST /api/v1/websites/{website}/environments/{env}/backends`
 - `DELETE /api/v1/websites/{website}/environments/{env}/backends/{path}`
 
+Retention operations:
+- `POST /api/v1/websites/{website}/environments/{env}/retention/run`
+
 ## 14. Failure Modes and Deterministic Responses
 
 - `ssh host key verification failed`:
@@ -504,6 +520,11 @@ Before promote:
 - validate staging release behavior.
 - verify release history and active release id.
 - remember that backend config does not promote with the release.
+
+Before retention:
+- run `htmlctl retention run ... --dry-run` first.
+- confirm any required preview URLs still exist for releases you must keep.
+- if you plan `--blob-gc`, make sure current desired state is correct before deleting orphaned blobs.
 
 After promote:
 - verify prod status + external health.

@@ -32,6 +32,8 @@ func (s *Server) handleWebsiteAPI(w http.ResponseWriter, r *http.Request) {
 		s.handleAuthPolicies(w, r)
 	case isPreviewPath(r.URL.EscapedPath()):
 		s.handlePreviews(w, r)
+	case strings.HasSuffix(r.URL.Path, "/retention/run"):
+		s.handleRetention(w, r)
 	case strings.HasSuffix(r.URL.Path, "/status"):
 		s.handleStatus(w, r)
 	case strings.HasSuffix(r.URL.Path, "/telemetry/events"):

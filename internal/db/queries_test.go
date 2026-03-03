@@ -2,10 +2,13 @@ package db
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"testing"
 	"time"
 )
@@ -1559,4 +1562,144 @@ func TestReleasePreviewExpiryBoundaryUsesStableTimestampOrdering(t *testing.T) {
 	if deleted != 1 {
 		t.Fatalf("expected one deleted preview at expiry boundary, got %d", deleted)
 	}
+}
+
+func TestDeleteReleasesByEnvironment(t *testing.T) {
+	q, cleanup := setupDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{Name: "sample", DefaultStyleBundle: "default", BaseTemplate: "default"})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	envID, err := q.InsertEnvironment(ctx, EnvironmentRow{WebsiteID: websiteID, Name: "staging"})
+	if err != nil {
+		t.Fatalf("InsertEnvironment() error = %v", err)
+	}
+	otherEnvID, err := q.InsertEnvironment(ctx, EnvironmentRow{WebsiteID: websiteID, Name: "prod"})
+	if err != nil {
+		t.Fatalf("InsertEnvironment(prod) error = %v", err)
+	}
+	for _, release := range []ReleaseRow{
+		{ID: "R3", EnvironmentID: envID, ManifestJSON: `{}`, OutputHashes: `{}`, BuildLog: "", Status: "active"},
+		{ID: "R2", EnvironmentID: envID, ManifestJSON: `{}`, OutputHashes: `{}`, BuildLog: "", Status: "active"},
+		{ID: "R1", EnvironmentID: envID, ManifestJSON: `{}`, OutputHashes: `{}`, BuildLog: "", Status: "active"},
+		{ID: "OTHER", EnvironmentID: otherEnvID, ManifestJSON: `{}`, OutputHashes: `{}`, BuildLog: "", Status: "active"},
+	} {
+		if err := q.InsertRelease(ctx, release); err != nil {
+			t.Fatalf("InsertRelease(%s) error = %v", release.ID, err)
+		}
+	}
+
+	deleted, err := q.DeleteReleasesByEnvironment(ctx, envID, []string{"R3", "", "R1"})
+	if err != nil {
+		t.Fatalf("DeleteReleasesByEnvironment() error = %v", err)
+	}
+	if deleted != 2 {
+		t.Fatalf("expected 2 deleted releases, got %d", deleted)
+	}
+
+	rows, err := q.ListReleasesByEnvironment(ctx, envID)
+	if err != nil {
+		t.Fatalf("ListReleasesByEnvironment() error = %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != "R2" {
+		t.Fatalf("unexpected remaining releases: %#v", rows)
+	}
+	otherRows, err := q.ListReleasesByEnvironment(ctx, otherEnvID)
+	if err != nil {
+		t.Fatalf("ListReleasesByEnvironment(other) error = %v", err)
+	}
+	if len(otherRows) != 1 || otherRows[0].ID != "OTHER" {
+		t.Fatalf("unexpected other environment releases: %#v", otherRows)
+	}
+}
+
+func TestListReferencedBlobHashes(t *testing.T) {
+	q, cleanup := setupDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	websiteID, err := q.InsertWebsite(ctx, WebsiteRow{
+		Name:               "sample",
+		DefaultStyleBundle: "default",
+		BaseTemplate:       "default",
+		ContentHash:        hashRef("website"),
+	})
+	if err != nil {
+		t.Fatalf("InsertWebsite() error = %v", err)
+	}
+	if _, err := q.InsertPage(ctx, PageRow{
+		WebsiteID:   websiteID,
+		Name:        "index",
+		Route:       "/",
+		Title:       "Home",
+		Description: "Home",
+		LayoutJSON:  `[]`,
+		ContentHash: hashRef("page"),
+	}); err != nil {
+		t.Fatalf("InsertPage() error = %v", err)
+	}
+	if _, err := q.InsertComponent(ctx, ComponentRow{
+		WebsiteID:   websiteID,
+		Name:        "header",
+		Scope:       "global",
+		ContentHash: hashRef("component"),
+	}); err != nil {
+		t.Fatalf("InsertComponent() error = %v", err)
+	}
+	if _, err := q.InsertStyleBundle(ctx, StyleBundleRow{
+		WebsiteID: websiteID,
+		Name:      "default",
+		FilesJSON: fmt.Sprintf(`[{"file":"styles/tokens.css","hash":"%s"},{"file":"styles/default.css","hash":"%s"}]`, hashRef("tokens"), hashRef("default")),
+	}); err != nil {
+		t.Fatalf("InsertStyleBundle() error = %v", err)
+	}
+	if _, err := q.InsertAsset(ctx, AssetRow{
+		WebsiteID:   websiteID,
+		Filename:    "logo.svg",
+		ContentType: "image/svg+xml",
+		SizeBytes:   12,
+		ContentHash: hashRef("asset"),
+	}); err != nil {
+		t.Fatalf("InsertAsset() error = %v", err)
+	}
+	if err := q.UpsertWebsiteIcon(ctx, WebsiteIconRow{
+		WebsiteID:   websiteID,
+		Slot:        "svg",
+		SourcePath:  "branding/favicon.svg",
+		ContentType: "image/svg+xml",
+		SizeBytes:   8,
+		ContentHash: hashRef("icon"),
+	}); err != nil {
+		t.Fatalf("UpsertWebsiteIcon() error = %v", err)
+	}
+
+	hashes, err := q.ListReferencedBlobHashes(ctx)
+	if err != nil {
+		t.Fatalf("ListReferencedBlobHashes() error = %v", err)
+	}
+	want := []string{
+		hashHex("default"),
+		hashHex("asset"),
+		hashHex("component"),
+		hashHex("icon"),
+		hashHex("website"),
+		hashHex("page"),
+		hashHex("tokens"),
+	}
+	sort.Strings(want)
+	if fmt.Sprintf("%q", hashes) != fmt.Sprintf("%q", want) {
+		t.Fatalf("unexpected referenced blob hashes:\n got=%q\nwant=%q", hashes, want)
+	}
+}
+
+func hashRef(label string) string {
+	return "sha256:" + hashHex(label)
+}
+
+func hashHex(label string) string {
+	sum := sha256.Sum256([]byte(label))
+	return hex.EncodeToString(sum[:])
 }

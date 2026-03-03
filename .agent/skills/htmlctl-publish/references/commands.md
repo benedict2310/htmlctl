@@ -177,6 +177,29 @@ htmlctl rollout undo website/<name> --context prod
 
 ---
 
+## Retention
+
+Release retention is environment-scoped operator maintenance. It prunes old release history while preserving the active release, the immediate rollback target, and any non-expired preview-pinned releases.
+
+```bash
+# Preview what retention would prune for the active context website/environment
+htmlctl retention run --keep 20 --dry-run --context staging
+
+# Preview retention for an explicit website/environment
+htmlctl retention run website/<name> --env staging --keep 20 --dry-run --context staging
+
+# Prune old releases and delete orphaned hash-named blobs
+htmlctl retention run website/<name> --env staging --keep 20 --blob-gc --context staging
+```
+
+Retention rules:
+- `--keep` counts the newest releases before safety pins are applied
+- `--dry-run` shows retained/prunable releases without deleting anything
+- `--blob-gc` deletes only orphaned 64-char lowercase hex files under `blobs/sha256/`
+- run `retention` only after verifying any required preview URLs and rollback expectations
+
+---
+
 ## Domains
 
 ```bash

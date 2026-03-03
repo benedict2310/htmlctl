@@ -17,6 +17,7 @@ const (
 	OperationBackendRemove    = "backend.remove"
 	OperationAuthPolicyAdd    = "authpolicy.add"
 	OperationAuthPolicyRemove = "authpolicy.remove"
+	OperationRetentionRun     = "retention.run"
 )
 
 type Entry struct {

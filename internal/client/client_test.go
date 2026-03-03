@@ -710,6 +710,40 @@ func TestPreviewClientMethods(t *testing.T) {
 	}
 }
 
+func TestRunRetentionClientMethod(t *testing.T) {
+	mock := &mockTransport{
+		doFn: func(ctx context.Context, req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodPost || req.URL.Path != "/api/v1/websites/sample/environments/staging/retention/run" {
+				t.Fatalf("unexpected retention request: %s %s", req.Method, req.URL.String())
+			}
+			if req.Header.Get("Content-Type") != "application/json" {
+				t.Fatalf("expected JSON content type, got %q", req.Header.Get("Content-Type"))
+			}
+			body, err := io.ReadAll(req.Body)
+			if err != nil {
+				t.Fatalf("read retention request body: %v", err)
+			}
+			got := string(body)
+			if !strings.Contains(got, `"keep":2`) || !strings.Contains(got, `"dryRun":true`) || !strings.Contains(got, `"blobGC":true`) {
+				t.Fatalf("unexpected retention request body %s", got)
+			}
+			return jsonResponse(http.StatusOK, `{"website":"sample","environment":"staging","keep":2,"dryRun":true,"blobGC":true,"retainedReleaseIds":["R3","R2"],"prunableReleaseIds":["R1"],"prunedReleaseIds":[],"markedBlobCount":7,"blobDeleteCandidates":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],"deletedBlobHashes":[]}`), nil
+		},
+	}
+
+	api := New(mock)
+	resp, err := api.RunRetention(context.Background(), "sample", "staging", 2, true, true)
+	if err != nil {
+		t.Fatalf("RunRetention() error = %v", err)
+	}
+	if resp.Keep != 2 || !resp.DryRun || !resp.BlobGC {
+		t.Fatalf("unexpected retention response: %#v", resp)
+	}
+	if len(resp.PrunableReleaseIDs) != 1 || resp.PrunableReleaseIDs[0] != "R1" {
+		t.Fatalf("unexpected prunable release ids: %#v", resp.PrunableReleaseIDs)
+	}
+}
+
 type mockTransport struct {
 	doFn func(ctx context.Context, req *http.Request) (*http.Response, error)
 }

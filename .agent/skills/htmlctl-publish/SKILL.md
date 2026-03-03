@@ -98,6 +98,16 @@ Environment auth policies let you challenge selected paths such as `/docs/*` or 
 - Overlapping auth-policy prefixes are rejected. Backend overlap is allowed only on an exact same-prefix match so auth can run before the proxy.
 - After changing an auth policy, verify the challenged route on that environment directly. Do not assume a staging auth policy exists in prod.
 
+## Release Retention
+
+Environment retention lets operators prune old immutable releases and optionally sweep orphaned blob files without breaking active traffic, preview URLs, or `rollout undo`.
+
+- Manage it with `htmlctl retention run`.
+- Always run a dry run first for non-trivial environments.
+- Retention preserves the active release, the newest previous non-failed rollback target, and any non-expired preview-pinned releases.
+- `htmlctl retention run --blob-gc` deletes only orphaned 64-char lowercase hex files under `blobs/sha256/`.
+- After a real retention run, re-check release history and keep rollback expectations explicit before continuing with other work.
+
 ## Workflow Decision
 
 | Change type | Workflow |
@@ -107,6 +117,7 @@ Environment auth policies let you challenge selected paths such as `/docs/*` or 
 | Website-level metadata change (`website.yaml`, `branding/`, favicon, robots, sitemap) | Verify server version first → apply to staging → verify generated artifacts → promote to prod |
 | Environment backend change (`htmlctl backend add/remove`) | Update the target environment directly → verify the proxied route on that environment |
 | Environment auth policy change (`htmlctl authpolicy add/remove`) | Update the target environment directly → verify the challenged route on that environment |
+| Release retention (`htmlctl retention run`) | Dry-run first → run on the target environment → verify release history and rollback path afterwards |
 | Inventory / operator drift check | Run `htmlctl doctor --context <ctx>`, then use `htmlctl get domains --context <ctx>` or `htmlctl get backends --context <ctx>` before making changes |
 | Structural change to shared components, layout redesign, style overhaul | Test locally with Docker → apply to staging → promote to prod |
 

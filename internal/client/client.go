@@ -523,6 +523,33 @@ func (c *APIClient) RemovePreview(ctx context.Context, website, environment stri
 	return c.do(req, nil)
 }
 
+func (c *APIClient) RunRetention(ctx context.Context, website, environment string, keep int, dryRun, blobGC bool) (RetentionResponse, error) {
+	pathValue := fmt.Sprintf(
+		"/api/v1/websites/%s/environments/%s/retention/run",
+		url.PathEscape(strings.TrimSpace(website)),
+		url.PathEscape(strings.TrimSpace(environment)),
+	)
+	body, err := json.Marshal(map[string]any{
+		"keep":   keep,
+		"dryRun": dryRun,
+		"blobGC": blobGC,
+	})
+	if err != nil {
+		return RetentionResponse{}, fmt.Errorf("marshal retention payload: %w", err)
+	}
+	req, err := c.newRequest(ctx, http.MethodPost, pathValue, bytes.NewReader(body))
+	if err != nil {
+		return RetentionResponse{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	var out RetentionResponse
+	if err := c.do(req, &out); err != nil {
+		return RetentionResponse{}, err
+	}
+	return out, nil
+}
+
 func (c *APIClient) GetLogs(ctx context.Context, website, environment string, limit int) (LogsResponse, error) {
 	path := fmt.Sprintf(
 		"/api/v1/websites/%s/environments/%s/logs",

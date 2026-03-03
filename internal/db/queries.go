@@ -3,8 +3,12 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
+
+	"github.com/benedict2310/htmlctl/internal/bundle"
 )
 
 type queryer interface {
@@ -379,6 +383,46 @@ func (q *Queries) ListReleasesByEnvironmentPage(ctx context.Context, environment
 	return q.listReleasesByEnvironment(ctx, environmentID, &limit, &offset)
 }
 
+func (q *Queries) DeleteReleasesByEnvironment(ctx context.Context, environmentID int64, releaseIDs []string) (int64, error) {
+	trimmed := make([]string, 0, len(releaseIDs))
+	for _, releaseID := range releaseIDs {
+		releaseID = strings.TrimSpace(releaseID)
+		if releaseID == "" {
+			continue
+		}
+		trimmed = append(trimmed, releaseID)
+	}
+	if len(trimmed) == 0 {
+		return 0, nil
+	}
+
+	var deleted int64
+	maxChunk := sqliteMaxVariables - 1 // reserve one parameter slot for environmentID
+	for start := 0; start < len(trimmed); start += maxChunk {
+		end := start + maxChunk
+		if end > len(trimmed) {
+			end = len(trimmed)
+		}
+		chunk := trimmed[start:end]
+		args := make([]any, 0, len(chunk)+1)
+		args = append(args, environmentID)
+		for _, releaseID := range chunk {
+			args = append(args, releaseID)
+		}
+		query := `DELETE FROM releases WHERE environment_id = ? AND id IN (` + placeholders(len(chunk)) + `)`
+		res, err := q.db.ExecContext(ctx, query, args...)
+		if err != nil {
+			return deleted, fmt.Errorf("delete releases by environment: %w", err)
+		}
+		affected, err := res.RowsAffected()
+		if err != nil {
+			return deleted, fmt.Errorf("release delete rows affected: %w", err)
+		}
+		deleted += affected
+	}
+	return deleted, nil
+}
+
 func (q *Queries) listReleasesByEnvironment(ctx context.Context, environmentID int64, limit, offset *int) ([]ReleaseRow, error) {
 	query := `SELECT id, environment_id, manifest_json, output_hashes, build_log, status, created_at FROM releases WHERE environment_id = ? ORDER BY created_at DESC, id DESC`
 	args := []any{environmentID}
@@ -580,6 +624,78 @@ func (q *Queries) DeleteExpiredReleasePreviews(ctx context.Context, now string) 
 		return 0, fmt.Errorf("expired release preview rows affected: %w", err)
 	}
 	return affected, nil
+}
+
+func (q *Queries) ListReferencedBlobHashes(ctx context.Context) ([]string, error) {
+	refs := map[string]struct{}{}
+
+	collectColumn := func(query string) error {
+		rows, err := q.db.QueryContext(ctx, query)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var raw string
+			if err := rows.Scan(&raw); err != nil {
+				return err
+			}
+			hashHex, err := bundle.HashHex(strings.TrimSpace(raw))
+			if err != nil {
+				return fmt.Errorf("normalize blob hash %q: %w", raw, err)
+			}
+			refs[hashHex] = struct{}{}
+		}
+		return rows.Err()
+	}
+
+	queries := []string{
+		`SELECT content_hash FROM websites WHERE TRIM(content_hash) <> ''`,
+		`SELECT content_hash FROM pages WHERE TRIM(content_hash) <> ''`,
+		`SELECT content_hash FROM components WHERE TRIM(content_hash) <> ''`,
+		`SELECT content_hash FROM assets WHERE TRIM(content_hash) <> ''`,
+		`SELECT content_hash FROM website_icons WHERE TRIM(content_hash) <> ''`,
+	}
+	for _, query := range queries {
+		if err := collectColumn(query); err != nil {
+			return nil, fmt.Errorf("list referenced blob hashes: %w", err)
+		}
+	}
+
+	rows, err := q.db.QueryContext(ctx, `SELECT files_json FROM style_bundles WHERE TRIM(files_json) <> ''`)
+	if err != nil {
+		return nil, fmt.Errorf("list referenced blob hashes: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var filesJSON string
+		if err := rows.Scan(&filesJSON); err != nil {
+			return nil, fmt.Errorf("scan style bundle files: %w", err)
+		}
+		var refsList []bundle.FileRef
+		if err := json.Unmarshal([]byte(filesJSON), &refsList); err != nil {
+			return nil, fmt.Errorf("parse style bundle files: %w", err)
+		}
+		for _, ref := range refsList {
+			hashHex, err := bundle.HashHex(strings.TrimSpace(ref.Hash))
+			if err != nil {
+				return nil, fmt.Errorf("normalize style bundle blob hash %q: %w", ref.Hash, err)
+			}
+			refs[hashHex] = struct{}{}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate style bundle files: %w", err)
+	}
+
+	hashes := make([]string, 0, len(refs))
+	for hashHex := range refs {
+		hashes = append(hashes, hashHex)
+	}
+	sort.Strings(hashes)
+	return hashes, nil
 }
 
 func (q *Queries) ListLatestReleaseActors(ctx context.Context, environmentID int64, releaseIDs []string) (map[string]string, error) {

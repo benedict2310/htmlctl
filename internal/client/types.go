@@ -184,6 +184,24 @@ type PreviewsResponse struct {
 	Previews    []Preview `json:"previews" yaml:"previews"`
 }
 
+type RetentionResponse struct {
+	Website                 string   `json:"website" yaml:"website"`
+	Environment             string   `json:"environment" yaml:"environment"`
+	Keep                    int      `json:"keep" yaml:"keep"`
+	DryRun                  bool     `json:"dryRun" yaml:"dryRun"`
+	BlobGC                  bool     `json:"blobGC" yaml:"blobGC"`
+	ActiveReleaseID         *string  `json:"activeReleaseId,omitempty" yaml:"activeReleaseId,omitempty"`
+	RollbackReleaseID       *string  `json:"rollbackReleaseId,omitempty" yaml:"rollbackReleaseId,omitempty"`
+	PreviewPinnedReleaseIDs []string `json:"previewPinnedReleaseIds" yaml:"previewPinnedReleaseIds"`
+	RetainedReleaseIDs      []string `json:"retainedReleaseIds" yaml:"retainedReleaseIds"`
+	PrunableReleaseIDs      []string `json:"prunableReleaseIds" yaml:"prunableReleaseIds"`
+	PrunedReleaseIDs        []string `json:"prunedReleaseIds" yaml:"prunedReleaseIds"`
+	MarkedBlobCount         int      `json:"markedBlobCount" yaml:"markedBlobCount"`
+	BlobDeleteCandidates    []string `json:"blobDeleteCandidates" yaml:"blobDeleteCandidates"`
+	DeletedBlobHashes       []string `json:"deletedBlobHashes" yaml:"deletedBlobHashes"`
+	Warnings                []string `json:"warnings,omitempty" yaml:"warnings,omitempty"`
+}
+
 type LogsResponse struct {
 	Entries []AuditLogEntry `json:"entries" yaml:"entries"`
 	Total   int             `json:"total" yaml:"total"`

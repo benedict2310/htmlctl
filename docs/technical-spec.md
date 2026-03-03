@@ -249,6 +249,28 @@ In v1, a single bundle `default`:
   - expired previews are deleted by a background cleanup loop and on startup
   - preview hostnames are convenience URLs, not access control
 
+### 2.10 Release retention and storage GC
+
+- Authenticated API endpoint:
+  - `POST /api/v1/websites/{website}/environments/{env}/retention/run`
+- Request body:
+  - `keep` (required, integer >= 0)
+  - `dryRun` (optional boolean)
+  - `blobGC` (optional boolean)
+- Retention pins:
+  - active release
+  - newest previous non-failed release needed by `rollout undo`
+  - releases referenced by non-expired preview URLs
+- Deletion flow:
+  - prunable release directories are first renamed to a quarantine path under the same `releases/` root
+  - release DB rows are deleted only after quarantine rename succeeds for every prunable release
+  - if DB deletion fails, quarantined directories are restored before the API returns an error
+  - after DB delete succeeds, quarantined directories are removed best-effort
+- Optional blob GC:
+  - mark set is built from current desired-state hashes in `websites`, `pages`, `components`, `style_bundles.files_json`, `assets`, and `website_icons`
+  - sweep deletes only orphaned 64-char lowercase hex filenames directly under `blobs/sha256/`
+  - non-hash filenames are preserved
+
 ## 3. Rendering & composition
 
 ### 3.1 Publish-time stitching
@@ -448,6 +470,7 @@ Remote defaults:
 - `htmlctl backend add|list|remove [website/<name>]` default both website and `--env` from the active context when omitted.
 - `htmlctl authpolicy add|list|remove [website/<name>]` default both website and `--env` from the active context when omitted.
 - `htmlctl preview create|list|remove [website/<name>]` default both website and `--env` from the active context when omitted.
+- `htmlctl retention run [website/<name>]` defaults both website and `--env` from the active context when omitted.
 - `htmlctl get environments|releases|domains|backends` default website and/or environment from the active context when omitted by the command shape.
 - Explicit `website/<name>` args and `--env` flags always take precedence over context defaults.
 
@@ -479,6 +502,8 @@ Remote ops:
 - `htmlctl preview create website/sample --env staging --release R1 --ttl 72h --context staging`
 - `htmlctl preview list website/sample --env staging --context staging`
 - `htmlctl preview remove website/sample --env staging --id 7 --context staging`
+- `htmlctl retention run website/sample --env staging --keep 20 --dry-run --context staging`
+- `htmlctl retention run website/sample --env staging --keep 20 --blob-gc --context staging`
 
 Inventory and guidance:
 
@@ -492,6 +517,8 @@ Inventory and guidance:
 - Auth policy path prefixes must use the same canonical matcher form as backends (`/<segment>/*`).
 - Overlapping auth policy prefixes in one environment must be rejected.
 - Auth policy overlap with backends is allowed only for an exact same-prefix match, so Caddy can challenge before `reverse_proxy`.
+- `retention run` is environment-scoped operator maintenance. It never deletes the active release, the immediate rollback target, or any non-expired preview-pinned release.
+- `retention run --blob-gc` only deletes orphaned hash-named blob files under `blobs/sha256/`.
 - `apply --from-git` resolves the Git source on the CLI side only, requires a pinned commit SHA, and then reuses the normal tar bundle upload path.
 - Git-source bundle manifests may include optional provenance metadata:
   - `source.type = "git"`

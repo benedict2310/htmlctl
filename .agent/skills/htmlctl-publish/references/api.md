@@ -60,6 +60,31 @@ Activates the previous release (symlink switch, < 1 second).
 
 ---
 
+## Retention
+
+```http
+POST /api/v1/websites/{website}/environments/{env}/retention/run
+```
+
+Request body:
+
+```json
+{
+  "keep": 20,
+  "dryRun": true,
+  "blobGC": true
+}
+```
+
+Semantics:
+- always preserves the active release
+- always preserves the newest previous non-failed release needed by `rollout undo`
+- always preserves releases referenced by non-expired preview URLs
+- quarantines release directories before deleting release rows from SQLite
+- with `blobGC: true`, deletes only orphaned hash-named files under `blobs/sha256/`
+
+---
+
 ## Promote
 
 ```http

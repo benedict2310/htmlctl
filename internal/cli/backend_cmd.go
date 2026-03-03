@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/benedict2310/htmlctl/internal/output"
 	"github.com/spf13/cobra"
@@ -59,7 +60,13 @@ func newBackendAddCmd() *cobra.Command {
 			if format != output.FormatTable {
 				return output.WriteStructured(cmd.OutOrStdout(), format, resp)
 			}
+			for _, warning := range backendPathWarnings(resp.PathPrefix) {
+				fmt.Fprintf(cmd.OutOrStdout(), "Warning: %s\n", warning)
+			}
 			fmt.Fprintf(cmd.OutOrStdout(), "backend %s -> %s added to %s/%s\n", resp.PathPrefix, resp.Upstream, website, envName)
+			fmt.Fprintf(cmd.OutOrStdout(), "Routing changes apply immediately on %s/%s.\n", website, envName)
+			fmt.Fprintf(cmd.OutOrStdout(), "Next: run 'htmlctl backend list website/%s --env %s --context %s' to confirm the route.\n", website, envName, rt.ResolvedContext.Name)
+			fmt.Fprintf(cmd.OutOrStdout(), "Next: check the live URL under %s on %s/%s.\n", resp.PathPrefix, website, envName)
 			return nil
 		},
 	}
@@ -171,4 +178,20 @@ func newBackendRemoveCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&outputMode, "output", "o", "table", "Output format (table|json|yaml)")
 	_ = cmd.MarkFlagRequired("path")
 	return cmd
+}
+
+func backendPathWarnings(pathPrefix string) []string {
+	pathPrefix = strings.TrimSpace(pathPrefix)
+	switch {
+	case pathPrefix == "/styles/*":
+		return []string{"backend path /styles/* will hide generated static styles under that prefix"}
+	case pathPrefix == "/scripts/*":
+		return []string{"backend path /scripts/* will hide generated static scripts under that prefix"}
+	case pathPrefix == "/assets/*":
+		return []string{"backend path /assets/* will hide published static assets under that prefix"}
+	case strings.HasPrefix(pathPrefix, "/favicon"):
+		return []string{"backend path " + pathPrefix + " may hide generated favicon files served from the site root"}
+	default:
+		return nil
+	}
 }

@@ -285,7 +285,7 @@ Rules:
 | `htmlctl apply -f ./site --dry-run` | Show diff without deploying |
 | `htmlctl diff -f ./site` | Show file-level diff against current desired state |
 | `htmlctl status [website/<name>]` | Show active release and environment status; omit website ref to use the active context website |
-| `htmlctl get website <name>` | Fetch a specific resource |
+| `htmlctl get <resource-type>` | List inventory for `websites`, `environments`, `releases`, `domains`, or `backends` |
 | `htmlctl logs [website/<name>]` | Show audit log; omit website ref to use the active context website |
 
 ### Release lifecycle
@@ -314,6 +314,7 @@ Rules:
 | `htmlctl backend remove [website/<name>] --path /api/* [--env <env>]` | Remove a backend mapping by path; omit website ref and `--env` to use the active context defaults |
 
 Backend paths must use the canonical prefix form `/<segment>/*`. They are runtime routing config, not bundle content, so `promote` does not copy or mutate backend definitions.
+In human output, `backend add` now warns about obviously risky prefixes such as `/styles/*`, `/scripts/*`, `/assets/*`, and `/favicon...`, and suggests the next verification commands.
 
 ### Context
 

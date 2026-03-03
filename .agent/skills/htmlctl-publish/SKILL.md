@@ -82,6 +82,8 @@ Environment backends let a static site call dynamic services through relative pa
 - Backend paths must use the canonical prefix form `/<segment>/*`.
 - Backends are environment-scoped runtime routing state, not site content. They are not stored in `site/`, are not affected by `htmlctl apply`, and are not copied by `htmlctl promote`.
 - Use them when staging and prod should serve the same static release but proxy the same relative prefix to different upstreams.
+- `htmlctl get backends --context staging` and `htmlctl backend list --context staging` both inventory backend state for the active context website/environment.
+- `htmlctl backend add` prints follow-up guidance after success. In table mode it also warns on suspicious static-content prefixes such as `/styles/*`, `/scripts/*`, `/assets/*`, and `/favicon...`.
 - After changing a backend, verify the route on that environment directly. Do not assume a staging backend exists in prod.
 
 ## Workflow Decision
@@ -92,6 +94,7 @@ Environment backends let a static site call dynamic services through relative pa
 | New standalone subpage (new component + new page, no changes to shared components) | Apply directly to staging → verify → promote to prod |
 | Website-level metadata change (`website.yaml`, `branding/`, favicon, robots, sitemap) | Verify server version first → apply to staging → verify generated artifacts → promote to prod |
 | Environment backend change (`htmlctl backend add/remove`) | Update the target environment directly → verify the proxied route on that environment |
+| Inventory / operator drift check | Run `htmlctl doctor --context <ctx>`, then use `htmlctl get domains --context <ctx>` or `htmlctl get backends --context <ctx>` before making changes |
 | Structural change to shared components, layout redesign, style overhaul | Test locally with Docker → apply to staging → promote to prod |
 
 ## Prerequisites
@@ -123,6 +126,9 @@ SSH auth order: SSH agent socket (`SSH_AUTH_SOCK`) → key file fallback (`HTMLC
 Use for targeted changes: updating copy, adding a project card, editing a single component.
 
 ```bash
+# 0. Confirm the target context is healthy and reachable
+htmlctl doctor --context staging
+
 # 1. Preview what will change
 htmlctl diff -f site/ --context staging
 
@@ -273,6 +279,7 @@ docker rm -f htmlservd-local
 ## Safety Checklist
 
 Before any apply:
+- `htmlctl doctor --context staging` — confirm config, SSH transport, auth, and version compatibility
 - `htmlctl diff -f site/ --context staging` — review changes (**exit code 1 = changes detected, not an error; exit code 0 = no changes**)
 - `htmlctl apply -f site/ --context staging --dry-run` — for risky changes
 - `htmlctl config current-context` — confirm you're on the right context
@@ -285,6 +292,7 @@ After apply:
 - if `robots` is enabled, verify `/robots.txt`
 - if `sitemap` is enabled, verify `/sitemap.xml`
 - if favicon is configured, verify the root icon files and page `<head>` output
+- if the environment uses custom domains, verify inventory with `htmlctl get domains --context staging`
 - if the environment uses backends, verify `htmlctl backend list website/mysite --env staging --context staging` and test the proxied URL directly
 
 Before promote:

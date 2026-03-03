@@ -104,7 +104,7 @@ htmlctl status website/<name> --context prod
 
 Inspect server state for specific resources.
 
-**Supported resource types:** `websites`, `environments`, `releases` only.
+**Supported resource types:** `websites`, `environments`, `releases`, `domains`, `backends`.
 `pages`, `components`, `styles`, and `assets` are not queryable via `get` — use `htmlctl diff` to compare local vs server state, or `htmlctl status` for summary counts.
 
 ```bash
@@ -116,6 +116,12 @@ htmlctl get websites --context staging
 
 # List all environments
 htmlctl get environments --context staging
+
+# List domain bindings for the active context website/environment
+htmlctl get domains --context staging
+
+# List environment backends for the active context website/environment
+htmlctl get backends --context staging
 ```
 
 ---
@@ -225,6 +231,8 @@ Backend rules:
 - `--path` must use canonical prefix form such as `/api/*`
 - upstreams must be absolute `http://` or `https://` URLs
 - matching backend prefixes are routed before static file serving
+- `backend add` prints a warning in table mode for suspicious static-content prefixes such as `/styles/*`, `/scripts/*`, `/assets/*`, and `/favicon...`
+- after `backend add`, follow the suggested `backend list` check and test the live proxied URL on that environment
 
 ---
 

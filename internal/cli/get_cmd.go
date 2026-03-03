@@ -113,9 +113,69 @@ func newGetCmd() *cobra.Command {
 				}
 				return output.WriteTable(cmd.OutOrStdout(), []string{"RELEASE_ID", "STATUS", "ACTIVE", "CREATED_AT"}, rows)
 
-			default:
-				return fmt.Errorf("unsupported resource type %q", resourceType)
+			case "domains":
+				website, err := requireContextWebsite(rt)
+				if err != nil {
+					return err
+				}
+				environment, err := requireContextEnvironment(rt)
+				if err != nil {
+					return err
+				}
+				resp, err := api.ListDomainBindings(cmd.Context(), website, environment)
+				if err != nil {
+					return err
+				}
+				if format != output.FormatTable {
+					return output.WriteStructured(cmd.OutOrStdout(), format, resp)
+				}
+				if len(resp.Domains) == 0 {
+					fmt.Fprintln(cmd.OutOrStdout(), "No domains found.")
+					return nil
+				}
+				rows := make([][]string, 0, len(resp.Domains))
+				for _, binding := range resp.Domains {
+					rows = append(rows, []string{
+						binding.Domain,
+						binding.Website,
+						binding.Environment,
+						binding.CreatedAt,
+					})
+				}
+				return output.WriteTable(cmd.OutOrStdout(), []string{"DOMAIN", "WEBSITE", "ENVIRONMENT", "CREATED"}, rows)
+
+			case "backends":
+				website, err := requireContextWebsite(rt)
+				if err != nil {
+					return err
+				}
+				environment, err := requireContextEnvironment(rt)
+				if err != nil {
+					return err
+				}
+				resp, err := api.ListBackends(cmd.Context(), website, environment)
+				if err != nil {
+					return err
+				}
+				if format != output.FormatTable {
+					return output.WriteStructured(cmd.OutOrStdout(), format, resp)
+				}
+				if len(resp.Backends) == 0 {
+					fmt.Fprintln(cmd.OutOrStdout(), "No backends found.")
+					return nil
+				}
+				rows := make([][]string, 0, len(resp.Backends))
+				for _, backend := range resp.Backends {
+					rows = append(rows, []string{
+						backend.PathPrefix,
+						backend.Upstream,
+						backend.CreatedAt,
+					})
+				}
+				return output.WriteTable(cmd.OutOrStdout(), []string{"PATH PREFIX", "UPSTREAM", "CREATED"}, rows)
+
 			}
+			return fmt.Errorf("internal: unhandled get resource type %q", resourceType)
 		},
 	}
 

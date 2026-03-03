@@ -285,7 +285,7 @@ func newDomainVerifyCmd() *cobra.Command {
 					fmt.Fprintf(cmd.OutOrStdout(), "DNS Resolution:    PASS  (resolves to %s)\n", strings.Join(result.DNS.Addresses, ", "))
 				} else {
 					fmt.Fprintf(cmd.OutOrStdout(), "DNS Resolution:    FAIL  (%s)\n", result.DNS.Error)
-					fmt.Fprintln(cmd.OutOrStdout(), "  -> Add an A/AAAA record for the domain pointing to your server.")
+					fmt.Fprintf(cmd.OutOrStdout(), "Next: add an A/AAAA record for %s pointing to your server, then rerun 'htmlctl domain verify %s --context %s'.\n", domainName, domainName, ctxInfo.Name)
 				}
 				switch {
 				case result.TLS.Pass:
@@ -294,7 +294,7 @@ func newDomainVerifyCmd() *cobra.Command {
 					fmt.Fprintf(cmd.OutOrStdout(), "TLS Certificate:   SKIP  (%s)\n", result.TLS.Error)
 				default:
 					fmt.Fprintf(cmd.OutOrStdout(), "TLS Certificate:   FAIL  (%s)\n", result.TLS.Error)
-					fmt.Fprintln(cmd.OutOrStdout(), "  -> Ensure Caddy is serving the domain and certificate issuance has completed.")
+					fmt.Fprintf(cmd.OutOrStdout(), "Next: ensure Caddy is serving %s and certificate issuance has completed, then rerun 'htmlctl domain verify %s --context %s'.\n", domainName, domainName, ctxInfo.Name)
 				}
 			}
 

@@ -26,7 +26,7 @@ func resolveRemoteWebsite(rt *commandRuntime, args []string) (string, error) {
 
 func resolveRemoteWebsiteValue(args []string, contextWebsite string) (string, error) {
 	if len(args) > 1 {
-		return "", fmt.Errorf("expected at most 1 website reference")
+		return "", fmt.Errorf("expected at most 1 website reference (website/<name>)")
 	}
 	if len(args) == 1 {
 		return parseWebsiteRef(args[0])
@@ -75,18 +75,18 @@ func parseWebsiteRef(v string) (string, error) {
 	if strings.HasPrefix(raw, "website/") {
 		name := strings.TrimSpace(strings.TrimPrefix(raw, "website/"))
 		if name == "" {
-			return "", fmt.Errorf("website name is required (expected website/<name>)")
+			return "", fmt.Errorf("website name is required (expected website/<name>; for example website/sample)")
 		}
 		return name, nil
 	}
 	if strings.HasPrefix(raw, "websites/") {
 		name := strings.TrimSpace(strings.TrimPrefix(raw, "websites/"))
 		if name == "" {
-			return "", fmt.Errorf("website name is required (expected website/<name>)")
+			return "", fmt.Errorf("website name is required (expected website/<name>; for example website/sample)")
 		}
 		return name, nil
 	}
-	return "", fmt.Errorf("invalid resource %q (expected website/<name>)", v)
+	return "", fmt.Errorf("invalid website reference %q (expected website/<name>; omit it to use the active context website)", v)
 }
 
 func normalizeResourceType(v string) (string, error) {
@@ -97,8 +97,12 @@ func normalizeResourceType(v string) (string, error) {
 		return "environments", nil
 	case "release", "releases":
 		return "releases", nil
+	case "domain", "domains":
+		return "domains", nil
+	case "backend", "backends":
+		return "backends", nil
 	default:
-		return "", fmt.Errorf("unsupported resource type %q (expected websites, environments, or releases)", v)
+		return "", fmt.Errorf("unsupported resource type %q (supported: websites, environments, releases, domains, backends)", v)
 	}
 }
 

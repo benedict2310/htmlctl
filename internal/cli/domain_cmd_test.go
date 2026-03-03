@@ -251,6 +251,9 @@ func TestDomainVerifyCommandFailure(t *testing.T) {
 	if !strings.Contains(out.String(), "DNS Resolution:    FAIL") || !strings.Contains(out.String(), "TLS Certificate:   SKIP") {
 		t.Fatalf("unexpected verify output: %s", out.String())
 	}
+	if !strings.Contains(out.String(), "Next: add an A/AAAA record for example.com") {
+		t.Fatalf("expected DNS next-step guidance, got: %s", out.String())
+	}
 }
 
 func TestDomainVerifyJSONOutputAndTLSFailure(t *testing.T) {
@@ -282,6 +285,38 @@ func TestDomainVerifyJSONOutputAndTLSFailure(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `"pass": false`) || !strings.Contains(out.String(), `"tls handshake failed"`) {
 		t.Fatalf("unexpected JSON verify output: %s", out.String())
+	}
+}
+
+func TestDomainVerifyTableOutputIncludesTLSNextStep(t *testing.T) {
+	configPath := writeTestConfigFile(t, "staging")
+	t.Setenv("HTMLCTL_CONFIG", configPath)
+
+	prevLookup := lookupDomainHost
+	prevTLS := verifyDomainTLS
+	lookupDomainHost = func(ctx context.Context, host string) ([]string, error) {
+		return []string{"203.0.113.10"}, nil
+	}
+	verifyDomainTLS = func(ctx context.Context, host string) (tlsVerifyResult, error) {
+		return tlsVerifyResult{}, errors.New("tls handshake failed")
+	}
+	t.Cleanup(func() {
+		lookupDomainHost = prevLookup
+		verifyDomainTLS = prevTLS
+	})
+
+	cmd := NewRootCmd("test")
+	out := &bytes.Buffer{}
+	errOut := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(errOut)
+	cmd.SetArgs([]string{"domain", "verify", "example.com"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected verification failure")
+	}
+	if !strings.Contains(out.String(), "Next: ensure Caddy is serving example.com") {
+		t.Fatalf("expected TLS next-step guidance, got: %s", out.String())
 	}
 }
 

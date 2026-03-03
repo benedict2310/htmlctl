@@ -411,6 +411,7 @@ Remote defaults:
 - `htmlctl status [website/<name>]` and `htmlctl logs [website/<name>]` default the website from the active context when omitted.
 - `htmlctl rollout history [website/<name>]` and `htmlctl rollout undo [website/<name>]` default the website from the active context when omitted.
 - `htmlctl backend add|list|remove [website/<name>]` default both website and `--env` from the active context when omitted.
+- `htmlctl get environments|releases|domains|backends` default website and/or environment from the active context when omitted by the command shape.
 - Explicit `website/<name>` args and `--env` flags always take precedence over context defaults.
 
 Diagnostics:
@@ -425,6 +426,8 @@ Remote ops:
 - `htmlctl diff -f ./site --context staging`
 - `htmlctl apply -f ./site --context staging [--dry-run]`
 - `htmlctl status website/sample --context staging`
+- `htmlctl get domains --context staging`
+- `htmlctl get backends --context staging`
 - `htmlctl promote website/sample --from staging --to prod`
 - `htmlctl rollout history website/sample --context prod`
 - `htmlctl rollout undo website/sample --context prod`
@@ -432,6 +435,13 @@ Remote ops:
 - `htmlctl backend add website/sample --env staging --path /api/* --upstream https://staging-api.example.com --context staging`
 - `htmlctl backend list website/sample --env staging --context staging`
 - `htmlctl backend remove website/sample --env staging --path /api/* --context staging`
+
+Inventory and guidance:
+
+- `htmlctl get` supports `websites`, `environments`, `releases`, `domains`, and `backends`.
+- Unsupported `get` resource types and malformed `website/<name>` refs must return fix-oriented guidance.
+- In table output, `backend add` prints follow-up guidance (`backend list`, live-URL verification) after success.
+- In table output, `backend add` emits non-blocking warnings for suspicious static-content prefixes such as `/styles/*`, `/scripts/*`, `/assets/*`, and `/favicon...`.
 
 Domains:
 

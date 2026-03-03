@@ -72,3 +72,119 @@ contexts:
 		t.Fatalf("expected context set guidance, got %v", err)
 	}
 }
+
+func TestGetDomainsTableOutput(t *testing.T) {
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			if req.Method != http.MethodGet || req.Path != "/api/v1/domains" {
+				t.Fatalf("unexpected request: %#v", req)
+			}
+			if req.Query != "environment=staging&website=sample" && req.Query != "website=sample&environment=staging" {
+				t.Fatalf("unexpected query: %s", req.Query)
+			}
+			return jsonHTTPResponse(200, `{"domains":[{"id":1,"domain":"example.com","website":"sample","environment":"staging","createdAt":"2026-03-01T12:00:00Z","updatedAt":"2026-03-01T12:00:00Z"}]}`), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"get", "domains"}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(out, "example.com") || !strings.Contains(out, "staging") {
+		t.Fatalf("unexpected output: %s", out)
+	}
+}
+
+func TestGetDomainsYAMLOutput(t *testing.T) {
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			return jsonHTTPResponse(200, `{"domains":[{"id":1,"domain":"example.com","website":"sample","environment":"staging","createdAt":"2026-03-01T12:00:00Z","updatedAt":"2026-03-01T12:00:00Z"}]}`), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"get", "domains", "--output", "yaml"}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(out, "domains:") || !strings.Contains(out, "domain: example.com") {
+		t.Fatalf("unexpected YAML output: %s", out)
+	}
+}
+
+func TestGetDomainsJSONOutput(t *testing.T) {
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			return jsonHTTPResponse(200, `{"domains":[{"id":1,"domain":"example.com","website":"sample","environment":"staging","createdAt":"2026-03-01T12:00:00Z","updatedAt":"2026-03-01T12:00:00Z"}]}`), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"get", "domains", "--output", "json"}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(out, `"domain": "example.com"`) {
+		t.Fatalf("unexpected JSON output: %s", out)
+	}
+}
+
+func TestGetBackendsJSONOutput(t *testing.T) {
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			if req.Method != http.MethodGet || req.Path != "/api/v1/websites/sample/environments/staging/backends" {
+				t.Fatalf("unexpected request: %#v", req)
+			}
+			return jsonHTTPResponse(200, `{"website":"sample","environment":"staging","backends":[{"pathPrefix":"/api/*","upstream":"https://api.example.com","createdAt":"2026-03-01T12:00:00Z","updatedAt":"2026-03-01T12:00:00Z"}]}`), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"get", "backends", "--output", "json"}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(out, `"pathPrefix": "/api/*"`) || !strings.Contains(out, `"upstream": "https://api.example.com"`) {
+		t.Fatalf("unexpected JSON output: %s", out)
+	}
+}
+
+func TestGetBackendsTableOutput(t *testing.T) {
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			return jsonHTTPResponse(200, `{"website":"sample","environment":"staging","backends":[{"pathPrefix":"/api/*","upstream":"https://api.example.com","createdAt":"2026-03-01T12:00:00Z","updatedAt":"2026-03-01T12:00:00Z"}]}`), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"get", "backends"}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(out, "/api/*") || !strings.Contains(out, "https://api.example.com") {
+		t.Fatalf("unexpected output: %s", out)
+	}
+}
+
+func TestGetBackendsYAMLOutput(t *testing.T) {
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			return jsonHTTPResponse(200, `{"website":"sample","environment":"staging","backends":[{"pathPrefix":"/api/*","upstream":"https://api.example.com","createdAt":"2026-03-01T12:00:00Z","updatedAt":"2026-03-01T12:00:00Z"}]}`), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"get", "backends", "--output", "yaml"}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(out, "backends:") || !strings.Contains(out, "pathPrefix: /api/*") {
+		t.Fatalf("unexpected YAML output: %s", out)
+	}
+}
+
+func TestGetUnsupportedResourceTypeProvidesSupportedList(t *testing.T) {
+	tr := &scriptedTransport{}
+	_, _, err := runCommandWithTransport(t, []string{"get", "pages"}, tr)
+	if err == nil {
+		t.Fatalf("expected unsupported resource type error")
+	}
+	if !strings.Contains(err.Error(), "supported: websites, environments, releases, domains, backends") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

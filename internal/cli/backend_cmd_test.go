@@ -27,6 +27,15 @@ func TestBackendAddCommand(t *testing.T) {
 	if !strings.Contains(out, "backend /api/* -> https://api.example.com added to sample/staging") {
 		t.Fatalf("unexpected output: %s", out)
 	}
+	if !strings.Contains(out, "Routing changes apply immediately on sample/staging.") {
+		t.Fatalf("expected routing guidance, got: %s", out)
+	}
+	if !strings.Contains(out, "htmlctl backend list website/sample --env staging --context staging") {
+		t.Fatalf("expected backend list guidance, got: %s", out)
+	}
+	if !strings.Contains(out, "check the live URL under /api/*") {
+		t.Fatalf("expected live URL guidance, got: %s", out)
+	}
 }
 
 func TestBackendAddUsesContextDefaults(t *testing.T) {
@@ -59,6 +68,41 @@ func TestBackendAddJSONOutput(t *testing.T) {
 		t.Fatalf("Execute() error = %v", err)
 	}
 	if !strings.Contains(out, `"pathPrefix": "/api/*"`) {
+		t.Fatalf("unexpected JSON output: %s", out)
+	}
+}
+
+func TestBackendAddWarnsOnSuspiciousPrefixInTableMode(t *testing.T) {
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			return jsonHTTPResponse(201, `{"pathPrefix":"/styles/*","upstream":"https://cdn.example.com","website":"sample","environment":"staging","createdAt":"2026-03-01T12:00:00Z","updatedAt":"2026-03-01T12:00:00Z"}`), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"backend", "add", "--path", "/styles/*", "--upstream", "https://cdn.example.com"}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(out, "Warning: backend path /styles/* will hide generated static styles under that prefix") {
+		t.Fatalf("expected warning in table output, got: %s", out)
+	}
+}
+
+func TestBackendAddDoesNotPrintWarningsInStructuredOutput(t *testing.T) {
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			return jsonHTTPResponse(201, `{"pathPrefix":"/styles/*","upstream":"https://cdn.example.com","website":"sample","environment":"staging","createdAt":"2026-03-01T12:00:00Z","updatedAt":"2026-03-01T12:00:00Z"}`), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"backend", "add", "--path", "/styles/*", "--upstream", "https://cdn.example.com", "--output", "json"}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if strings.Contains(out, "Warning:") {
+		t.Fatalf("expected structured output to stay warning-free, got: %s", out)
+	}
+	if !strings.Contains(out, `"pathPrefix": "/styles/*"`) {
 		t.Fatalf("unexpected JSON output: %s", out)
 	}
 }
@@ -233,5 +277,19 @@ func TestBackendHelpDocumentsContextDefaults(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "Omit --env to use the active context environment.") {
 		t.Fatalf("expected environment default help text, got: %s", out.String())
+	}
+}
+
+func TestBackendListInvalidWebsiteReferenceProvidesGuidance(t *testing.T) {
+	tr := &scriptedTransport{}
+	_, _, err := runCommandWithTransport(t, []string{"backend", "list", "sample"}, tr)
+	if err == nil {
+		t.Fatalf("expected invalid website reference error")
+	}
+	if !strings.Contains(err.Error(), "expected website/<name>") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "omit it to use the active context website") {
+		t.Fatalf("expected recovery guidance, got %v", err)
 	}
 }

@@ -168,15 +168,15 @@ by guarding the field with `sync.RWMutex`. All 428 tests pass clean under `-race
 ## Epic 11 — CLI UX Polish
 
 **Goal:** Make `htmlctl` feel more like a coherent operator control plane by fixing command inconsistencies, context ergonomics, diagnostics, and unsafe/default-awkward CLI behavior.
-**Status:** Planned
+**Status:** Complete (2026-03-04) — 11.1 through 11.4 implemented.
 
 **Motivation:** Epics 8 and 9 improved reliability and added backend management, but the command surface still has avoidable friction: `config` vs `context` is split awkwardly, many remote commands ignore context defaults, `config view` exposes secrets, remote version skew is hard to detect, error output is often less actionable than it should be, and the command inventory does not line up cleanly with what operators expect.
 
 | # | Story | File |
 |---|-------|------|
-| 11.1 | Safe context lifecycle and config UX | [E11-S1](stories/E11-S1-safe-context-lifecycle-and-config-ux.md) |
-| 11.2 | Context-aware defaults for remote commands | [E11-S2](stories/E11-S2-context-aware-defaults-remote-commands.md) |
-| 11.3 | Remote diagnostics and version awareness | [E11-S3](stories/E11-S3-remote-diagnostics-and-version-awareness.md) |
-| 11.4 | Inventory and workflow guidance polish | [E11-S4](stories/E11-S4-inventory-and-workflow-guidance-polish.md) |
+| 11.1 | Safe context lifecycle and config UX (Completed) | [E11-S1](stories/E11-S1-safe-context-lifecycle-and-config-ux.md) |
+| 11.2 | Context-aware defaults for remote commands (Completed) | [E11-S2](stories/E11-S2-context-aware-defaults-remote-commands.md) |
+| 11.3 | Remote diagnostics and version awareness (Completed) | [E11-S3](stories/E11-S3-remote-diagnostics-and-version-awareness.md) |
+| 11.4 | Inventory and workflow guidance polish (Completed) | [E11-S4](stories/E11-S4-inventory-and-workflow-guidance-polish.md) |
 
 **Done when:** operators can inspect and manage contexts safely, use common remote commands without repeatedly restating the current website/environment, detect client/server skew quickly, and discover resource inventory and next steps from the CLI without reading the source.

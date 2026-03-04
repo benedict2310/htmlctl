@@ -5,19 +5,26 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/benedict2310/htmlctl/pkg/model"
 )
 
 type renderedStatics struct {
-	TokensHref  string
-	DefaultHref string
-	ScriptSrc   string
-	AssetMap    map[string]string
+	TokensHref          string
+	DefaultHref         string
+	ScriptSrc           string
+	AssetMap            map[string]string
+	ComponentStyleHrefs map[string]string
+	ComponentScriptSrcs map[string]string
 }
 
 func renderStatics(site *model.Site, outputDir string) (renderedStatics, error) {
-	statics := renderedStatics{AssetMap: map[string]string{}}
+	statics := renderedStatics{
+		AssetMap:            map[string]string{},
+		ComponentStyleHrefs: map[string]string{},
+		ComponentScriptSrcs: map[string]string{},
+	}
 
 	tokensRel, err := writeContentAddressedTextFile(outputDir, "styles", "tokens.css", site.Styles.TokensCSS)
 	if err != nil {
@@ -42,6 +49,24 @@ func renderStatics(site *model.Site, outputDir string) (renderedStatics, error) 
 			return statics, err
 		}
 		statics.ScriptSrc = "/" + filepath.ToSlash(scriptRel)
+	}
+
+	for _, name := range sortedComponentNames(site.Components) {
+		component := site.Components[name]
+		if strings.TrimSpace(component.CSS) != "" {
+			rel, err := writeContentAddressedTextFile(outputDir, "components", component.Name+".css", component.CSS)
+			if err != nil {
+				return statics, err
+			}
+			statics.ComponentStyleHrefs[component.Name] = "/" + filepath.ToSlash(rel)
+		}
+		if strings.TrimSpace(component.JS) != "" {
+			rel, err := writeContentAddressedTextFile(outputDir, "components", component.Name+".js", component.JS)
+			if err != nil {
+				return statics, err
+			}
+			statics.ComponentScriptSrcs[component.Name] = "/" + filepath.ToSlash(rel)
+		}
 	}
 
 	if err := renderBranding(site, outputDir); err != nil {
@@ -138,6 +163,15 @@ func brandingPublicFilename(slot string) (string, bool) {
 }
 
 func sortedBrandingSlots(v map[string]model.BrandingAsset) []string {
+	keys := make([]string, 0, len(v))
+	for k := range v {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func sortedComponentNames(v map[string]model.Component) []string {
 	keys := make([]string, 0, len(v))
 	for k := range v {
 		keys = append(keys, k)

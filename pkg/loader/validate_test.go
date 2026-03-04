@@ -161,6 +161,80 @@ func TestValidateSiteAllowsRelativeHeadURLs(t *testing.T) {
 	}
 }
 
+func TestValidateSiteRejectsRelativeComponentCSSURLs(t *testing.T) {
+	tests := []struct {
+		name string
+		css  string
+	}{
+		{
+			name: "relative path",
+			css:  `#header { background-image: url("../images/bg.png"); }`,
+		},
+		{
+			name: "https url",
+			css:  `#header { background-image: url("https://cdn.example.com/bg.png"); }`,
+		},
+		{
+			name: "data url",
+			css:  `#header { background-image: url("data:image/png;base64,AAAA"); }`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			site := &model.Site{
+				Website: model.Website{Metadata: model.Metadata{Name: "sample"}},
+				Components: map[string]model.Component{
+					"header": {
+						Name:  "header",
+						Scope: model.ComponentScopeGlobal,
+						HTML:  "<section id=\"header\"></section>",
+						CSS:   tc.css,
+					},
+				},
+				Pages: map[string]model.Page{
+					"index": {
+						Metadata: model.Metadata{Name: "index"},
+						Spec:     model.PageSpec{Route: "/", Layout: []model.PageLayoutItem{{Include: "header"}}},
+					},
+				},
+			}
+
+			err := ValidateSite(site)
+			if err == nil {
+				t.Fatalf("expected component css url validation error")
+			}
+			if !strings.Contains(err.Error(), "unsupported url() reference") {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateSiteAllowsComponentCSSAssetURLs(t *testing.T) {
+	site := &model.Site{
+		Website: model.Website{Metadata: model.Metadata{Name: "sample"}},
+		Components: map[string]model.Component{
+			"header": {
+				Name:  "header",
+				Scope: model.ComponentScopeGlobal,
+				HTML:  "<section id=\"header\"></section>",
+				CSS:   `#header { background-image: url("/assets/images/bg.png"); }`,
+			},
+		},
+		Pages: map[string]model.Page{
+			"index": {
+				Metadata: model.Metadata{Name: "index"},
+				Spec:     model.PageSpec{Route: "/", Layout: []model.PageLayoutItem{{Include: "header"}}},
+			},
+		},
+	}
+
+	if err := ValidateSite(site); err != nil {
+		t.Fatalf("ValidateSite() error = %v", err)
+	}
+}
+
 func TestValidateSiteEnforcesHeadMetadataLimits(t *testing.T) {
 	tooManyMeta := map[string]string{}
 	for i := 0; i < maxHeadMetaEntries+1; i++ {

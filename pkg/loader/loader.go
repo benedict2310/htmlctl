@@ -128,6 +128,37 @@ func loadComponents(root string) (map[string]model.Component, error) {
 		return nil, fmt.Errorf("read components directory %s: %w", dir, err)
 	}
 
+	type componentFiles struct {
+		html bool
+		css  bool
+		js   bool
+	}
+	filesByName := map[string]*componentFiles{}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		switch strings.ToLower(filepath.Ext(entry.Name())) {
+		case ".html", ".css", ".js":
+		default:
+			continue
+		}
+		name := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
+		files := filesByName[name]
+		if files == nil {
+			files = &componentFiles{}
+			filesByName[name] = files
+		}
+		switch strings.ToLower(filepath.Ext(entry.Name())) {
+		case ".html":
+			files.html = true
+		case ".css":
+			files.css = true
+		case ".js":
+			files.js = true
+		}
+	}
+
 	components := make(map[string]model.Component)
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".html" {
@@ -141,11 +172,44 @@ func loadComponents(root string) (map[string]model.Component, error) {
 		}
 
 		name := strings.TrimSuffix(entry.Name(), ".html")
-		components[name] = model.Component{
+		component := model.Component{
 			Name:  name,
 			Scope: model.ComponentScopeGlobal,
 			HTML:  normalizeLineEndings(string(content)),
 		}
+		if files := filesByName[name]; files != nil {
+			if files.css {
+				cssPath := filepath.Join(dir, name+".css")
+				cssContent, err := os.ReadFile(cssPath)
+				if err != nil {
+					return nil, fmt.Errorf("read component sidecar file %s: %w", cssPath, err)
+				}
+				component.CSS = normalizeLineEndings(string(cssContent))
+			}
+			if files.js {
+				jsPath := filepath.Join(dir, name+".js")
+				jsContent, err := os.ReadFile(jsPath)
+				if err != nil {
+					return nil, fmt.Errorf("read component sidecar file %s: %w", jsPath, err)
+				}
+				component.JS = normalizeLineEndings(string(jsContent))
+			}
+		}
+		components[name] = component
+	}
+
+	for name, files := range filesByName {
+		if files.html {
+			continue
+		}
+		var suffix string
+		switch {
+		case files.css:
+			suffix = ".css"
+		case files.js:
+			suffix = ".js"
+		}
+		return nil, fmt.Errorf("component sidecar file %s requires components/%s.html", name+suffix, name)
 	}
 
 	return components, nil

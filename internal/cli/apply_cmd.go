@@ -29,7 +29,7 @@ func newApplyCmd() *cobra.Command {
 	var dryRun bool
 
 	cmd := &cobra.Command{
-		Use:   "apply -f <site-dir>",
+		Use:   "apply -f <site-path>",
 		Short: "Apply local site resources to a remote environment",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			sourceDir, source, cleanup, err := resolveApplySource(cmd.Context(), from, fromGit, ref, subdir)
@@ -84,7 +84,7 @@ func newApplyCmd() *cobra.Command {
 			if format == output.FormatTable {
 				fmt.Fprintln(cmd.OutOrStdout(), "Bundling...")
 			}
-			archive, _, err := bundle.BuildTarFromDirWithOptions(sourceDir, website, bundle.BuildOptions{Source: source})
+			archive, _, err := bundle.BuildTarFromPathWithOptions(sourceDir, website, bundle.BuildOptions{Source: source})
 			if err != nil {
 				return fmt.Errorf("local validation failed: %w", err)
 			}
@@ -135,7 +135,7 @@ func newApplyCmd() *cobra.Command {
 	}
 
 	markRequiresTransport(cmd)
-	cmd.Flags().StringVarP(&from, "from", "f", "", "Source site directory")
+	cmd.Flags().StringVarP(&from, "from", "f", "", "Source site directory or supported site file path")
 	cmd.Flags().StringVar(&fromGit, "from-git", "", "Source Git repository (local path or remote URL)")
 	cmd.Flags().StringVar(&ref, "ref", "", "Pinned Git commit SHA for --from-git")
 	cmd.Flags().StringVar(&subdir, "subdir", "", "Repository subdirectory containing the site root")

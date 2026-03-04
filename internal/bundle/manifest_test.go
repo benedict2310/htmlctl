@@ -77,19 +77,18 @@ func TestParseManifestAssetMustHaveExactlyOneFile(t *testing.T) {
 	}
 }
 
-func TestParseManifestComponentMustHaveExactlyOneFile(t *testing.T) {
+func TestParseManifestComponentRequiresHTMLFile(t *testing.T) {
 	data := []byte(`{
 		"mode":"partial",
 		"website":"sample",
 		"resources":[
 			{"kind":"Component","name":"header","files":[
-				{"file":"components/header.html","hash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
 				{"file":"components/header.css","hash":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}
 			]}
 		]
 	}`)
 	if _, err := ParseManifest(data); err == nil {
-		t.Fatalf("expected multiple component file error")
+		t.Fatalf("expected missing component html error")
 	}
 }
 

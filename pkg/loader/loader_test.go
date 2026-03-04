@@ -114,6 +114,47 @@ func TestLoadSiteOptionalScriptMissing(t *testing.T) {
 	}
 }
 
+func TestLoadSiteComponentSidecars(t *testing.T) {
+	root := t.TempDir()
+	copyFixture(t, filepath.Join("..", "..", "testdata", "valid-site"), root)
+
+	if err := os.WriteFile(filepath.Join(root, "components", "header.css"), []byte("#header { color: red; }\n"), 0o644); err != nil {
+		t.Fatalf("write header.css: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "components", "header.js"), []byte("console.log('header');\n"), 0o644); err != nil {
+		t.Fatalf("write header.js: %v", err)
+	}
+
+	site, err := LoadSite(root)
+	if err != nil {
+		t.Fatalf("LoadSite() error = %v", err)
+	}
+	component := site.Components["header"]
+	if !strings.Contains(component.CSS, "color: red") {
+		t.Fatalf("expected component css to load, got %q", component.CSS)
+	}
+	if !strings.Contains(component.JS, "console.log") {
+		t.Fatalf("expected component js to load, got %q", component.JS)
+	}
+}
+
+func TestLoadSiteRejectsOrphanComponentSidecar(t *testing.T) {
+	root := t.TempDir()
+	copyFixture(t, filepath.Join("..", "..", "testdata", "valid-site"), root)
+
+	if err := os.WriteFile(filepath.Join(root, "components", "missing.css"), []byte(".x {}\n"), 0o644); err != nil {
+		t.Fatalf("write missing.css: %v", err)
+	}
+
+	_, err := LoadSite(root)
+	if err == nil {
+		t.Fatalf("expected orphan component sidecar error")
+	}
+	if !strings.Contains(err.Error(), "missing.css") {
+		t.Fatalf("expected orphan sidecar error, got %v", err)
+	}
+}
+
 func TestLoadSiteWebsiteBrandingIcons(t *testing.T) {
 	root := t.TempDir()
 	for _, dir := range []string{"pages", "styles", "branding"} {

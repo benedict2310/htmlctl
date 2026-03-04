@@ -161,9 +161,14 @@ func (r Resource) validate(mode string) error {
 		}
 	}
 	switch kind {
-	case "component", "page", "asset", "script", "website", "websiteicon":
+	case "page", "asset", "script", "website", "websiteicon":
 		if len(entries) != 1 {
 			return fmt.Errorf("%s resources must reference exactly one file", kind)
+		}
+	}
+	if kind == "component" {
+		if err := validateComponentEntries(strings.TrimSpace(r.Name), entries); err != nil {
+			return err
 		}
 	}
 	if kind == "asset" || kind == "script" {
@@ -185,6 +190,41 @@ func (r Resource) validate(mode string) error {
 		if !validNames[strings.TrimSpace(r.Name)] {
 			return fmt.Errorf("invalid websiteicon name %q", r.Name)
 		}
+	}
+	return nil
+}
+
+func validateComponentEntries(name string, entries []FileRef) error {
+	if name == "" {
+		return fmt.Errorf("name is required")
+	}
+	basePath := "components/" + name
+	seen := map[string]bool{}
+	hasHTML := false
+	for _, entry := range entries {
+		switch entry.File {
+		case basePath + ".html":
+			if seen["html"] {
+				return fmt.Errorf("component resource includes duplicate html file")
+			}
+			seen["html"] = true
+			hasHTML = true
+		case basePath + ".css":
+			if seen["css"] {
+				return fmt.Errorf("component resource includes duplicate css file")
+			}
+			seen["css"] = true
+		case basePath + ".js":
+			if seen["js"] {
+				return fmt.Errorf("component resource includes duplicate js file")
+			}
+			seen["js"] = true
+		default:
+			return fmt.Errorf("component resource file %q must match %q, %q, or %q", entry.File, basePath+".html", basePath+".css", basePath+".js")
+		}
+	}
+	if !hasHTML {
+		return fmt.Errorf("component resources must include %q", basePath+".html")
 	}
 	return nil
 }

@@ -96,11 +96,11 @@ func collectUnsafeHTMLViolations(componentName string, root *html.Node) []Valida
 		}
 		if node.Type == html.ElementNode {
 			if node.DataAtom == atom.Script {
-				errs = append(errs, newError(componentName, "script-disallow", "<script> tags are not allowed in components; move JavaScript to scripts/site.js"))
+				errs = append(errs, newError(componentName, "script-disallow", fmt.Sprintf("<script> tags are not allowed in components; move JavaScript to components/%s.js or scripts/site.js", componentName)))
 			}
 			for _, attr := range node.Attr {
 				if inlineEventAttrPattern.MatchString(attr.Key) {
-					errs = append(errs, newError(componentName, "event-handler-disallow", fmt.Sprintf("inline event handler attribute %q is not allowed in components; move JavaScript to scripts/site.js", attr.Key)))
+					errs = append(errs, newError(componentName, "event-handler-disallow", fmt.Sprintf("inline event handler attribute %q is not allowed in components; move JavaScript to components/%s.js or scripts/site.js", attr.Key, componentName)))
 				}
 			}
 		}

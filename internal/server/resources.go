@@ -350,6 +350,18 @@ func (s *Server) handleManifest(w http.ResponseWriter, r *http.Request) {
 			s.writeInternalAPIError(w, r, "build desired-state manifest failed", err, "website", website, "environment", env)
 			return
 		}
+		if strings.TrimSpace(row.CSSHash) != "" {
+			if err := addManifestEntry(byPath, path.Join("components", row.Name+".css"), row.CSSHash); err != nil {
+				s.writeInternalAPIError(w, r, "build desired-state manifest failed", err, "website", website, "environment", env)
+				return
+			}
+		}
+		if strings.TrimSpace(row.JSHash) != "" {
+			if err := addManifestEntry(byPath, path.Join("components", row.Name+".js"), row.JSHash); err != nil {
+				s.writeInternalAPIError(w, r, "build desired-state manifest failed", err, "website", website, "environment", env)
+				return
+			}
+		}
 	}
 	for _, row := range styleBundles {
 		refs := []bundle.FileRef{}

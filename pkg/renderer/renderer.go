@@ -38,7 +38,7 @@ func Render(site *model.Site, outputDir string) error {
 		return fmt.Errorf("render website icons: %w", err)
 	}
 	for _, page := range pages {
-		contentHTML, err := stitchComponents(page.Spec.Layout, site.Components)
+		contentHTML, componentOrder, err := stitchComponents(page.Spec.Layout, site.Components)
 		if err != nil {
 			return fmt.Errorf("stitch page %q: %w", page.Metadata.Name, err)
 		}
@@ -47,14 +47,28 @@ func Render(site *model.Site, outputDir string) error {
 			return fmt.Errorf("render head metadata for page %q: %w", page.Metadata.Name, err)
 		}
 
+		styleHrefs := []string{statics.TokensHref, statics.DefaultHref}
+		for _, componentName := range componentOrder {
+			if href := statics.ComponentStyleHrefs[componentName]; href != "" {
+				styleHrefs = append(styleHrefs, href)
+			}
+		}
+		componentScriptSrcs := make([]string, 0, len(componentOrder))
+		for _, componentName := range componentOrder {
+			if src := statics.ComponentScriptSrcs[componentName]; src != "" {
+				componentScriptSrcs = append(componentScriptSrcs, src)
+			}
+		}
+
 		htmlBytes, err := renderDefaultTemplate(pageTemplateData{
-			Title:            page.Spec.Title,
-			Description:      page.Spec.Description,
-			WebsiteIconsHTML: websiteIconsHTML,
-			HeadMetaHTML:     headMetaHTML,
-			StyleHrefs:       []string{statics.TokensHref, statics.DefaultHref},
-			ContentHTML:      template.HTML(contentHTML),
-			ScriptSrc:        statics.ScriptSrc,
+			Title:              page.Spec.Title,
+			Description:        page.Spec.Description,
+			WebsiteIconsHTML:   websiteIconsHTML,
+			HeadMetaHTML:       headMetaHTML,
+			StyleHrefs:         styleHrefs,
+			ContentHTML:        template.HTML(contentHTML),
+			ScriptSrc:          statics.ScriptSrc,
+			DeferredScriptSrcs: componentScriptSrcs,
 		})
 		if err != nil {
 			return fmt.Errorf("render page %q: %w", page.Metadata.Name, err)
@@ -88,20 +102,26 @@ func sortedPages(pages map[string]model.Page) []model.Page {
 	return out
 }
 
-func stitchComponents(layout []model.PageLayoutItem, components map[string]model.Component) (string, error) {
+func stitchComponents(layout []model.PageLayoutItem, components map[string]model.Component) (string, []string, error) {
 	chunks := make([]string, 0, len(layout))
+	componentOrder := make([]string, 0, len(layout))
+	seen := map[string]struct{}{}
 	for _, item := range layout {
 		include := strings.TrimSpace(item.Include)
 		component, ok := components[include]
 		if !ok {
-			return "", fmt.Errorf("missing component %q", include)
+			return "", nil, fmt.Errorf("missing component %q", include)
 		}
 		chunks = append(chunks, strings.TrimRight(normalizeLFString(component.HTML), "\n"))
+		if _, ok := seen[include]; !ok {
+			componentOrder = append(componentOrder, include)
+			seen[include] = struct{}{}
+		}
 	}
 	if len(chunks) == 0 {
-		return "", nil
+		return "", nil, nil
 	}
-	return strings.Join(chunks, "\n") + "\n", nil
+	return strings.Join(chunks, "\n") + "\n", componentOrder, nil
 }
 
 func routeToOutputPath(route string) (string, error) {

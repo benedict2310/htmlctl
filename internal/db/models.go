@@ -64,6 +64,8 @@ type ComponentRow struct {
 	Name        string
 	Scope       string
 	ContentHash string
+	CSSHash     string
+	JSHash      string
 	CreatedAt   string
 	UpdatedAt   string
 }

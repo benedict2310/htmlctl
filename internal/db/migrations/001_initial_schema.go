@@ -153,5 +153,10 @@ func All() []Migration {
 			Name:    "auth_policies",
 			UpSQL:   authPoliciesMigrationSQL,
 		},
+		{
+			Version: 10,
+			Name:    "component_fragments",
+			UpSQL:   componentFragmentsMigrationSQL,
+		},
 	}
 }

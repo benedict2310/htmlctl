@@ -223,6 +223,62 @@ func TestApplyEndpointHashMismatch(t *testing.T) {
 	}
 }
 
+func TestApplyEndpointPersistsComponentSidecars(t *testing.T) {
+	srv := startTestServer(t)
+	baseURL := "http://" + srv.Addr()
+
+	component := []byte("<section id=\"header\">Header</section>")
+	componentCSS := []byte("#header { color: red; }")
+	componentJS := []byte("console.log('header')")
+	body := tarBody(t, map[string][]byte{
+		"components/header.html": component,
+		"components/header.css":  componentCSS,
+		"components/header.js":   componentJS,
+	}, map[string]any{
+		"apiVersion": "htmlctl.dev/v1",
+		"kind":       "Bundle",
+		"mode":       "partial",
+		"website":    "sample",
+		"resources": []map[string]any{
+			{
+				"kind": "Component",
+				"name": "header",
+				"files": []map[string]any{
+					{"file": "components/header.html", "hash": "sha256:" + sha256Hex(component)},
+					{"file": "components/header.css", "hash": "sha256:" + sha256Hex(componentCSS)},
+					{"file": "components/header.js", "hash": "sha256:" + sha256Hex(componentJS)},
+				},
+			},
+		},
+	})
+
+	resp := postBundle(t, baseURL+"/api/v1/websites/sample/environments/staging/apply", body)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d body=%s", resp.StatusCode, string(b))
+	}
+
+	q := dbpkg.NewQueries(srv.db)
+	websiteRow, err := q.GetWebsiteByName(context.Background(), "sample")
+	if err != nil {
+		t.Fatalf("GetWebsiteByName() error = %v", err)
+	}
+	rows, err := q.ListComponentsByWebsite(context.Background(), websiteRow.ID)
+	if err != nil {
+		t.Fatalf("ListComponentsByWebsite() error = %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected one component row, got %d", len(rows))
+	}
+	if rows[0].CSSHash != "sha256:"+sha256Hex(componentCSS) {
+		t.Fatalf("unexpected css hash %q", rows[0].CSSHash)
+	}
+	if rows[0].JSHash != "sha256:"+sha256Hex(componentJS) {
+		t.Fatalf("unexpected js hash %q", rows[0].JSHash)
+	}
+}
+
 func TestApplyEndpointInternalErrorIsSanitized(t *testing.T) {
 	srv := startTestServer(t)
 	baseURL := "http://" + srv.Addr()

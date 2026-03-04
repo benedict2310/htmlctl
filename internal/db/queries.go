@@ -155,7 +155,7 @@ func (q *Queries) DeletePageByName(ctx context.Context, websiteID int64, name st
 }
 
 func (q *Queries) InsertComponent(ctx context.Context, in ComponentRow) (int64, error) {
-	res, err := q.db.ExecContext(ctx, `INSERT INTO components(website_id, name, scope, content_hash) VALUES(?, ?, ?, ?)`, in.WebsiteID, in.Name, in.Scope, in.ContentHash)
+	res, err := q.db.ExecContext(ctx, `INSERT INTO components(website_id, name, scope, content_hash, css_hash, js_hash) VALUES(?, ?, ?, ?, ?, ?)`, in.WebsiteID, in.Name, in.Scope, in.ContentHash, strings.TrimSpace(in.CSSHash), strings.TrimSpace(in.JSHash))
 	if err != nil {
 		return 0, fmt.Errorf("insert component: %w", err)
 	}
@@ -164,13 +164,15 @@ func (q *Queries) InsertComponent(ctx context.Context, in ComponentRow) (int64, 
 
 func (q *Queries) UpsertComponent(ctx context.Context, in ComponentRow) error {
 	_, err := q.db.ExecContext(ctx, `
-INSERT INTO components(website_id, name, scope, content_hash)
-VALUES(?, ?, ?, ?)
+INSERT INTO components(website_id, name, scope, content_hash, css_hash, js_hash)
+VALUES(?, ?, ?, ?, ?, ?)
 ON CONFLICT(website_id, name) DO UPDATE SET
   scope=excluded.scope,
   content_hash=excluded.content_hash,
+  css_hash=excluded.css_hash,
+  js_hash=excluded.js_hash,
   updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
-`, in.WebsiteID, in.Name, in.Scope, in.ContentHash)
+`, in.WebsiteID, in.Name, in.Scope, in.ContentHash, strings.TrimSpace(in.CSSHash), strings.TrimSpace(in.JSHash))
 	if err != nil {
 		return fmt.Errorf("upsert component: %w", err)
 	}
@@ -178,7 +180,7 @@ ON CONFLICT(website_id, name) DO UPDATE SET
 }
 
 func (q *Queries) ListComponentsByWebsite(ctx context.Context, websiteID int64) ([]ComponentRow, error) {
-	rows, err := q.db.QueryContext(ctx, `SELECT id, website_id, name, scope, content_hash, created_at, updated_at FROM components WHERE website_id = ? ORDER BY name`, websiteID)
+	rows, err := q.db.QueryContext(ctx, `SELECT id, website_id, name, scope, content_hash, css_hash, js_hash, created_at, updated_at FROM components WHERE website_id = ? ORDER BY name`, websiteID)
 	if err != nil {
 		return nil, fmt.Errorf("list components by website: %w", err)
 	}
@@ -187,7 +189,7 @@ func (q *Queries) ListComponentsByWebsite(ctx context.Context, websiteID int64) 
 	out := []ComponentRow{}
 	for rows.Next() {
 		var row ComponentRow
-		if err := rows.Scan(&row.ID, &row.WebsiteID, &row.Name, &row.Scope, &row.ContentHash, &row.CreatedAt, &row.UpdatedAt); err != nil {
+		if err := rows.Scan(&row.ID, &row.WebsiteID, &row.Name, &row.Scope, &row.ContentHash, &row.CSSHash, &row.JSHash, &row.CreatedAt, &row.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan component row: %w", err)
 		}
 		out = append(out, row)
@@ -654,6 +656,8 @@ func (q *Queries) ListReferencedBlobHashes(ctx context.Context) ([]string, error
 		`SELECT content_hash FROM websites WHERE TRIM(content_hash) <> ''`,
 		`SELECT content_hash FROM pages WHERE TRIM(content_hash) <> ''`,
 		`SELECT content_hash FROM components WHERE TRIM(content_hash) <> ''`,
+		`SELECT css_hash FROM components WHERE TRIM(css_hash) <> ''`,
+		`SELECT js_hash FROM components WHERE TRIM(js_hash) <> ''`,
 		`SELECT content_hash FROM assets WHERE TRIM(content_hash) <> ''`,
 		`SELECT content_hash FROM website_icons WHERE TRIM(content_hash) <> ''`,
 	}

@@ -153,18 +153,20 @@ spec:
 
 ### 2.4 Component
 
-Stored as HTML fragment, strongly validated.
+Stored as HTML fragment with optional sidecar CSS/JS, strongly validated.
 
 - `name`: string (e.g., `pricing`)
 - `scope`: default global; optional page-scoped later
 - `html`: string (file content)
-- optional: `cssFragment` (post-v1)
-- optional: `jsFragment` (post-v1) — in v1, JS is via `scripts/site.js`
+- optional `components/<name>.css` sidecar
+- optional `components/<name>.js` sidecar
 
 Component file rule:
 
 - **Exactly one root element**.
 - For anchor-nav components, root must include `id="<componentName>"`.
+- Sidecars are emitted as external files only; no inline `<style>` or inline `<script>` blocks.
+- Relative `url(...)` references in component CSS are rejected in v1; use absolute `/assets/...` URLs.
 
 Example `components/pricing.html`:
 
@@ -281,6 +283,8 @@ Pages are not full HTML docs; they are layouts that reference components. Render
 - Layout includes inserted in order into `<main>`
 - `scripts/site.js` injected at end of body if present
 - Stylesheets injected into `<head>`
+- Component CSS sidecars injected after global styles in first-use layout order
+- Component JS sidecars injected after `scripts/site.js` with `defer` in first-use layout order
 - `spec.head` metadata is rendered directly into `<head>` (no runtime JS injection path)
 - Website icon files from `branding/` are copied verbatim into conventional root paths during release materialization:
   - `/favicon.svg`
@@ -310,7 +314,7 @@ Pages are not full HTML docs; they are layouts that reference components. Render
 
 ### 3.2 Determinism requirements
 
-- Stable ordering for injections (styles, scripts)
+- Stable ordering for injections (global styles, component styles, global script, component scripts)
 - Stable ordering for head metadata tags and JSON-LD block emission
 - Normalized line endings (LF)
 - No time-dependent output
@@ -354,7 +358,8 @@ For any environment apply:
 - Exactly one root element.
 - Root tag allowlist: `section|header|footer|main|nav|article|div` (configurable).
 - If component is anchor-navigable: root must include `id="<componentName>"`.
-- In v1, disallow `<script>` tags and inline event handler attributes matching `(?i)^on\w+$` in components (JS only from `scripts/site.js`).
+- In v1, disallow `<script>` tags and inline event handler attributes matching `(?i)^on\w+$` in component HTML.
+- Component behavior belongs in external JS files (`components/<name>.js` or `scripts/site.js`), never inline HTML script or event-handler content.
 
 ### 6.2 Page validation
 
@@ -485,6 +490,7 @@ Remote ops:
 
 - `htmlctl diff -f ./site --context staging`
 - `htmlctl apply -f ./site --context staging [--dry-run]`
+- `htmlctl apply -f ./components/hero.css --context staging`
 - `htmlctl apply --from-git <repo> --ref <commit-sha> [--subdir site] --context staging [--dry-run]`
 - `htmlctl status website/sample --context staging`
 - `htmlctl get domains --context staging`
@@ -537,9 +543,11 @@ Domains:
 Although the server always creates a full release, the CLI supports applying only changed files:
 
 - `htmlctl apply -f components/pricing.html --context staging`
+- `htmlctl apply -f components/pricing.css --context staging`
+- `htmlctl apply -f components/pricing.js --context staging`
 - `htmlctl apply -f styles/default.css --context staging`
 
-Server merges into last known desired state for that environment, validates, renders, releases.
+For component sidecars, the CLI resolves the owning component and bundles its current HTML plus any present sidecars into one partial component resource before upload. Server merges into last known desired state for that environment, validates, renders, releases.
 
 ## 10. Implementation notes (Go v1)
 

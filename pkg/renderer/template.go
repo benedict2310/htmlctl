@@ -13,8 +13,9 @@ type pageTemplateData struct {
 	HeadMetaHTML     template.HTML
 	StyleHrefs       []string
 	// ContentHTML is trusted component markup; all other fields remain auto-escaped.
-	ContentHTML template.HTML
-	ScriptSrc   string
+	ContentHTML        template.HTML
+	ScriptSrc          string
+	DeferredScriptSrcs []string
 }
 
 const defaultPageTemplate = `<!DOCTYPE html>
@@ -38,6 +39,9 @@ const defaultPageTemplate = `<!DOCTYPE html>
   </main>
 {{- if .ScriptSrc }}
   <script src="{{.ScriptSrc}}"></script>
+{{- end }}
+{{- range .DeferredScriptSrcs }}
+  <script src="{{.}}" defer></script>
 {{- end }}
 </body>
 </html>

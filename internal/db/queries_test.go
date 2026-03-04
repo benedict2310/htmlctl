@@ -1646,6 +1646,8 @@ func TestListReferencedBlobHashes(t *testing.T) {
 		Name:        "header",
 		Scope:       "global",
 		ContentHash: hashRef("component"),
+		CSSHash:     hashRef("component-css"),
+		JSHash:      hashRef("component-js"),
 	}); err != nil {
 		t.Fatalf("InsertComponent() error = %v", err)
 	}
@@ -1684,6 +1686,8 @@ func TestListReferencedBlobHashes(t *testing.T) {
 		hashHex("default"),
 		hashHex("asset"),
 		hashHex("component"),
+		hashHex("component-css"),
+		hashHex("component-js"),
 		hashHex("icon"),
 		hashHex("website"),
 		hashHex("page"),

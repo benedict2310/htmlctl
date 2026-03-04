@@ -108,6 +108,8 @@ type Component struct {
 	Name  string
 	Scope string
 	HTML  string
+	CSS   string
+	JS    string
 }
 
 type StyleBundle struct {

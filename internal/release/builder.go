@@ -368,6 +368,8 @@ func (s desiredState) Manifest() manifestSnapshot {
 			"name":        row.Name,
 			"scope":       row.Scope,
 			"contentHash": row.ContentHash,
+			"cssHash":     row.CSSHash,
+			"jsHash":      row.JSHash,
 		})
 	}
 	styleBundles := make([]map[string]any, 0, len(s.StyleBundles))
@@ -496,6 +498,24 @@ func (b *Builder) materializeSource(ctx context.Context, sourceDir string, state
 		}
 		if err := writeFile(filepath.Join(sourceDir, "components", componentName+".html"), content); err != nil {
 			return fmt.Errorf("write component %q: %w", row.Name, err)
+		}
+		if strings.TrimSpace(row.CSSHash) != "" {
+			content, err := b.readBlob(ctx, row.CSSHash)
+			if err != nil {
+				return fmt.Errorf("load component css %q blob: %w", row.Name, err)
+			}
+			if err := writeFile(filepath.Join(sourceDir, "components", componentName+".css"), content); err != nil {
+				return fmt.Errorf("write component css %q: %w", row.Name, err)
+			}
+		}
+		if strings.TrimSpace(row.JSHash) != "" {
+			content, err := b.readBlob(ctx, row.JSHash)
+			if err != nil {
+				return fmt.Errorf("load component js %q blob: %w", row.Name, err)
+			}
+			if err := writeFile(filepath.Join(sourceDir, "components", componentName+".js"), content); err != nil {
+				return fmt.Errorf("write component js %q: %w", row.Name, err)
+			}
 		}
 	}
 

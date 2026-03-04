@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/benedict2310/htmlctl/pkg/model"
 )
+
+var cssURLPattern = regexp.MustCompile(`(?is)url\(\s*([^)]*?)\s*\)`)
 
 const (
 	maxHeadURLLength          = 2048
@@ -77,6 +80,28 @@ func ValidateSite(site *model.Site) error {
 		}
 	}
 
+	for componentName, component := range site.Components {
+		if err := ValidateComponentCSSSidecar(componentName, component.CSS); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ValidateComponentCSSSidecar enforces the v1 component CSS url() policy.
+func ValidateComponentCSSSidecar(componentName, css string) error {
+	for _, match := range cssURLPattern.FindAllStringSubmatch(css, -1) {
+		ref := strings.Trim(strings.TrimSpace(match[1]), `"'`)
+		switch {
+		case ref == "":
+			continue
+		case strings.HasPrefix(ref, "/assets/"):
+			continue
+		default:
+			return fmt.Errorf("component %q css sidecar contains unsupported url() reference %q; use an absolute /assets/... URL", componentName, ref)
+		}
+	}
 	return nil
 }
 

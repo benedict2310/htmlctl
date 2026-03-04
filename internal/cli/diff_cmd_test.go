@@ -3,6 +3,8 @@ package cli
 import (
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -54,6 +56,31 @@ func TestDiffCommandNoChangesReturnsExitCodeZero(t *testing.T) {
 	}
 
 	out, _, err := runCommandWithTransport(t, []string{"diff", "-f", siteDir}, tr)
+	if err != nil {
+		t.Fatalf("expected no diff error, got %v", err)
+	}
+	if !strings.Contains(out, "No changes detected.") {
+		t.Fatalf("unexpected diff output: %s", out)
+	}
+}
+
+func TestDiffCommandForSingleFileUsesContainingSiteState(t *testing.T) {
+	siteDir := writeApplySiteFixture(t)
+	if err := os.WriteFile(filepath.Join(siteDir, "components", "header.css"), []byte("#header { color: red; }\n"), 0o644); err != nil {
+		t.Fatalf("write header.css: %v", err)
+	}
+	remotePayload := buildManifestPayloadForSite(t, siteDir)
+
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			if call != 0 {
+				t.Fatalf("unexpected transport call %d: %#v", call, req)
+			}
+			return jsonHTTPResponse(200, remotePayload), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"diff", "-f", filepath.Join(siteDir, "components", "header.css")}, tr)
 	if err != nil {
 		t.Fatalf("expected no diff error, got %v", err)
 	}

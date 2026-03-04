@@ -3,6 +3,8 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/benedict2310/htmlctl/internal/bundle"
 	"github.com/benedict2310/htmlctl/internal/client"
@@ -10,7 +12,11 @@ import (
 )
 
 func computeDesiredStateDiff(ctx context.Context, api *client.APIClient, website, environment, from string) (diffpkg.Report, error) {
-	_, localManifest, err := bundle.BuildTarFromDir(from, website)
+	sourceRoot, err := diffSourceRoot(from)
+	if err != nil {
+		return diffpkg.Report{}, fmt.Errorf("local validation failed: %w", err)
+	}
+	_, localManifest, err := bundle.BuildTarFromDir(sourceRoot, website)
 	if err != nil {
 		return diffpkg.Report{}, fmt.Errorf("local validation failed: %w", err)
 	}
@@ -46,4 +52,30 @@ func computeDesiredStateDiff(ctx context.Context, api *client.APIClient, website
 		Environment: environment,
 		Result:      result,
 	}, nil
+}
+
+func diffSourceRoot(from string) (string, error) {
+	info, err := os.Stat(from)
+	if err != nil {
+		return "", fmt.Errorf("stat source path %s: %w", from, err)
+	}
+	if info.IsDir() {
+		return from, nil
+	}
+	abs, err := filepath.Abs(from)
+	if err != nil {
+		return "", fmt.Errorf("resolve source path: %w", err)
+	}
+	current := filepath.Dir(abs)
+	for {
+		if _, err := os.Stat(filepath.Join(current, "website.yaml")); err == nil {
+			return current, nil
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			break
+		}
+		current = parent
+	}
+	return "", fmt.Errorf("source file %s is not inside a site root containing website.yaml", from)
 }

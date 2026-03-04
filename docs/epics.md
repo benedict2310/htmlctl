@@ -149,17 +149,17 @@ by guarding the field with `sync.RWMutex`. All 428 tests pass clean under `-race
 ## Epic 10 — Review, Automation, and Lifecycle
 
 **Goal:** Extend htmlctl from a static-site deployment control plane into a fuller publishing platform with draft review URLs, reproducible Git-driven deployment, visitor access control, storage lifecycle management, and richer component delivery.
-**Status:** Planned
+**Status:** Implemented (2026-03-04) — 10.1 through 10.5 implemented.
 
 **Motivation:** Epics 1-9 established deterministic rendering, safe release promotion, production TLS/domain routing, telemetry, and environment-specific backends. The next set of features should increase operator leverage without undermining those guarantees: review non-active releases safely, deploy from source control without manual checkout steps, protect selected paths, control storage growth, and let components carry scoped behavior without falling back to large global bundles.
 
 | # | Story | File |
 |---|-------|------|
-| 10.1 | Preview URLs for draft releases | [E10-S1](stories/E10-S1-preview-urls-draft-releases.md) |
-| 10.2 | Git input mode for `apply` | [E10-S2](stories/E10-S2-git-input-apply.md) |
-| 10.3 | Path-based auth policies | [E10-S3](stories/E10-S3-path-auth-policies.md) |
-| 10.4 | Release retention and storage GC | [E10-S4](stories/E10-S4-release-retention-and-gc.md) |
-| 10.5 | Component-scoped CSS/JS fragments | [E10-S5](stories/E10-S5-component-scoped-css-js-fragments.md) |
+| 10.1 | Preview URLs for draft releases (Implemented) | [E10-S1](stories/E10-S1-preview-urls-draft-releases.md) |
+| 10.2 | Git input mode for `apply` (Implemented) | [E10-S2](stories/E10-S2-git-input-apply.md) |
+| 10.3 | Path-based auth policies (Implemented) | [E10-S3](stories/E10-S3-path-auth-policies.md) |
+| 10.4 | Release retention and storage GC (Implemented) | [E10-S4](stories/E10-S4-release-retention-and-gc.md) |
+| 10.5 | Component-scoped CSS/JS fragments (Implemented) | [E10-S5](stories/E10-S5-component-scoped-css-js-fragments.md) |
 
 **Done when:** operators can create expiring preview hosts for specific releases, deploy a site directly from a pinned Git ref, gate selected prefixes with stored auth policies, prune old storage safely without breaking rollback or previews, and ship per-component CSS/JS sidecars deterministically.
 

@@ -337,7 +337,7 @@ func TestRenderDeterministicAcrossRuns(t *testing.T) {
 }
 
 func TestStitchComponentsPreservesLayoutOrder(t *testing.T) {
-	content, err := stitchComponents(
+	content, order, err := stitchComponents(
 		[]model.PageLayoutItem{
 			{Include: "header"},
 			{Include: "hero"},
@@ -356,6 +356,9 @@ func TestStitchComponentsPreservesLayoutOrder(t *testing.T) {
 	expected := "<section id=\"header\"></section>\n<section id=\"hero\"></section>\n<footer id=\"footer\"></footer>\n"
 	if content != expected {
 		t.Fatalf("unexpected component stitching order:\n%s", content)
+	}
+	if got := strings.Join(order, ","); got != "header,hero,footer" {
+		t.Fatalf("unexpected component order %q", got)
 	}
 }
 

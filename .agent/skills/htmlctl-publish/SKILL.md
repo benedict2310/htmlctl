@@ -26,11 +26,15 @@ The server is the **source of truth**. `htmlservd` stores all desired state in S
 
 **Read this before writing any component HTML.** The validator enforces these at apply time:
 
-- **No `<script>` tags** inside components — JS belongs in `scripts/site.js` (injected at end of `<body>` on every page).
+- **No `<script>` tags** inside component HTML — JS belongs in `components/<name>.js` or `scripts/site.js`.
 - **Exactly one root element** per component file.
 - **Root tag must be one of:** `section`, `header`, `footer`, `main`, `nav`, `article`, `div`.
 - **No inline event handlers** (`onclick`, `onload`, etc.) — rejected at validation time.
 - If the component is anchor-navigable, root element **must** have `id="<componentName>"`.
+- Optional sidecars live next to the HTML file:
+  - `components/<name>.css`
+  - `components/<name>.js`
+- Component CSS sidecars must not use relative `url(...)` references in v1. Use absolute `/assets/...` URLs instead.
 
 See `references/resource-schemas.md` for the full schema.
 
@@ -158,6 +162,7 @@ htmlctl diff -f site/ --context staging
 
 # 2. Apply changed file(s)
 htmlctl apply -f components/projects.html --context staging
+htmlctl apply -f components/projects.css --context staging
 #   or the full site:
 htmlctl apply -f site/ --context staging
 

@@ -251,17 +251,24 @@ func (a *Applier) Apply(ctx context.Context, websiteName, envName string, b bund
 		}
 
 		for i, ref := range entries {
-			content, ok := b.Files[ref.File]
-			if !ok {
+			if _, ok := b.Files[ref.File]; !ok {
 				return out, badRequestf("resource %q references missing file %q", res.Name, ref.File)
 			}
 			canonicalHash, err := bundle.CanonicalHash(ref.Hash)
 			if err != nil {
 				return out, badRequestf("resource %q has invalid hash %q: %v", res.Name, ref.Hash, err)
 			}
-			hashHex, _ := bundle.HashHex(canonicalHash)
 			entries[i].Hash = canonicalHash
-			if !dryRun {
+		}
+		if kind == "component" {
+			if err := validateComponentResourceSidecars(res.Name, entries, b.Files); err != nil {
+				return out, badRequestf("component %q: %v", res.Name, err)
+			}
+		}
+		if !dryRun {
+			for _, ref := range entries {
+				content := b.Files[ref.File]
+				hashHex, _ := bundle.HashHex(ref.Hash)
 				if _, err := a.blobs.Put(ctx, hashHex, content); err != nil {
 					return out, fmt.Errorf("store blob %s for %q: %w", hashHex, ref.File, err)
 				}
@@ -325,10 +332,13 @@ func (a *Applier) Apply(ctx context.Context, websiteName, envName string, b bund
 			out.Accepted = append(out.Accepted, AcceptedResource{Kind: "WebsiteIcon", Name: res.Name, Hash: input.hash})
 
 		case "component":
-			ref := entries[0]
+			htmlHash, cssHash, jsHash, err := componentHashesForResource(res.Name, entries)
+			if err != nil {
+				return out, badRequestf("component %q: %v", res.Name, err)
+			}
 			if existing, ok := componentByName[res.Name]; !ok {
 				out.Changes.Created++
-			} else if existing.ContentHash != ref.Hash || existing.Scope != "global" {
+			} else if existing.ContentHash != htmlHash || existing.CSSHash != cssHash || existing.JSHash != jsHash || existing.Scope != "global" {
 				out.Changes.Updated++
 			}
 			if !dryRun {
@@ -336,13 +346,15 @@ func (a *Applier) Apply(ctx context.Context, websiteName, envName string, b bund
 					WebsiteID:   website.ID,
 					Name:        res.Name,
 					Scope:       "global",
-					ContentHash: ref.Hash,
+					ContentHash: htmlHash,
+					CSSHash:     cssHash,
+					JSHash:      jsHash,
 				}); err != nil {
 					return out, fmt.Errorf("upsert component %q: %w", res.Name, err)
 				}
 			}
 			keepComponents[res.Name] = struct{}{}
-			out.Accepted = append(out.Accepted, AcceptedResource{Kind: "Component", Name: res.Name, Hash: ref.Hash})
+			out.Accepted = append(out.Accepted, AcceptedResource{Kind: "Component", Name: res.Name, Hash: resourceFilesHash(entries)})
 
 		case "page":
 			ref := entries[0]
@@ -664,12 +676,68 @@ func normalizeRoute(route string) string {
 }
 
 func styleBundleHash(files []bundle.FileRef) string {
+	return resourceFilesHash(files)
+}
+
+func resourceFilesHash(files []bundle.FileRef) string {
 	if len(files) == 1 {
 		return files[0].Hash
 	}
-	b, _ := json.Marshal(files)
+	sorted := append([]bundle.FileRef(nil), files...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].File < sorted[j].File })
+	b, _ := json.Marshal(sorted)
 	sum := sha256.Sum256(b)
 	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func validateComponentResourceSidecars(name string, entries []bundle.FileRef, files map[string][]byte) error {
+	for _, entry := range entries {
+		if strings.ToLower(path.Ext(entry.File)) != ".css" {
+			continue
+		}
+		content, ok := files[entry.File]
+		if !ok {
+			return fmt.Errorf("resource references missing file %q", entry.File)
+		}
+		if err := loader.ValidateComponentCSSSidecar(name, string(content)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func componentHashesForResource(name string, files []bundle.FileRef) (string, string, string, error) {
+	htmlPath := path.Join("components", name+".html")
+	cssPath := path.Join("components", name+".css")
+	jsPath := path.Join("components", name+".js")
+	var htmlHash string
+	var cssHash string
+	var jsHash string
+	for _, file := range files {
+		switch file.File {
+		case htmlPath:
+			if htmlHash != "" {
+				return "", "", "", fmt.Errorf("duplicate html file %q", htmlPath)
+			}
+			htmlHash = file.Hash
+		case cssPath:
+			if cssHash != "" {
+				return "", "", "", fmt.Errorf("duplicate css file %q", cssPath)
+			}
+			cssHash = file.Hash
+		case jsPath:
+			if jsHash != "" {
+				return "", "", "", fmt.Errorf("duplicate js file %q", jsPath)
+			}
+			jsHash = file.Hash
+		default:
+			return "", "", "", fmt.Errorf("unexpected file %q", file.File)
+		}
+	}
+	if htmlHash == "" {
+		return "", "", "", fmt.Errorf("missing html file %q", htmlPath)
+	}
+	return htmlHash, cssHash, jsHash, nil
 }
 
 func inferContentType(filename string) string {

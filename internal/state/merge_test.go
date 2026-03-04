@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -181,6 +182,148 @@ spec:
 	}
 	if got["canonicalURL"] != "https://example.com/" {
 		t.Fatalf("unexpected canonicalURL in head_json: %#v", got["canonicalURL"])
+	}
+}
+
+func TestApplyComponentSidecarsPersistAndUpdate(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openStateTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+	applier, err := NewApplier(db, blobStore)
+	if err != nil {
+		t.Fatalf("NewApplier() error = %v", err)
+	}
+
+	componentHTML := []byte("<section id=\"header\">Header</section>\n")
+	componentCSS := []byte("#header { color: red; }\n")
+	componentJS := []byte("console.log('header')\n")
+	applyComponent := func(css []byte) (ApplyResult, error) {
+		return applier.Apply(ctx, "sample", "staging", bundle.Bundle{
+			Manifest: bundle.Manifest{
+				Mode:    bundle.ApplyModePartial,
+				Website: "sample",
+				Resources: []bundle.Resource{
+					{
+						Kind: "Component",
+						Name: "header",
+						Files: []bundle.FileRef{
+							{File: "components/header.html", Hash: "sha256:" + sha256Hex(componentHTML)},
+							{File: "components/header.css", Hash: "sha256:" + sha256Hex(css)},
+							{File: "components/header.js", Hash: "sha256:" + sha256Hex(componentJS)},
+						},
+					},
+				},
+			},
+			Files: map[string][]byte{
+				"components/header.html": componentHTML,
+				"components/header.css":  css,
+				"components/header.js":   componentJS,
+			},
+		}, false)
+	}
+
+	result, err := applyComponent(componentCSS)
+	if err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	if result.Changes.Created != 1 {
+		t.Fatalf("expected created component, got %#v", result.Changes)
+	}
+
+	updatedCSS := []byte("#header { color: blue; }\n")
+	result, err = applyComponent(updatedCSS)
+	if err != nil {
+		t.Fatalf("Apply() update error = %v", err)
+	}
+	if result.Changes.Updated != 1 {
+		t.Fatalf("expected updated component, got %#v", result.Changes)
+	}
+
+	q := dbpkg.NewQueries(db)
+	website, err := q.GetWebsiteByName(ctx, "sample")
+	if err != nil {
+		t.Fatalf("GetWebsiteByName() error = %v", err)
+	}
+	components, err := q.ListComponentsByWebsite(ctx, website.ID)
+	if err != nil {
+		t.Fatalf("ListComponentsByWebsite() error = %v", err)
+	}
+	if len(components) != 1 {
+		t.Fatalf("expected one component row, got %d", len(components))
+	}
+	row := components[0]
+	if row.ContentHash != "sha256:"+sha256Hex(componentHTML) {
+		t.Fatalf("unexpected component html hash %q", row.ContentHash)
+	}
+	if row.CSSHash != "sha256:"+sha256Hex(updatedCSS) {
+		t.Fatalf("unexpected component css hash %q", row.CSSHash)
+	}
+	if row.JSHash != "sha256:"+sha256Hex(componentJS) {
+		t.Fatalf("unexpected component js hash %q", row.JSHash)
+	}
+}
+
+func TestApplyRejectsComponentCSSOutsideAssetsAndDoesNotStoreBlobs(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openStateTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+
+	blobRoot := filepath.Join(dataDir, "blobs", "sha256")
+	blobStore := blob.NewStore(blobRoot)
+	applier, err := NewApplier(db, blobStore)
+	if err != nil {
+		t.Fatalf("NewApplier() error = %v", err)
+	}
+
+	componentHTML := []byte("<section id=\"header\">Header</section>\n")
+	componentCSS := []byte(`#header { background-image: url("https://cdn.example.com/bg.png"); }` + "\n")
+	componentJS := []byte("console.log('header')\n")
+
+	_, err = applier.Apply(ctx, "sample", "staging", bundle.Bundle{
+		Manifest: bundle.Manifest{
+			Mode:    bundle.ApplyModePartial,
+			Website: "sample",
+			Resources: []bundle.Resource{
+				{
+					Kind: "Component",
+					Name: "header",
+					Files: []bundle.FileRef{
+						{File: "components/header.html", Hash: "sha256:" + sha256Hex(componentHTML)},
+						{File: "components/header.css", Hash: "sha256:" + sha256Hex(componentCSS)},
+						{File: "components/header.js", Hash: "sha256:" + sha256Hex(componentJS)},
+					},
+				},
+			},
+		},
+		Files: map[string][]byte{
+			"components/header.html": componentHTML,
+			"components/header.css":  componentCSS,
+			"components/header.js":   componentJS,
+		},
+	}, false)
+	if err == nil {
+		t.Fatalf("Apply() expected error")
+	}
+	if !strings.Contains(err.Error(), "unsupported url() reference") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	q := dbpkg.NewQueries(db)
+	website, err := q.GetWebsiteByName(ctx, "sample")
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("expected no committed website row after failed apply, got err=%v", err)
+	}
+	if website.ID != 0 {
+		t.Fatalf("expected empty website row after failed apply, got %#v", website)
+	}
+	if _, statErr := os.Stat(blobRoot); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("expected blob directory to be absent, got err=%v", statErr)
 	}
 }
 

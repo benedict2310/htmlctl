@@ -347,6 +347,16 @@ func TestBuilderBuildFailsWhenSitemapPublicBaseURLIsInvalid(t *testing.T) {
 			seoJSON: `{"publicBaseURL":"/docs","sitemap":{"enabled":true}}`,
 			wantErr: "must be absolute",
 		},
+		{
+			name:    "llmsTxt enabled without publicBaseURL",
+			seoJSON: `{"llmsTxt":{"enabled":true}}`,
+			wantErr: "llmsTxt.enabled requires publicBaseURL",
+		},
+		{
+			name:    "structuredData enabled without publicBaseURL",
+			seoJSON: `{"structuredData":{"enabled":true}}`,
+			wantErr: "structuredData.enabled requires publicBaseURL",
+		},
 	}
 
 	for _, tc := range tests {
@@ -429,6 +439,63 @@ func TestBuilderBuildFailsOnInvalidPublicBaseURLWhenSitemapDisabled(t *testing.T
 	}
 	if len(releases) == 0 || releases[0].Status != "failed" {
 		t.Fatalf("expected failed release row, got %#v", releases)
+	}
+}
+
+func TestBuilderBuildMaterializesLLMsTxtAndWebsiteStructuredData(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+
+	db := openReleaseTestDB(t, filepath.Join(dataDir, "db.sqlite"))
+	defer db.Close()
+	queries := dbpkg.NewQueries(db)
+	blobStore := blob.NewStore(filepath.Join(dataDir, "blobs", "sha256"))
+
+	websiteID, _ := seedReleaseState(t, ctx, queries, blobStore)
+	if err := queries.UpdateWebsiteSpec(ctx, dbpkg.WebsiteRow{
+		ID:                 websiteID,
+		DefaultStyleBundle: "default",
+		BaseTemplate:       "default",
+		SEOJSON:            `{"publicBaseURL":"https://example.com","displayName":"Sample Studio","description":"Docs and product pages.","llmsTxt":{"enabled":true},"structuredData":{"enabled":true}}`,
+		ContentHash:        "sha256:website",
+	}); err != nil {
+		t.Fatalf("UpdateWebsiteSpec() error = %v", err)
+	}
+
+	builder, err := NewBuilder(db, blobStore, filepath.Join(dataDir, "websites"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatalf("NewBuilder() error = %v", err)
+	}
+	res, err := builder.Build(ctx, "sample", "staging")
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+
+	releaseDir := filepath.Join(dataDir, "websites", "sample", "envs", "staging", "releases", res.ReleaseID)
+	llms := readReleaseFileString(t, releaseDir, "llms.txt")
+	for _, needle := range []string{
+		"# Sample Studio",
+		"> Docs and product pages.",
+		"- [Home](https://example.com/): Home",
+	} {
+		if !strings.Contains(llms, needle) {
+			t.Fatalf("expected llms.txt to contain %q, got %s", needle, llms)
+		}
+	}
+
+	index := readReleaseFileString(t, releaseDir, "index.html")
+	orgNeedle := `<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Sample Studio","url":"https://example.com/"}</script>`
+	websiteNeedle := `<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Sample"}</script>`
+	orgIdx := strings.Index(index, orgNeedle)
+	if orgIdx == -1 {
+		t.Fatalf("expected index.html to contain auto Organization JSON-LD block, got %s", index)
+	}
+	websiteIdx := strings.Index(index, websiteNeedle)
+	if websiteIdx == -1 {
+		t.Fatalf("expected index.html to contain existing page WebSite JSON-LD block, got %s", index)
+	}
+	if orgIdx >= websiteIdx {
+		t.Fatalf("expected website-level structured data to be rendered before existing page JSON-LD blocks")
 	}
 }
 

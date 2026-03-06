@@ -1,0 +1,32 @@
+[Unit]
+Description=htmlctl newsletter extension service (staging)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=htmlctl-newsletter
+Group=htmlctl-newsletter
+EnvironmentFile=/etc/htmlctl-newsletter/staging.env
+ExecStartPre=/usr/local/bin/htmlctl-newsletter migrate
+ExecStart=/usr/local/bin/htmlctl-newsletter serve
+WorkingDirectory=/var/lib/htmlctl-newsletter
+Restart=on-failure
+RestartSec=5
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectClock=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryDenyWriteExecute=true
+LockPersonality=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

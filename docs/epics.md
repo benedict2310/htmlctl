@@ -119,13 +119,13 @@ by guarding the field with `sync.RWMutex`. All 428 tests pass clean under `-race
 
 | # | Story | File |
 |---|-------|------|
-| 8.1 | SSH auth: fall back to key file when agent key is rejected | [E8-S1](stories/E8-S1-ssh-auth-agent-key-fallback.md) |
+| 8.1 | SSH auth: fall back to key file when agent key is rejected (Implemented) | [E8-S1](stories/E8-S1-ssh-auth-agent-key-fallback.md) |
 | 8.2 | Automatic OG image generation (Implemented) | [E8-S2](stories/E8-S2-og-image-generation.md) |
 | 8.3 | Promote metadata host warnings (Implemented) | [E8-S3](stories/E8-S3-promote-metadata-host-warnings.md) |
 | 8.4 | Website-scoped favicon support (Implemented) | [E8-S4](stories/E8-S4-website-favicon-support.md) |
 | 8.5 | Declarative `robots.txt` generation (Implemented) | [E8-S5](stories/E8-S5-robots-txt-generation.md) |
 | 8.6 | Automatic `sitemap.xml` generation (Implemented) | [E8-S6](stories/E8-S6-sitemap-xml-generation.md) |
-| 8.7 | `llms.txt` generation and auto-generated JSON-LD structured data | [E8-S7](stories/E8-S7-llms-txt-and-structured-data.md) |
+| 8.7 | `llms.txt` generation and auto-generated JSON-LD structured data (Implemented) | [E8-S7](stories/E8-S7-llms-txt-and-structured-data.md) |
 
 ---
 
@@ -180,3 +180,21 @@ by guarding the field with `sync.RWMutex`. All 428 tests pass clean under `-race
 | 11.4 | Inventory and workflow guidance polish (Completed) | [E11-S4](stories/E11-S4-inventory-and-workflow-guidance-polish.md) |
 
 **Done when:** operators can inspect and manage contexts safely, use common remote commands without repeatedly restating the current website/environment, detect client/server skew quickly, and discover resource inventory and next steps from the CLI without reading the source.
+
+---
+
+## Epic 12 — Optional Service Extensions
+
+**Goal:** Provide an official extension model for reusable dynamic companion services (starting with newsletter) without expanding `htmlctl`/`htmlservd` core runtime responsibilities.
+**Status:** Complete (2026-03-06)
+
+**Motivation:** Epic 9 made same-origin dynamic integration practical via environment backends, and real-world adoption now needs a reusable way to deploy common companion services safely. The extension track should package these services for all users while preserving core product boundaries: `htmlctl` remains a static-site control plane; extensions are optional, separately deployable workloads.
+
+| # | Story | File |
+|---|-------|------|
+| 12.1 | Extension catalog and compatibility contract (Implemented) | [E12-S1](stories/E12-S1-extension-catalog-and-compatibility-contract.md) |
+| 12.2 | Newsletter extension reference implementation (Implemented) | [E12-S2](stories/E12-S2-newsletter-extension-reference-implementation.md) |
+| 12.3 | Newsletter extension installer and ops runbook (Implemented) | [E12-S3](stories/E12-S3-newsletter-extension-installer-and-ops-runbook.md) |
+| 12.4 | Newsletter extension adoption validation and docs integration (Implemented) | [E12-S4](stories/E12-S4-newsletter-extension-adoption-validation.md) |
+
+**Done when:** operators can install an official newsletter extension package, route it through Epic 9 backends, and operate it safely with documented staging/prod isolation and security checks, without any mandatory core binary changes.

@@ -286,6 +286,23 @@ Verification:
 - test the proxied URL on the environment hostname directly
 - if staging and prod should both proxy `/api/*`, declare one backend per environment
 
+Newsletter extension pattern:
+
+```bash
+htmlctl backend add website/sample --env staging --path /newsletter/* --upstream http://127.0.0.1:9501 --context staging
+htmlctl backend list website/sample --env staging --context staging
+curl -s -o /dev/null -w '%{http_code}\n' https://staging.example.com/newsletter/verify
+```
+
+For the foundation newsletter service, `/newsletter/verify` currently returns `501` as the expected placeholder response. Validate route plumbing and failure handling before any public cutover.
+Note: backend path `/newsletter/*` routes subpaths, not the bare `/newsletter` path.
+
+Required extension gate before prod routing:
+- extension listener is loopback-only
+- extension health checks pass on local listener
+- staging/prod use separate credentials and datastores
+- backend rollback command prepared (`htmlctl backend remove ...`)
+
 ## 9. Runbook RB-RELEASE-01: History, Rollback, Promote
 
 Release history:
@@ -497,6 +514,10 @@ Retention operations:
   - verify `--path` uses canonical prefix form like `/api/*` and that the upstream serves the requested subpath.
 - `502 Bad Gateway` on `/api/...`:
   - upstream is down or unreachable; for Docker host-side tests, use `http://host.docker.internal:<port>`.
+- `502 Bad Gateway` on `/newsletter/...`:
+  - verify newsletter unit is running, verify upstream port mapping, and verify backend path is `/newsletter/*`.
+- `/newsletter/verify` returns unexpected status code:
+  - with foundation build, expected is `501`; if `404`, verify backend mapping exists and points at newsletter listener.
 - `domain verify` TLS fail in local/dev:
   - expected unless public DNS/TLS is valid; for local HTTP set `HTMLSERVD_CADDY_AUTO_HTTPS=false`.
 - cleanup blocked by ownership in `.tmp`:
@@ -515,11 +536,13 @@ After apply:
 - `htmlctl logs`.
 - external route check (HTTP/TLS).
 - if the environment uses backends, run `htmlctl backend list ...` and test the proxied route directly.
+- if the environment routes to an extension service, run a controlled failure drill (temporarily stop upstream or use known-bad upstream) and verify deterministic proxy failure + rollback command.
 
 Before promote:
 - validate staging release behavior.
 - verify release history and active release id.
 - remember that backend config does not promote with the release.
+- if extension paths are used (for example `/newsletter/*`), confirm the target environment has matching backend mappings and healthy local extension service(s).
 
 Before retention:
 - run `htmlctl retention run ... --dry-run` first.

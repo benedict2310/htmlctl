@@ -204,6 +204,9 @@ func (b *Builder) Build(ctx context.Context, websiteName, envName string) (out B
 	if err != nil {
 		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, fmt.Errorf("load source site: %w", err))
 	}
+	if err := injectWebsiteStructuredData(site, log); err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, fmt.Errorf("inject website structured data: %w", err))
+	}
 	warnLocalhostMetadataURLs(site, log)
 	log.Addf("ensuring og image blobs")
 	ogPageHashes, err := b.ensureOGBlobs(ctx, site, log)
@@ -232,6 +235,9 @@ func (b *Builder) Build(ctx context.Context, websiteName, envName string) (out B
 		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
 	}
 	if err := b.materializeRobotsFile(ctx, site.Website.Spec.SEO, sitemapURL, tmpReleaseDir); err != nil {
+		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
+	}
+	if err := b.materializeLLMsTxtFile(ctx, site, log, tmpReleaseDir); err != nil {
 		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
 	}
 	if err := b.materializeOGImages(ctx, tmpReleaseDir, ogReadyPageHashes, log); err != nil {

@@ -1,7 +1,7 @@
 # E8-S1 - SSH Auth: Fall Back to Key File When Agent Key Is Rejected
 
 **Epic:** Epic 8 — DX & Reliability
-**Status:** Not Started
+**Status:** Implemented (2026-02-24)
 **Priority:** P1 (High — silent failure affects real users)
 **Estimated Effort:** 0.5 days
 **Dependencies:** E3-S2 (SSH tunnel transport)

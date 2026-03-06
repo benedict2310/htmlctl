@@ -375,6 +375,8 @@ func TestValidateSiteNormalizesWebsiteSEO(t *testing.T) {
 			Spec: model.WebsiteSpec{
 				SEO: &model.WebsiteSEO{
 					PublicBaseURL: " https://example.com/docs/ ",
+					DisplayName:   " Sample Studio ",
+					Description:   " Sample docs and product pages. ",
 					Robots: &model.WebsiteRobots{
 						Enabled: true,
 						Groups: []model.RobotsGroup{
@@ -386,6 +388,10 @@ func TestValidateSiteNormalizesWebsiteSEO(t *testing.T) {
 						},
 					},
 					Sitemap: &model.WebsiteSitemap{Enabled: true},
+					LLMsTxt: &model.WebsiteLLMsTxt{Enabled: true},
+					StructuredData: &model.WebsiteStructuredData{
+						Enabled: true,
+					},
 				},
 			},
 		},
@@ -405,6 +411,12 @@ func TestValidateSiteNormalizesWebsiteSEO(t *testing.T) {
 	if got := site.Website.Spec.SEO.PublicBaseURL; got != "https://example.com/docs" {
 		t.Fatalf("unexpected normalized publicBaseURL: %q", got)
 	}
+	if got := site.Website.Spec.SEO.DisplayName; got != "Sample Studio" {
+		t.Fatalf("unexpected normalized displayName: %q", got)
+	}
+	if got := site.Website.Spec.SEO.Description; got != "Sample docs and product pages." {
+		t.Fatalf("unexpected normalized description: %q", got)
+	}
 	group := site.Website.Spec.SEO.Robots.Groups[0]
 	if len(group.UserAgents) != 1 || group.UserAgents[0] != "*" {
 		t.Fatalf("unexpected normalized userAgents: %#v", group.UserAgents)
@@ -417,6 +429,12 @@ func TestValidateSiteNormalizesWebsiteSEO(t *testing.T) {
 	}
 	if site.Website.Spec.SEO.Sitemap == nil || !site.Website.Spec.SEO.Sitemap.Enabled {
 		t.Fatalf("expected sitemap settings to be preserved")
+	}
+	if site.Website.Spec.SEO.LLMsTxt == nil || !site.Website.Spec.SEO.LLMsTxt.Enabled {
+		t.Fatalf("expected llmsTxt settings to be preserved")
+	}
+	if site.Website.Spec.SEO.StructuredData == nil || !site.Website.Spec.SEO.StructuredData.Enabled {
+		t.Fatalf("expected structuredData settings to be preserved")
 	}
 }
 
@@ -446,6 +464,34 @@ func TestValidateSiteRejectsInvalidWebsiteSEO(t *testing.T) {
 				Sitemap: &model.WebsiteSitemap{Enabled: true},
 			},
 			wantError: "sitemap.enabled requires publicBaseURL",
+		},
+		{
+			name: "llmstxt enabled without public base url",
+			seo: &model.WebsiteSEO{
+				LLMsTxt: &model.WebsiteLLMsTxt{Enabled: true},
+			},
+			wantError: "llmsTxt.enabled requires publicBaseURL",
+		},
+		{
+			name: "structured data enabled without public base url",
+			seo: &model.WebsiteSEO{
+				StructuredData: &model.WebsiteStructuredData{Enabled: true},
+			},
+			wantError: "structuredData.enabled requires publicBaseURL",
+		},
+		{
+			name: "display name too long",
+			seo: &model.WebsiteSEO{
+				DisplayName: strings.Repeat("x", maxWebsiteSEODisplayName+1),
+			},
+			wantError: "displayName longer",
+		},
+		{
+			name: "description too long",
+			seo: &model.WebsiteSEO{
+				Description: strings.Repeat("x", maxWebsiteSEODescription+1),
+			},
+			wantError: "description longer",
 		},
 		{
 			name: "robots group without user agent",

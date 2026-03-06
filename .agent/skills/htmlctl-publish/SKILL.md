@@ -69,13 +69,16 @@ Website-scoped metadata lives in `website.yaml`, not in page files or ad hoc ass
 - `spec.head.icons` configures favicon links rendered into every page.
 - favicon source files live under `branding/`, not `assets/`.
 - `spec.seo.publicBaseURL` defines the canonical public crawl origin.
+- `spec.seo.displayName` and `spec.seo.description` provide website-level discovery metadata.
 - `spec.seo.robots.enabled` generates `/robots.txt` during release materialization.
 - `spec.seo.sitemap.enabled` generates `/sitemap.xml` during release materialization and appends a `Sitemap:` line to `robots.txt`.
+- `spec.seo.llmsTxt.enabled` generates `/llms.txt` during release materialization.
+- `spec.seo.structuredData.enabled` auto-injects website-level `Organization` and `WebSite` JSON-LD blocks into each page `<head>`.
 
 Important constraints:
 
 - `publicBaseURL` must be the real public production URL, not a staging host.
-- `promote` copies the release artifact byte-for-byte. It does not rebuild `robots.txt`, `sitemap.xml`, favicon output, or OG metadata.
+- `promote` copies the release artifact byte-for-byte. It does not rebuild `robots.txt`, `sitemap.xml`, `llms.txt`, website structured-data output, favicon output, or OG metadata.
 - if the client supports a website-level feature but the server binary is older, `apply` may still succeed while the expected generated artifact is missing. Upgrade `htmlservd`, then re-apply.
 
 ## Runtime Backends
@@ -89,6 +92,21 @@ Environment backends let a static site call dynamic services through relative pa
 - `htmlctl get backends --context staging` and `htmlctl backend list --context staging` both inventory backend state for the active context website/environment.
 - `htmlctl backend add` prints follow-up guidance after success. In table mode it also warns on suspicious static-content prefixes such as `/styles/*`, `/scripts/*`, `/assets/*`, and `/favicon...`.
 - After changing a backend, verify the route on that environment directly. Do not assume a staging backend exists in prod.
+
+### Newsletter Extension Pattern
+
+The official newsletter extension is an optional companion service routed through backends (usually `/newsletter/*`).
+
+- Keep newsletter services loopback-bound and managed separately from `htmlservd`.
+- Configure backend routes per environment:
+
+```bash
+htmlctl backend add website/<name> --env staging --path /newsletter/* --upstream http://127.0.0.1:9501 --context staging
+htmlctl backend add website/<name> --env prod --path /newsletter/* --upstream http://127.0.0.1:9502 --context prod
+```
+
+- Validate behavior on staging before prod cutover.
+- Validate failure handling with a controlled outage (stop service or bad upstream) and keep rollback command ready.
 
 ## Runtime Auth Policies
 
@@ -118,8 +136,9 @@ Environment retention lets operators prune old immutable releases and optionally
 |-------------|----------|
 | Content update (copy, cards, links, small edits to existing components) | Apply directly to staging → verify → promote to prod |
 | New standalone subpage (new component + new page, no changes to shared components) | Apply directly to staging → verify → promote to prod |
-| Website-level metadata change (`website.yaml`, `branding/`, favicon, robots, sitemap) | Verify server version first → apply to staging → verify generated artifacts → promote to prod |
+| Website-level metadata change (`website.yaml`, `branding/`, favicon, robots, sitemap, `llms.txt`, structured data) | Verify server version first → apply to staging → verify generated artifacts → promote to prod |
 | Environment backend change (`htmlctl backend add/remove`) | Update the target environment directly → verify the proxied route on that environment |
+| Dynamic extension onboarding (for example newsletter via `/newsletter/*`) | Install and verify extension runtime first → add staging backend and run failure drills → add prod backend and verify |
 | Environment auth policy change (`htmlctl authpolicy add/remove`) | Update the target environment directly → verify the challenged route on that environment |
 | Release retention (`htmlctl retention run`) | Dry-run first → run on the target environment → verify release history and rollback path afterwards |
 | Inventory / operator drift check | Run `htmlctl doctor --context <ctx>`, then use `htmlctl get domains --context <ctx>` or `htmlctl get backends --context <ctx>` before making changes |
@@ -182,7 +201,7 @@ htmlctl status website/mysite --context prod
 
 ## Workflow A2 — Website Metadata Change
 
-Use for changes to `website.yaml` or `branding/`: favicon, `publicBaseURL`, `robots`, `sitemap`, and similar website-scoped state.
+Use for changes to `website.yaml` or `branding/`: favicon, `publicBaseURL`, `robots`, `sitemap`, `llms.txt`, structured data, and similar website-scoped state.
 
 ```bash
 # 0. Make sure both client and server binaries include the feature you are about to use
@@ -199,6 +218,7 @@ htmlctl status website/mysite --context staging
 curl -sf https://staging.example.com/ | grep "<title>"
 curl -sf https://staging.example.com/robots.txt
 curl -sf https://staging.example.com/sitemap.xml
+curl -sf https://staging.example.com/llms.txt
 
 # 4. Promote exact artifact to prod
 htmlctl promote website/mysite --from staging --to prod
@@ -207,6 +227,7 @@ htmlctl promote website/mysite --from staging --to prod
 htmlctl status website/mysite --context prod
 curl -sf https://example.com/robots.txt
 curl -sf https://example.com/sitemap.xml
+curl -sf https://example.com/llms.txt
 ```
 
 ## Workflow B — Structural Change (Docker local first)
@@ -270,6 +291,7 @@ htmlctl status website/mysite --context local-docker
 curl -sf -H "Host: 127.0.0.1.nip.io" http://127.0.0.1:18080/ | grep "<title>"
 curl -sf -H "Host: 127.0.0.1.nip.io" http://127.0.0.1:18080/robots.txt
 curl -sf -H "Host: 127.0.0.1.nip.io" http://127.0.0.1:18080/sitemap.xml
+curl -sf -H "Host: 127.0.0.1.nip.io" http://127.0.0.1:18080/llms.txt
 ```
 
 If the site depends on an environment backend, verify that separately after binding the local hostname:
@@ -320,9 +342,12 @@ After apply:
 - Check the site URL
 - if `robots` is enabled, verify `/robots.txt`
 - if `sitemap` is enabled, verify `/sitemap.xml`
+- if `llmsTxt` is enabled, verify `/llms.txt`
+- if `structuredData` is enabled, verify page source includes website-level `Organization` and `WebSite` JSON-LD before page-level JSON-LD
 - if favicon is configured, verify the root icon files and page `<head>` output
 - if the environment uses custom domains, verify inventory with `htmlctl get domains --context staging`
 - if the environment uses backends, verify `htmlctl backend list website/mysite --env staging --context staging` and test the proxied URL directly
+- if the environment uses extension paths (for example `/newsletter/*`), run one controlled failure drill and confirm rollback steps are ready
 
 Before promote:
 - Verify staging behavior end-to-end

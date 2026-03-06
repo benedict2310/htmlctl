@@ -1,0 +1,45 @@
+apiVersion: htmlctl.dev/extensions/v1
+kind: Extension
+metadata:
+  name: newsletter
+  version: 0.3.1
+spec:
+  summary: Optional newsletter companion service with a standalone reference runtime.
+  homepage: https://github.com/benedict2310/htmlctl/tree/main/extensions/newsletter
+  compatibility:
+    minHTMLCTL: 0.11.0
+    minHTMLSERVD: 0.11.0
+  runtime:
+    requires:
+      - postgresql
+      - systemd
+    healthEndpoints:
+      - /healthz
+  integration:
+    backendPaths:
+      - /newsletter/*
+  env:
+    - name: NEWSLETTER_ENV
+      required: true
+      secret: false
+      description: Deployment environment (staging or prod).
+    - name: NEWSLETTER_HTTP_ADDR
+      required: false
+      secret: false
+      description: Loopback bind address for this service instance (defaults to 127.0.0.1:9501 for staging, 127.0.0.1:9502 for prod).
+    - name: NEWSLETTER_DATABASE_URL
+      required: true
+      secret: true
+      description: PostgreSQL connection string for this environment.
+    - name: NEWSLETTER_PUBLIC_BASE_URL
+      required: true
+      secret: false
+      description: Public host base URL used in verification/unsubscribe links.
+    - name: NEWSLETTER_RESEND_API_KEY
+      required: true
+      secret: true
+      description: Resend API key used for newsletter email delivery.
+  security:
+    listenerPolicy: loopback-only
+    requiresRateLimiting: true
+    requiresSanitized5xx: true

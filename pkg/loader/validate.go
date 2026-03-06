@@ -30,6 +30,8 @@ const (
 	maxRobotsDisallowRules    = 50
 	maxRobotsRuleLen          = 512
 	maxPublicBaseURLLen       = 2048
+	maxWebsiteSEODisplayName  = 512
+	maxWebsiteSEODescription  = 2048
 )
 
 // ValidateSite validates cross-resource relationships required for safe parsing.
@@ -111,6 +113,14 @@ func NormalizeWebsiteSEO(seo *model.WebsiteSEO) error {
 	if seo == nil {
 		return nil
 	}
+	seo.DisplayName = strings.TrimSpace(seo.DisplayName)
+	seo.Description = strings.TrimSpace(seo.Description)
+	if utf8.RuneCountInString(seo.DisplayName) > maxWebsiteSEODisplayName {
+		return fmt.Errorf("website seo displayName longer than %d characters", maxWebsiteSEODisplayName)
+	}
+	if utf8.RuneCountInString(seo.Description) > maxWebsiteSEODescription {
+		return fmt.Errorf("website seo description longer than %d characters", maxWebsiteSEODescription)
+	}
 	if value := strings.TrimSpace(seo.PublicBaseURL); value != "" {
 		normalized, err := NormalizePublicBaseURL(value)
 		if err != nil {
@@ -118,10 +128,16 @@ func NormalizeWebsiteSEO(seo *model.WebsiteSEO) error {
 		}
 		seo.PublicBaseURL = normalized
 	}
+	if seo.Sitemap != nil && seo.Sitemap.Enabled && strings.TrimSpace(seo.PublicBaseURL) == "" {
+		return fmt.Errorf("website seo sitemap.enabled requires publicBaseURL")
+	}
+	if seo.LLMsTxt != nil && seo.LLMsTxt.Enabled && strings.TrimSpace(seo.PublicBaseURL) == "" {
+		return fmt.Errorf("website seo llmsTxt.enabled requires publicBaseURL")
+	}
+	if seo.StructuredData != nil && seo.StructuredData.Enabled && strings.TrimSpace(seo.PublicBaseURL) == "" {
+		return fmt.Errorf("website seo structuredData.enabled requires publicBaseURL")
+	}
 	if seo.Robots == nil {
-		if seo.Sitemap != nil && seo.Sitemap.Enabled && strings.TrimSpace(seo.PublicBaseURL) == "" {
-			return fmt.Errorf("website seo sitemap.enabled requires publicBaseURL")
-		}
 		return nil
 	}
 	if len(seo.Robots.Groups) > maxRobotsGroups {
@@ -166,9 +182,6 @@ func NormalizeWebsiteSEO(seo *model.WebsiteSEO) error {
 			}
 			group.Disallow[j] = value
 		}
-	}
-	if seo.Sitemap != nil && seo.Sitemap.Enabled && strings.TrimSpace(seo.PublicBaseURL) == "" {
-		return fmt.Errorf("website seo sitemap.enabled requires publicBaseURL")
 	}
 	return nil
 }

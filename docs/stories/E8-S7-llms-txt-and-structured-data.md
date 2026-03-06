@@ -1,7 +1,7 @@
 # E8-S7 — `llms.txt` Generation and Auto-Generated JSON-LD Structured Data
 
 **Epic:** Epic 8 — DX & Reliability
-**Status:** Planned
+**Status:** Implemented (2026-03-06)
 **Priority:** P2 (Medium — natural completion of the discoverability stack from E8-S5/S6)
 **Estimated Effort:** 2–3 days
 **Dependencies:** E8-S4 (first-class `Website` desired state), E8-S5 (robots.txt / `publicBaseURL`), E8-S6 (sitemap.xml / page inclusion rules)
@@ -173,18 +173,17 @@ spec:
 - `pkg/model/types_test.go` — YAML/JSON roundtrip coverage.
 - `pkg/loader/validate.go` — validate new fields; require `publicBaseURL` when `llmsTxt.enabled` or `structuredData.enabled`.
 - `pkg/loader/validate_test.go` — add coverage.
-- `internal/release/builder.go` — call `llmstxt.GenerateLLMsTxt` and `structureddata.GenerateWebsiteBlocks`; pass website schema blocks into renderer pipeline.
+- `internal/release/builder.go` — call `injectWebsiteStructuredData` and materialize `llms.txt` during release build.
 - `internal/release/builder_test.go` — verify presence, content, and page injection.
-- `pkg/renderer/template.go` — add `WebsiteSchemaHTML template.HTML` to `pageTemplateData`; inject before per-page `jsonLD` blocks.
-- `pkg/renderer/renderer.go` — pass website schema blocks through render pipeline.
-- `pkg/renderer/head.go` — render `<script type="application/ld+json">` for website-level blocks.
-- `pkg/renderer/head_test.go` — verify tag ordering and JSON escaping.
+- `internal/server/promote_test.go` — verify promote parity includes generated `llms.txt`.
 - `docs/technical-spec.md` — document `llms.txt`, `structuredData`, `displayName`, `description`.
 
 ### Files to Create
 
 - `internal/release/llmstxt.go` — `GenerateLLMsTxt` helper.
 - `internal/release/llmstxt_test.go` — unit tests.
+- `internal/release/structured_data.go` — website `Organization` / `WebSite` block generation and injection helper.
+- `internal/release/structured_data_test.go` — unit tests for generation, ordering, and duplicate suppression.
 
 ---
 
@@ -202,16 +201,16 @@ spec:
 
 ## 8. Acceptance Criteria
 
-- [ ] AC-1: `Website` resource supports `spec.seo.llmsTxt.enabled`, `spec.seo.structuredData.enabled`, `spec.seo.displayName`, and `spec.seo.description`.
-- [ ] AC-2: When `llmsTxt.enabled` and `publicBaseURL` are set, release output contains a deterministic `/llms.txt` following the llmstxt.org format.
-- [ ] AC-3: `llms.txt` includes only crawlable pages (excludes `robots: noindex` / `robots: none`), ordered by URL.
-- [ ] AC-4: Per-page description is included in `llms.txt` when `spec.description` is non-empty.
-- [ ] AC-5: When `structuredData.enabled` and `publicBaseURL` are set, every rendered page `<head>` contains `Organization` and `WebSite` JSON-LD blocks derived from website metadata.
-- [ ] AC-6: Website-level JSON-LD blocks appear before per-page `jsonLD` entries in the rendered `<head>`.
-- [ ] AC-7: Both artifacts are generated at build time and promoted byte-identical (no rebuild on promote).
-- [ ] AC-8: Omitting `publicBaseURL` with either feature enabled produces a validation error at apply time.
-- [ ] AC-9: `go test -race ./...` passes.
-- [ ] AC-10: Technical spec is updated.
+- [x] AC-1: `Website` resource supports `spec.seo.llmsTxt.enabled`, `spec.seo.structuredData.enabled`, `spec.seo.displayName`, and `spec.seo.description`.
+- [x] AC-2: When `llmsTxt.enabled` and `publicBaseURL` are set, release output contains a deterministic `/llms.txt` following the llmstxt.org format.
+- [x] AC-3: `llms.txt` includes only crawlable pages (excludes `robots: noindex` / `robots: none`), ordered by URL.
+- [x] AC-4: Per-page description is included in `llms.txt` when `spec.description` is non-empty.
+- [x] AC-5: When `structuredData.enabled` and `publicBaseURL` are set, every rendered page `<head>` contains `Organization` and `WebSite` JSON-LD blocks derived from website metadata.
+- [x] AC-6: Website-level JSON-LD blocks appear before per-page `jsonLD` entries in the rendered `<head>`.
+- [x] AC-7: Both artifacts are generated at build time and promoted byte-identical (no rebuild on promote).
+- [x] AC-8: Omitting `publicBaseURL` with either feature enabled produces a validation error at apply time.
+- [x] AC-9: `go test -race ./...` passes.
+- [x] AC-10: Technical spec is updated.
 
 ---
 
@@ -248,3 +247,36 @@ spec:
 
 - **Risk:** `DisplayName` and `Description` fields are easy to overlook.
   **Mitigation:** fall back gracefully (`metadata.name` for display name; omit description clause when empty). Log a build-time note when `llmsTxt` is enabled but `description` is absent.
+
+## 11. Implementation Notes (2026-03-06)
+
+- Added website SEO schema support:
+  - `spec.seo.displayName`
+  - `spec.seo.description`
+  - `spec.seo.llmsTxt.enabled`
+  - `spec.seo.structuredData.enabled`
+- Added validation guards in loader normalization:
+  - max-length checks for display fields
+  - `publicBaseURL` required when `sitemap`, `llmsTxt`, or `structuredData` generation is enabled
+- Added release helpers:
+  - `internal/release/llmstxt.go` for deterministic `/llms.txt` generation reusing sitemap inclusion/canonical logic
+  - `internal/release/structured_data.go` for website-level JSON-LD generation and per-page prepend injection before page JSON-LD
+- Builder integration:
+  - website structured data injection runs before page rendering
+  - `llms.txt` is materialized as part of release artifacts
+- Promote parity coverage:
+  - `internal/server/promote_test.go` asserts generated `llms.txt` is present in promoted artifact hashing path
+
+Independent review gate:
+- `codex review --uncommitted` completed with no actionable findings.
+
+Verification evidence:
+- `go test ./...` passed
+- `go test -race ./...` passed
+- Local Docker E2E with `htmlservd-ssh:e8s7` + `htmlctl:e8s7` passed (`E2E_OK`)
+  - verified `/llms.txt` content and `noindex` exclusion
+  - verified `Organization` and `WebSite` JSON-LD exist and appear before page-level JSON-LD in rendered HTML
+- Re-validated in combined extension matrix (2026-03-06):
+  - local Docker deploy with `spec.seo.llmsTxt.enabled` + `spec.seo.structuredData.enabled`
+  - `/llms.txt` contained only crawlable pages with deterministic URL ordering
+  - rendered page source kept website-level JSON-LD before page-level JSON-LD

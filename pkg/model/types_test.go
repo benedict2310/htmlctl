@@ -23,6 +23,8 @@ spec:
       appleTouch: branding/apple-touch-icon.png
   seo:
     publicBaseURL: https://example.com/
+    displayName: Sample Studio
+    description: Sample website docs and product pages.
     robots:
       enabled: true
       groups:
@@ -33,6 +35,10 @@ spec:
           disallow:
             - /drafts/
     sitemap:
+      enabled: true
+    llmsTxt:
+      enabled: true
+    structuredData:
       enabled: true
 `)
 
@@ -68,6 +74,12 @@ spec:
 	if website.Spec.SEO.PublicBaseURL != "https://example.com/" {
 		t.Fatalf("unexpected publicBaseURL: %q", website.Spec.SEO.PublicBaseURL)
 	}
+	if website.Spec.SEO.DisplayName != "Sample Studio" {
+		t.Fatalf("unexpected displayName: %q", website.Spec.SEO.DisplayName)
+	}
+	if website.Spec.SEO.Description != "Sample website docs and product pages." {
+		t.Fatalf("unexpected seo description: %q", website.Spec.SEO.Description)
+	}
 	if !website.Spec.SEO.Robots.Enabled {
 		t.Fatalf("expected robots enabled to be parsed")
 	}
@@ -79,6 +91,12 @@ spec:
 	}
 	if website.Spec.SEO.Sitemap == nil || !website.Spec.SEO.Sitemap.Enabled {
 		t.Fatalf("expected website sitemap settings to be parsed")
+	}
+	if website.Spec.SEO.LLMsTxt == nil || !website.Spec.SEO.LLMsTxt.Enabled {
+		t.Fatalf("expected website llmsTxt settings to be parsed")
+	}
+	if website.Spec.SEO.StructuredData == nil || !website.Spec.SEO.StructuredData.Enabled {
+		t.Fatalf("expected website structuredData settings to be parsed")
 	}
 }
 
@@ -110,6 +128,8 @@ func TestWebsiteHeadJSONMarshaling(t *testing.T) {
 func TestWebsiteSEOJSONMarshaling(t *testing.T) {
 	seo := &WebsiteSEO{
 		PublicBaseURL: "https://example.com",
+		DisplayName:   "Sample Studio",
+		Description:   "Sample website docs and product pages.",
 		Robots: &WebsiteRobots{
 			Enabled: true,
 			Groups: []RobotsGroup{
@@ -121,6 +141,10 @@ func TestWebsiteSEOJSONMarshaling(t *testing.T) {
 			},
 		},
 		Sitemap: &WebsiteSitemap{Enabled: true},
+		LLMsTxt: &WebsiteLLMsTxt{Enabled: true},
+		StructuredData: &WebsiteStructuredData{
+			Enabled: true,
+		},
 	}
 
 	b, err := json.Marshal(seo)
@@ -130,11 +154,15 @@ func TestWebsiteSEOJSONMarshaling(t *testing.T) {
 	got := string(b)
 	for _, want := range []string{
 		`"publicBaseURL":"https://example.com"`,
+		`"displayName":"Sample Studio"`,
+		`"description":"Sample website docs and product pages."`,
 		`"enabled":true`,
 		`"userAgents":["*","Googlebot"]`,
 		`"allow":["/"]`,
 		`"disallow":["/preview/"]`,
 		`"sitemap":{"enabled":true}`,
+		`"llmsTxt":{"enabled":true}`,
+		`"structuredData":{"enabled":true}`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in marshaled output, got: %s", want, got)

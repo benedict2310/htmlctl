@@ -45,6 +45,8 @@ Write your site as declarative YAML resources. `htmlctl` renders them determinis
 **Environments** (`staging`, `prod`) each have their own active release pointer. Promotion copies the exact artifact bytes — no rebuild, guaranteed hash parity.
 Per-environment backends are managed separately from release content, so `/api/*` can point at different upstreams in staging and prod without changing the promoted static artifact.
 
+Optional dynamic companion services are handled as **extensions** (for example newsletter). Extensions are separate deployable services integrated via environment backends, not plugins loaded into `htmlctl` or `htmlservd` runtime. See [`extensions/README.md`](extensions/README.md) and [`docs/reference/extensions.md`](docs/reference/extensions.md).
+
 ---
 
 ## Quickstart
@@ -205,14 +207,45 @@ spec:
       ico: branding/favicon.ico
   seo:
     publicBaseURL: https://example.com
+    displayName: Example Studio
+    description: Notes and product updates.
     robots:
       enabled: true
     sitemap:
       enabled: true
+    llmsTxt:
+      enabled: true
+    structuredData:
+      enabled: true
 ```
 
-Website-level metadata supports favicon publication plus generated `robots.txt` and `sitemap.xml`.
+Website-level metadata supports favicon publication plus generated `robots.txt`, `sitemap.xml`, and `llms.txt`, plus website-level `Organization`/`WebSite` JSON-LD injection.
 See [`docs/technical-spec.md`](docs/technical-spec.md) for the full model and [`docs/guides/first-deploy-docker.md`](docs/guides/first-deploy-docker.md) for the end-to-end workflow.
+
+### Extensions (E12)
+
+Extensions are optional companion services packaged in `extensions/` and routed through environment backends.
+
+Newsletter example:
+
+```bash
+# service health on host
+curl -sf http://127.0.0.1:9501/healthz
+
+# route newsletter path on staging
+htmlctl backend add website/mysite \
+  --env staging \
+  --path /newsletter/* \
+  --upstream http://127.0.0.1:9501 \
+  --context staging
+
+# foundation response probe
+curl -s -o /dev/null -w '%{http_code}\n' https://staging.example.com/newsletter/verify
+```
+
+Current foundation expectation: `/newsletter/verify` returns `501`.
+Note: backend path `/newsletter/*` routes subpaths, not bare `/newsletter`.
+See [`extensions/README.md`](extensions/README.md), [`docs/reference/extensions.md`](docs/reference/extensions.md), and [`docs/guides/newsletter-extension-hetzner.md`](docs/guides/newsletter-extension-hetzner.md).
 
 ### Page
 

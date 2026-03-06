@@ -266,6 +266,26 @@ Backend rules:
 - `backend add` prints a warning in table mode for suspicious static-content prefixes such as `/styles/*`, `/scripts/*`, `/assets/*`, and `/favicon...`
 - after `backend add`, follow the suggested `backend list` check and test the live proxied URL on that environment
 
+Newsletter extension backend example:
+
+```bash
+htmlctl backend add website/<name> \
+  --env staging \
+  --path /newsletter/* \
+  --upstream http://127.0.0.1:9501 \
+  --context staging
+
+htmlctl backend list website/<name> --env staging --context staging
+curl -s -o /dev/null -w '%{http_code}\n' https://staging.example.com/newsletter/verify
+```
+
+Foundation expectation: `/newsletter/verify` currently returns `501` (placeholder response) when routing is correct.
+Note: backend path `/newsletter/*` routes subpaths, not the bare `/newsletter` path.
+For cutover safety, run one controlled failure drill before prod:
+- stop newsletter service (or point upstream to an unused port) and verify gateway failure behavior
+- restore healthy upstream and verify expected route response
+- keep `htmlctl backend remove ... --path /newsletter/*` ready as rollback
+
 ---
 
 ## Auth Policies

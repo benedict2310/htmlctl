@@ -13,7 +13,12 @@ Open `http://localhost:8080/`. Check:
 - `dist/index.html` exists
 - Each page has `dist/<route>/index.html`
 - No validator errors (single root tag, no script tags in components, anchor id rules)
-- If `website.yaml` enables favicon, robots, or sitemap, verify `dist/favicon.svg`, `dist/favicon.ico`, `dist/robots.txt`, and `dist/sitemap.xml` as applicable
+- If `website.yaml` enables website-level features, verify generated artifacts as applicable:
+  - favicon: `dist/favicon.svg`, `dist/favicon.ico`
+  - robots: `dist/robots.txt`
+  - sitemap: `dist/sitemap.xml`
+  - llms: `dist/llms.txt`
+  - structured data: page HTML includes website-level `Organization` + `WebSite` JSON-LD before page-level JSON-LD
 
 ---
 
@@ -330,6 +335,67 @@ htmlctl backend add website/sample --env prod --path /api/* --upstream https://a
 ```
 
 If prod needs the same backend prefix, declare it explicitly for prod. Promotion does not carry backend state across environments.
+
+---
+
+## Workflow 3A — Extension Adoption (Newsletter Service)
+
+Goal: validate and cut over a dynamic extension path (`/newsletter/*`) safely.
+
+### 1. Verify extension runtime invariants on host
+
+```bash
+ssh <host> "sudo systemctl status htmlctl-newsletter-staging --no-pager"
+ssh <host> "curl -sf http://127.0.0.1:9501/healthz"
+ssh <host> "sudo ss -tlnp | grep ':9501'"
+```
+
+Checks:
+- unit active
+- loopback-only listener
+- health endpoint responds
+
+### 2. Add staging backend and validate route
+
+```bash
+htmlctl backend add website/sample --env staging --path /newsletter/* --upstream http://127.0.0.1:9501 --context staging
+htmlctl backend list website/sample --env staging --context staging
+curl -s -o /dev/null -w '%{http_code}\n' https://staging.example.com/newsletter/verify
+```
+
+Foundation expectation for current newsletter reference: HTTP `501` placeholder response on `/newsletter/verify`.
+Note: backend path `/newsletter/*` routes subpaths, not the bare `/newsletter` path.
+
+### 3. Run controlled failure drills
+
+```bash
+ssh <host> "sudo systemctl stop htmlctl-newsletter-staging"
+curl -s -o /dev/null -w '%{http_code}\n' https://staging.example.com/newsletter/verify
+ssh <host> "sudo systemctl start htmlctl-newsletter-staging"
+
+htmlctl backend remove website/sample --env staging --path /newsletter/* --context staging
+htmlctl backend add website/sample --env staging --path /newsletter/* --upstream http://127.0.0.1:9599 --context staging
+curl -s -o /dev/null -w '%{http_code}\n' https://staging.example.com/newsletter/verify
+```
+
+Expected during outage/wrong upstream: gateway failure (typically `502`).
+
+### 4. Restore staging mapping and cut over prod
+
+```bash
+htmlctl backend remove website/sample --env staging --path /newsletter/* --context staging
+htmlctl backend add website/sample --env staging --path /newsletter/* --upstream http://127.0.0.1:9501 --context staging
+
+htmlctl backend add website/sample --env prod --path /newsletter/* --upstream http://127.0.0.1:9502 --context prod
+htmlctl backend list website/sample --env prod --context prod
+curl -s -o /dev/null -w '%{http_code}\n' https://example.com/newsletter/verify
+```
+
+Rollback command:
+
+```bash
+htmlctl backend remove website/sample --env prod --path /newsletter/* --context prod
+```
 
 ---
 

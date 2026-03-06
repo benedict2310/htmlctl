@@ -47,6 +47,8 @@ All resources are stored in sqlite (metadata/manifests/audit), with blobs/releas
     - `appleTouch`: path under `branding/` for the Apple touch icon source
 - `spec.seo` (optional): website-scoped crawl metadata
   - `publicBaseURL`: canonical absolute `http(s)` site URL used by generated crawl artifacts
+  - `displayName` (optional): website display label used by generated discovery artifacts
+  - `description` (optional): website description used by generated discovery artifacts
   - `robots` (optional):
     - `enabled`: generate `/robots.txt` when `true`
     - `groups`: ordered crawler policy groups
@@ -55,6 +57,10 @@ All resources are stored in sqlite (metadata/manifests/audit), with blobs/releas
       - `disallow`: ordered path-prefix rules
   - `sitemap` (optional):
     - `enabled`: generate `/sitemap.xml` when `true`
+  - `llmsTxt` (optional):
+    - `enabled`: generate `/llms.txt` when `true`
+  - `structuredData` (optional):
+    - `enabled`: inject website-level `Organization` + `WebSite` JSON-LD blocks into every rendered page head when `true`
 
 Example:
 
@@ -73,6 +79,8 @@ spec:
       appleTouch: branding/apple-touch-icon.png
   seo:
     publicBaseURL: https://example.com/
+    displayName: Sample Studio
+    description: Docs and product pages.
     robots:
       enabled: true
       groups:
@@ -84,6 +92,10 @@ spec:
             - /preview/
             - /drafts/
     sitemap:
+      enabled: true
+    llmsTxt:
+      enabled: true
+    structuredData:
       enabled: true
 ```
 
@@ -273,6 +285,22 @@ In v1, a single bundle `default`:
   - sweep deletes only orphaned 64-char lowercase hex filenames directly under `blobs/sha256/`
   - non-hash filenames are preserved
 
+### 2.11 Optional extension services (out-of-process)
+
+- Extensions are optional companion services deployed separately from `htmlservd`.
+- `htmlctl` and `htmlservd` do not load extension code at runtime.
+- Extension public traffic integration uses Epic 9 environment backends (`htmlctl backend add/list/remove`) with canonical path prefixes.
+- Extension manifests live under `extensions/<name>/extension.yaml` and follow the catalog schema in `extensions/schema/extension.schema.yaml`.
+- Extension runtime configuration is environment-scoped operational state (similar to backends/auth policies), not release artifact content:
+  - `apply`, `diff`, and `promote` do not copy extension runtime secrets or process config.
+- Official extension baseline requirements:
+  - loopback-only listeners by default
+  - staging/prod credential and datastore isolation
+  - secrets stored only in host-side env/config files
+  - abuse controls for unauthenticated public endpoints
+  - sanitized client-facing 5xx responses
+- v1 extension model is packaging + operational contract only; there is no plugin runtime API or in-process extension execution.
+
 ## 3. Rendering & composition
 
 ### 3.1 Publish-time stitching
@@ -292,6 +320,13 @@ Pages are not full HTML docs; they are layouts that reference components. Render
   - `/apple-touch-icon.png`
 - `robots.txt` is generated during release materialization from `website.yaml spec.seo.robots` and written to `/robots.txt` when enabled
 - `sitemap.xml` is generated during release materialization from `website.yaml spec.seo.sitemap` and declared pages when enabled
+- `llms.txt` is generated during release materialization from `website.yaml spec.seo.llmsTxt` and declared pages when enabled
+  - format is deterministic markdown (`# <displayName|metadata.name>`, optional `> <description>`, `## Pages`, ordered link list)
+  - uses the same crawlable-page inclusion logic as `sitemap.xml` (`robots=noindex|none` excluded, canonical/public-base scope checks applied)
+- website-level JSON-LD (`Organization`, `WebSite`) is auto-injected during release materialization when `spec.seo.structuredData.enabled` is true
+  - generated from `displayName` (fallback `metadata.name`) and `publicBaseURL`
+  - prepended before page-level JSON-LD blocks
+  - skipped per type when a page already declares a matching `@type` block
 - sitemap URL selection is deterministic:
   - pages default to `publicBaseURL + route`
   - relative `canonicalURL` values override the derived route URL when they resolve within the configured public-base scope
@@ -310,7 +345,8 @@ Pages are not full HTML docs; they are layouts that reference components. Render
   3. `meta[name]` tags sorted by `name`
   4. Open Graph tags in fixed field order
   5. Twitter tags in fixed field order
-  6. JSON-LD blocks in manifest order
+  6. website-level JSON-LD blocks (`Organization`, `WebSite`) in fixed order
+  7. page-level JSON-LD blocks in manifest order
 
 ### 3.2 Determinism requirements
 
@@ -367,6 +403,9 @@ For any environment apply:
 - all includes exist
 - prevent cycles (component cannot include other components in v1)
 - metadata URL fields in `spec.head` allow only relative URLs or `http(s)` schemes
+- website SEO feature gates:
+  - `sitemap.enabled`, `llmsTxt.enabled`, and `structuredData.enabled` each require `publicBaseURL`
+  - `displayName` and `description` lengths are bounded for deterministic storage/output safety
 
 ### 6.3 Asset validation
 

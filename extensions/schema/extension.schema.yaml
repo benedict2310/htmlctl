@@ -1,0 +1,115 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+title: htmlctl Extension Manifest
+type: object
+additionalProperties: false
+required:
+  - apiVersion
+  - kind
+  - metadata
+  - spec
+properties:
+  apiVersion:
+    type: string
+    const: htmlctl.dev/extensions/v1
+  kind:
+    type: string
+    const: Extension
+  metadata:
+    type: object
+    additionalProperties: false
+    required:
+      - name
+      - version
+    properties:
+      name:
+        type: string
+        pattern: "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$"
+      version:
+        type: string
+        description: Semver string (for example, 0.1.0)
+  spec:
+    type: object
+    additionalProperties: false
+    required:
+      - summary
+      - compatibility
+      - runtime
+      - integration
+      - env
+      - security
+    properties:
+      summary:
+        type: string
+      homepage:
+        type: string
+      compatibility:
+        type: object
+        additionalProperties: false
+        required:
+          - minHTMLCTL
+          - minHTMLSERVD
+        properties:
+          minHTMLCTL:
+            type: string
+          minHTMLSERVD:
+            type: string
+      runtime:
+        type: object
+        additionalProperties: false
+        required:
+          - requires
+          - healthEndpoints
+        properties:
+          requires:
+            type: array
+            items:
+              type: string
+          healthEndpoints:
+            type: array
+            items:
+              type: string
+      integration:
+        type: object
+        additionalProperties: false
+        required:
+          - backendPaths
+        properties:
+          backendPaths:
+            type: array
+            items:
+              type: string
+              description: Canonical path-prefix matchers (for example, /newsletter/*)
+      env:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required:
+            - name
+            - required
+            - secret
+            - description
+          properties:
+            name:
+              type: string
+              pattern: "^[A-Z][A-Z0-9_]*$"
+            required:
+              type: boolean
+            secret:
+              type: boolean
+            description:
+              type: string
+      security:
+        type: object
+        additionalProperties: false
+        required:
+          - listenerPolicy
+          - requiresRateLimiting
+          - requiresSanitized5xx
+        properties:
+          listenerPolicy:
+            type: string
+          requiresRateLimiting:
+            type: boolean
+          requiresSanitized5xx:
+            type: boolean

@@ -31,6 +31,7 @@
 | `--ref must be a pinned commit SHA, not a branch or symbolic ref` | Git input used a branch, tag, or hex-looking branch name | Resolve the exact commit first (`git rev-parse <branch>`) and pass that SHA to `--ref` |
 | `git clone ... failed` with repo URL but no secret shown | Git input mode failed while cloning a credentialed repo | Fix repo reachability or credentials; htmlctl redacts embedded URL credentials in surfaced errors |
 | `robots.txt` or `sitemap.xml` is 404 after successful apply | Server binary predates website SEO feature | Upgrade `htmlservd`, restart it, then re-apply the site |
+| `llms.txt` missing or website JSON-LD not injected after successful apply | Server binary predates `llmsTxt` / `structuredData` materialization support | Upgrade `htmlservd`, restart it, then re-apply the site |
 | favicon files missing after successful apply | `branding/` files not configured or server binary predates website icon feature | Add `spec.head.icons` plus `branding/*`, or upgrade `htmlservd` and re-apply |
 
 ### Telemetry

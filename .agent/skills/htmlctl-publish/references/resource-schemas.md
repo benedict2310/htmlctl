@@ -49,9 +49,15 @@ spec:
       ico: branding/favicon.ico
   seo:
     publicBaseURL: https://mysite.com
+    displayName: My Site
+    description: Notes and updates from My Site
     robots:
       enabled: true
     sitemap:
+      enabled: true
+    llmsTxt:
+      enabled: true
+    structuredData:
       enabled: true
 ```
 
@@ -60,8 +66,12 @@ spec:
 - `spec.baseTemplate`: base HTML template (`default` in v1)
 - `spec.head.icons`: optional website-level favicon config; source files live under `branding/`
 - `spec.seo.publicBaseURL`: canonical public site origin used for generated crawl artifacts
+- `spec.seo.displayName`: optional human-facing website name used in generated crawl/structured artifacts (falls back to `metadata.name`)
+- `spec.seo.description`: optional website summary used in generated `llms.txt`
 - `spec.seo.robots.enabled`: generates root `/robots.txt`
 - `spec.seo.sitemap.enabled`: generates root `/sitemap.xml` and appends a `Sitemap:` line to `robots.txt`
+- `spec.seo.llmsTxt.enabled`: generates root `/llms.txt` from crawlable pages
+- `spec.seo.structuredData.enabled`: auto-injects website-level `Organization` + `WebSite` JSON-LD into rendered pages
 - `publicBaseURL` should point at the real public production URL because promote does not rebuild artifacts for prod
 
 ---

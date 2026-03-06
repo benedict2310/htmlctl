@@ -25,7 +25,7 @@ func TestPromoteEndpointSuccess(t *testing.T) {
 	baseURL := "http://" + srv.Addr()
 
 	applySampleSite(t, baseURL)
-	setOnlyWebsiteSEOJSON(t, srv.db, `{"publicBaseURL":"https://example.com","robots":{"enabled":true},"sitemap":{"enabled":true}}`)
+	setOnlyWebsiteSEOJSON(t, srv.db, `{"publicBaseURL":"https://example.com","displayName":"Sample Studio","description":"Docs and product pages.","robots":{"enabled":true},"sitemap":{"enabled":true},"llmsTxt":{"enabled":true},"structuredData":{"enabled":true}}`)
 	sourceReleaseID := createReleaseWithActor(t, baseURL, "alice")
 	ensureEnvironment(t, srv.db, "sample", "prod")
 
@@ -55,7 +55,7 @@ func TestPromoteEndpointSuccess(t *testing.T) {
 
 	stagingDir := filepath.Join(srv.dataPaths.WebsitesRoot, "sample", "envs", "staging", "releases", sourceReleaseID)
 	prodDir := filepath.Join(srv.dataPaths.WebsitesRoot, "sample", "envs", "prod", "releases", out.ReleaseID)
-	for _, rel := range []string{"robots.txt", "sitemap.xml"} {
+	for _, rel := range []string{"robots.txt", "sitemap.xml", "llms.txt"} {
 		if _, err := os.Stat(filepath.Join(stagingDir, rel)); err != nil {
 			t.Fatalf("expected staging release file %s to exist: %v", rel, err)
 		}

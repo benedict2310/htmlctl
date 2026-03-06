@@ -23,12 +23,24 @@ type WebsiteHead struct {
 }
 
 type WebsiteSEO struct {
-	PublicBaseURL string          `yaml:"publicBaseURL" json:"publicBaseURL,omitempty"`
-	Robots        *WebsiteRobots  `yaml:"robots,omitempty" json:"robots,omitempty"`
-	Sitemap       *WebsiteSitemap `yaml:"sitemap,omitempty" json:"sitemap,omitempty"`
+	PublicBaseURL  string                 `yaml:"publicBaseURL" json:"publicBaseURL,omitempty"`
+	DisplayName    string                 `yaml:"displayName,omitempty" json:"displayName,omitempty"`
+	Description    string                 `yaml:"description,omitempty" json:"description,omitempty"`
+	Robots         *WebsiteRobots         `yaml:"robots,omitempty" json:"robots,omitempty"`
+	Sitemap        *WebsiteSitemap        `yaml:"sitemap,omitempty" json:"sitemap,omitempty"`
+	LLMsTxt        *WebsiteLLMsTxt        `yaml:"llmsTxt,omitempty" json:"llmsTxt,omitempty"`
+	StructuredData *WebsiteStructuredData `yaml:"structuredData,omitempty" json:"structuredData,omitempty"`
 }
 
 type WebsiteSitemap struct {
+	Enabled bool `yaml:"enabled" json:"enabled"`
+}
+
+type WebsiteLLMsTxt struct {
+	Enabled bool `yaml:"enabled" json:"enabled"`
+}
+
+type WebsiteStructuredData struct {
 	Enabled bool `yaml:"enabled" json:"enabled"`
 }
 

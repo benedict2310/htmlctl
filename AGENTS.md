@@ -122,6 +122,10 @@ Epic 6 addressed 16 findings from the 2026-02-20 security audit. Maintain these 
 | SQL identifiers | Check table/column against `allowedDeleteTargets` allowlist before interpolation |
 | Container | Non-root UID 10001; `restrict,port-forwarding` on authorized_keys; `PermitTunnel no` |
 
+## Skill Maintenance
+
+- **`.agent/skills/htmlctl-publish`** must be kept in sync after every significant change to the app (new commands, changed flags, updated API behaviour, new resource types, etc.). Update the skill's reference docs and prompt files to reflect current CLI and API capabilities before closing a story.
+
 ## Commit & Pull Request Guidelines
 
 - Commit message format: `<type>(<scope>): <imperative summary>`

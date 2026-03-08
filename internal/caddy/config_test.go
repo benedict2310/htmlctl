@@ -62,6 +62,13 @@ func TestGenerateConfigRejectsInvalidSite(t *testing.T) {
 	}}); err == nil {
 		t.Fatalf("expected invalid backend upstream error")
 	}
+	if _, err := GenerateConfig([]Site{{
+		Domain:   "example.com",
+		Root:     "/srv/sample/current",
+		Backends: []Backend{{PathPrefix: "/api/*", Upstream: "https://api.example.com/base"}},
+	}}); err == nil {
+		t.Fatalf("expected backend upstream path rejection")
+	}
 }
 
 func TestGenerateConfigWithAutoHTTPSDisabled(t *testing.T) {

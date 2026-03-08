@@ -11,16 +11,22 @@ Examples:
 
 1. Deploy extension services separately from `htmlservd`.
 2. Keep extension listeners loopback-only on the host.
-3. Route public paths with environment backends.
-4. Validate behavior on staging first.
-5. Promote static releases independently; maintain extension runtime config per environment.
+3. Validate extension compatibility before cutover.
+4. Route public paths with environment backends.
+5. Validate behavior on staging first.
+6. Promote static releases independently; maintain extension runtime config per environment.
 
 Backends are environment-scoped runtime config, not bundle content:
 
 ```bash
+htmlctl extension validate extensions/newsletter --remote --context staging
 htmlctl backend add website/<site> --env staging --path /service/* --upstream http://127.0.0.1:<port>
 htmlctl backend list website/<site> --env staging
 ```
+
+Backend constraints and failure semantics:
+- upstreams must be origin-only `http://` or `https://` targets; do not include path segments such as `/base`
+- if `backend add` or `backend remove` cannot be applied because Caddy reload fails, the mutation is rolled back and the command fails instead of leaving stored state ahead of live routing
 
 ## Newsletter Quickstart (New Operator)
 
@@ -31,14 +37,16 @@ Reference implementation:
 - Adoption validation log: `docs/review-logs/E12-newsletter-extension-adoption-validation-2026-03-06.md`
 
 1. Install staging/prod service units and env files with `extensions/newsletter/ops/setup-newsletter-extension.sh`.
-2. Verify service invariants before routing:
+2. Validate manifest compatibility before routing:
+- `htmlctl extension validate extensions/newsletter --remote --context staging`
+3. Verify service invariants before routing:
 - `systemctl status htmlctl-newsletter-{staging,prod}`
 - `curl -sf http://127.0.0.1:9501/healthz` and `:9502/healthz`
 - `ss -tlnp` confirms loopback bind only
 - env files mode `640 root htmlctl-newsletter`
-3. Add staging backend and validate route behavior.
-4. Validate failure mode handling (upstream down, wrong mapping).
-5. Add prod backend only after staging checks are clean.
+4. Add staging backend and validate route behavior.
+5. Validate failure mode handling (upstream down, wrong mapping).
+6. Add prod backend only after staging checks are clean.
 
 ## Production Cutover Checklist
 
@@ -64,6 +72,7 @@ Recommended drills before public launch:
 - stop the newsletter unit and confirm proxied path fails as expected (`502` from reverse proxy)
 - restore service and confirm route recovery
 - test incorrect upstream mapping in staging, then restore correct mapping
+- confirm failed backend mutations are rejected instead of silently persisting
 
 ## Upgrade Path
 

@@ -289,6 +289,7 @@ Verification:
 Newsletter extension pattern:
 
 ```bash
+htmlctl extension validate extensions/newsletter --remote --context staging
 htmlctl backend add website/sample --env staging --path /newsletter/* --upstream http://127.0.0.1:9501 --context staging
 htmlctl backend list website/sample --env staging --context staging
 curl -s -o /dev/null -w '%{http_code}\n' https://staging.example.com/newsletter/verify
@@ -296,11 +297,13 @@ curl -s -o /dev/null -w '%{http_code}\n' https://staging.example.com/newsletter/
 
 For the foundation newsletter service, `/newsletter/verify` currently returns `501` as the expected placeholder response. Validate route plumbing and failure handling before any public cutover.
 Note: backend path `/newsletter/*` routes subpaths, not the bare `/newsletter` path.
+Note: backend upstreams are origin-only targets. Do not configure values such as `http://127.0.0.1:9501/base`.
 
 Required extension gate before prod routing:
 - extension listener is loopback-only
 - extension health checks pass on local listener
 - staging/prod use separate credentials and datastores
+- extension manifest compatibility is validated against local `htmlctl` and target `htmlservd`
 - backend rollback command prepared (`htmlctl backend remove ...`)
 
 ## 9. Runbook RB-RELEASE-01: History, Rollback, Promote

@@ -46,6 +46,7 @@ Write your site as declarative YAML resources. `htmlctl` renders them determinis
 Per-environment backends are managed separately from release content, so `/api/*` can point at different upstreams in staging and prod without changing the promoted static artifact.
 
 Optional dynamic companion services are handled as **extensions** (for example newsletter). Extensions are separate deployable services integrated via environment backends, not plugins loaded into `htmlctl` or `htmlservd` runtime. See [`extensions/README.md`](extensions/README.md) and [`docs/reference/extensions.md`](docs/reference/extensions.md).
+Run `htmlctl extension validate extensions/<name> --remote --context <ctx>` before wiring an extension into a live environment.
 
 ---
 

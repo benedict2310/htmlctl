@@ -997,6 +997,17 @@ func (q *Queries) DeleteBackendByPathPrefix(ctx context.Context, environmentID i
 	return affected > 0, nil
 }
 
+func (q *Queries) RestoreBackend(ctx context.Context, in BackendRow) error {
+	_, err := q.db.ExecContext(ctx, `
+INSERT INTO environment_backends(id, environment_id, path_prefix, upstream, created_at, updated_at)
+VALUES(?, ?, ?, ?, ?, ?)
+`, in.ID, in.EnvironmentID, in.PathPrefix, in.Upstream, in.CreatedAt, in.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("restore backend: %w", err)
+	}
+	return nil
+}
+
 func (q *Queries) UpsertAuthPolicy(ctx context.Context, in AuthPolicyRow) error {
 	_, err := q.db.ExecContext(ctx, `
 INSERT INTO auth_policies(environment_id, path_prefix, username, password_hash)

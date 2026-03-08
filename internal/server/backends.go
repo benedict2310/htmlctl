@@ -160,6 +160,38 @@ func (s *Server) handleAddBackend(w http.ResponseWriter, r *http.Request, websit
 		reason := "backend.add " + website + "/" + env + " " + pathPrefix
 		if err := s.caddyReloader.Reload(r.Context(), reason); err != nil {
 			s.logger.Error("caddy reload failed after backend add", "website", website, "environment", env, "path_prefix", pathPrefix, "reason", reason, "error", err)
+			if created {
+				rolledBack, rollbackErr := q.DeleteBackendByPathPrefix(r.Context(), envRow.ID, pathPrefix)
+				if rollbackErr != nil {
+					if reconcileErr := s.reconcileBackendConfig(r.Context(), "add rollback failure "+website+"/"+env+" "+pathPrefix); reconcileErr != nil {
+						s.writeInternalAPIError(w, r, "backend created but caddy reload failed and rollback failed", err, "website", website, "environment", env, "path_prefix", pathPrefix, "rollback_error", rollbackErr, "reconcile_error", reconcileErr)
+						return
+					}
+					s.logger.Warn("backend caddy reconcile succeeded after failed create rollback", "website", website, "environment", env, "path_prefix", pathPrefix)
+				} else if rolledBack {
+					s.writeInternalAPIError(w, r, "backend add was rolled back because caddy reload failed", err, "website", website, "environment", env, "path_prefix", pathPrefix)
+					return
+				}
+			} else {
+				if _, deleteErr := q.DeleteBackendByPathPrefix(r.Context(), envRow.ID, pathPrefix); deleteErr != nil {
+					if reconcileErr := s.reconcileBackendConfig(r.Context(), "update rollback delete failure "+website+"/"+env+" "+pathPrefix); reconcileErr != nil {
+						s.writeInternalAPIError(w, r, "backend updated but caddy reload failed and rollback delete failed", err, "website", website, "environment", env, "path_prefix", pathPrefix, "rollback_error", deleteErr, "reconcile_error", reconcileErr)
+						return
+					}
+					s.logger.Warn("backend caddy reconcile succeeded after failed update rollback delete", "website", website, "environment", env, "path_prefix", pathPrefix)
+				} else if rollbackErr := q.RestoreBackend(r.Context(), existing); rollbackErr != nil {
+					if reconcileErr := s.reconcileBackendConfig(r.Context(), "update rollback restore failure "+website+"/"+env+" "+pathPrefix); reconcileErr != nil {
+						s.writeInternalAPIError(w, r, "backend updated but caddy reload failed and rollback restore failed", err, "website", website, "environment", env, "path_prefix", pathPrefix, "rollback_error", rollbackErr, "reconcile_error", reconcileErr)
+						return
+					}
+					s.logger.Warn("backend caddy reconcile succeeded after failed update rollback restore", "website", website, "environment", env, "path_prefix", pathPrefix)
+					s.writeInternalAPIError(w, r, "backend update failed and rollback restore failed", err, "website", website, "environment", env, "path_prefix", pathPrefix, "rollback_error", rollbackErr)
+					return
+				} else {
+					s.writeInternalAPIError(w, r, "backend update was rolled back because caddy reload failed", err, "website", website, "environment", env, "path_prefix", pathPrefix)
+					return
+				}
+			}
 		}
 	}
 
@@ -224,6 +256,16 @@ func (s *Server) handleRemoveBackend(w http.ResponseWriter, r *http.Request, web
 		reason := "backend.remove " + website + "/" + env + " " + pathPrefix
 		if err := s.caddyReloader.Reload(r.Context(), reason); err != nil {
 			s.logger.Error("caddy reload failed after backend remove", "website", website, "environment", env, "path_prefix", pathPrefix, "reason", reason, "error", err)
+			if rollbackErr := q.RestoreBackend(r.Context(), row); rollbackErr != nil {
+				if reconcileErr := s.reconcileBackendConfig(r.Context(), "remove rollback failure "+website+"/"+env+" "+pathPrefix); reconcileErr != nil {
+					s.writeInternalAPIError(w, r, "backend removed but caddy reload failed and rollback failed", err, "website", website, "environment", env, "path_prefix", pathPrefix, "rollback_error", rollbackErr, "reconcile_error", reconcileErr)
+					return
+				}
+				s.logger.Warn("backend caddy reconcile succeeded after failed remove rollback", "website", website, "environment", env, "path_prefix", pathPrefix)
+			} else {
+				s.writeInternalAPIError(w, r, "backend removal was rolled back because caddy reload failed", err, "website", website, "environment", env, "path_prefix", pathPrefix)
+				return
+			}
 		}
 	}
 
@@ -332,4 +374,16 @@ func parseBackendsPath(pathValue string) (website, env string, ok bool, err erro
 		return website, env, false, fmt.Errorf("invalid environment name %q: %w", env, err)
 	}
 	return website, env, true, nil
+}
+
+func (s *Server) reconcileBackendConfig(ctx context.Context, reason string) error {
+	if s.caddyReloader == nil {
+		return nil
+	}
+	reconcileReason := "backend.reconcile " + strings.TrimSpace(reason)
+	if err := s.caddyReloader.Reload(ctx, reconcileReason); err != nil {
+		return fmt.Errorf("reconcile caddy config: %w", err)
+	}
+	s.logger.Warn("backend caddy reconciliation reload succeeded", "reason", reconcileReason)
+	return nil
 }

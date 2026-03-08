@@ -130,3 +130,13 @@ Document mandatory invariants:
 - Re-validated in local Docker verification matrix (2026-03-06):
   - `go test ./internal/extensionspec` in `golang:1.24-bookworm` container passed
   - confirms extension manifest contract remains parseable/validated in a clean container environment
+
+## 10. Hardening Update (2026-03-08)
+
+- The original v1 contract shipped as a docs and packaging artifact only.
+- Added active compatibility enforcement path:
+  - `htmlctl extension validate <extension-dir-or-manifest>`
+  - validates manifest structure plus `spec.compatibility.minHTMLCTL`
+  - `--remote --context <ctx>` also validates `spec.compatibility.minHTMLSERVD` against the selected remote `htmlservd`
+- Added semver comparison helpers in `internal/extensionspec` so compatibility checks are executable rather than advisory-only.
+- Updated extension reference and operator docs to treat validation as the pre-routing gate before extension adoption or upgrade.

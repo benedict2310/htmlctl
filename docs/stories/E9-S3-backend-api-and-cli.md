@@ -181,3 +181,13 @@ After a successful `UpsertBackend` or `DeleteBackendByPathPrefix`, call the exis
 - **Risk:** Path prefixes contain literal `/` which cannot be safely round-tripped through a URL path segment. **Mitigation:** resolved by design — `DELETE` uses a query parameter (`?path=...`) rather than a path segment. Parse `r.URL.RawQuery` with `url.ParseQuery` so malformed query encoding is rejected explicitly instead of being silently ignored.
 - **Risk:** Caddy reload fails after a backend is added because the upstream is unreachable or the config is syntactically wrong. **Mitigation:** Caddy validates syntax at reload time (not upstream reachability). Log the reload error; surface it in the CLI output as a warning so the operator knows to check. The backend is persisted either way.
 - **Risk:** Operator adds a backend with a path prefix that shadows a legitimate static file path (e.g. `/styles/*`). **Mitigation:** this is operator intent, not a bug. Document the behaviour: `reverse_proxy` takes priority over `file_server` for the declared prefix. Future story could add a warning for suspicious prefixes.
+
+## 11. Hardening Update (2026-03-08)
+
+- Backend upstream validation is now stricter:
+  - upstreams must be absolute `http://` or `https://` origins
+  - query strings, fragments, credentials, and path segments are rejected
+- Backend mutation semantics changed after production validation:
+  - if Caddy reload fails after `backend add` or `backend remove`, the mutation is rolled back and the API returns `500`
+  - this prevents persisted backend intent from drifting ahead of live routing state
+- Tests now cover rollback-on-reload-failure for both add and remove paths.

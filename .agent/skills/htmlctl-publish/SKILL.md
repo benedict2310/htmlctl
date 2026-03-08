@@ -87,10 +87,12 @@ Environment backends let a static site call dynamic services through relative pa
 
 - Manage them with `htmlctl backend add`, `htmlctl backend list`, and `htmlctl backend remove`.
 - Backend paths must use the canonical prefix form `/<segment>/*`.
+- Backend upstreams must be origin-only `http://` or `https://` targets. Do not include path segments such as `/base`.
 - Backends are environment-scoped runtime routing state, not site content. They are not stored in `site/`, are not affected by `htmlctl apply`, and are not copied by `htmlctl promote`.
 - Use them when staging and prod should serve the same static release but proxy the same relative prefix to different upstreams.
 - `htmlctl get backends --context staging` and `htmlctl backend list --context staging` both inventory backend state for the active context website/environment.
 - `htmlctl backend add` prints follow-up guidance after success. In table mode it also warns on suspicious static-content prefixes such as `/styles/*`, `/scripts/*`, `/assets/*`, and `/favicon...`.
+- If a backend mutation cannot be applied because Caddy reload fails, `htmlctl` rolls the backend change back and returns a failure instead of silently persisting stale intent.
 - After changing a backend, verify the route on that environment directly. Do not assume a staging backend exists in prod.
 
 ### Newsletter Extension Pattern
@@ -101,6 +103,7 @@ The official newsletter extension is an optional companion service routed throug
 - Configure backend routes per environment:
 
 ```bash
+htmlctl extension validate extensions/newsletter --remote --context staging
 htmlctl backend add website/<name> --env staging --path /newsletter/* --upstream http://127.0.0.1:9501 --context staging
 htmlctl backend add website/<name> --env prod --path /newsletter/* --upstream http://127.0.0.1:9502 --context prod
 ```

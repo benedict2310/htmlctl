@@ -240,9 +240,10 @@ func TestBackendsReloadFailureDoesNotRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("POST /backends error = %v", err)
 	}
+	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("expected 201 even when reload fails, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when reload fails, got %d body=%s", resp.StatusCode, string(body))
 	}
 
 	q := dbpkg.NewQueries(srv.db)
@@ -254,12 +255,55 @@ func TestBackendsReloadFailureDoesNotRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetEnvironmentByName() error = %v", err)
 	}
+	if _, err := q.GetBackendByPathPrefix(context.Background(), envRow.ID, "/api/*"); err == nil {
+		t.Fatalf("expected backend add to be rolled back")
+	}
+}
+
+func TestBackendsRemoveReloadFailureRollsBack(t *testing.T) {
+	srv := startTestServer(t)
+	baseURL := "http://" + srv.Addr()
+	seedDomainWebsiteEnv(t, srv, "sample", "staging")
+
+	q := dbpkg.NewQueries(srv.db)
+	websiteRow, err := q.GetWebsiteByName(context.Background(), "sample")
+	if err != nil {
+		t.Fatalf("GetWebsiteByName() error = %v", err)
+	}
+	envRow, err := q.GetEnvironmentByName(context.Background(), websiteRow.ID, "staging")
+	if err != nil {
+		t.Fatalf("GetEnvironmentByName() error = %v", err)
+	}
+	if err := q.UpsertBackend(context.Background(), dbpkg.BackendRow{
+		EnvironmentID: envRow.ID,
+		PathPrefix:    "/api/*",
+		Upstream:      "https://api.example.com",
+	}); err != nil {
+		t.Fatalf("UpsertBackend() error = %v", err)
+	}
+
+	srv.caddyReloader = &fakeCaddyReloader{err: context.DeadlineExceeded}
+
+	req, err := http.NewRequest(http.MethodDelete, baseURL+"/api/v1/websites/sample/environments/staging/backends?path=%2Fapi%2F%2A", nil)
+	if err != nil {
+		t.Fatalf("new delete request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("DELETE /backends error = %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when delete reload fails, got %d body=%s", resp.StatusCode, string(body))
+	}
+
 	row, err := q.GetBackendByPathPrefix(context.Background(), envRow.ID, "/api/*")
 	if err != nil {
-		t.Fatalf("GetBackendByPathPrefix() error = %v", err)
+		t.Fatalf("expected backend remove to be rolled back, got error %v", err)
 	}
 	if row.Upstream != "https://api.example.com" {
-		t.Fatalf("unexpected persisted backend: %#v", row)
+		t.Fatalf("unexpected restored backend: %#v", row)
 	}
 }
 

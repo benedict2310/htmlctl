@@ -105,6 +105,11 @@ Expected: both return `f`.
 
 Current foundation routes `/newsletter/*` subpaths to a placeholder response (`501 Not Implemented`). Validate plumbing with this expected response until full endpoints ship.
 Note: `/newsletter/*` does not match the bare `/newsletter` path; probe `/newsletter/verify`.
+Preflight compatibility gate:
+
+```bash
+htmlctl extension validate extensions/newsletter --remote --context staging
+```
 
 Add staging backend:
 
@@ -132,12 +137,14 @@ htmlctl backend add website/<site> --env staging --path /newsletter/* --upstream
 ```
 
 Expected during outage/wrong upstream checks: `502` (or equivalent upstream-unreachable gateway failure).
+Expected during backend mutation failure: `htmlctl backend add/remove` should fail and roll back instead of silently leaving stale backend state behind.
 
 ## 5. Production Cutover Checklist
 
 Only add prod routing after all staging checks are green.
 
 Checklist:
+- `htmlctl extension validate extensions/newsletter --remote --context prod` passes
 - prod unit healthy on loopback and no public listener
 - prod env file permissions and DB isolation checks pass
 - staging backend validation and failure drills completed

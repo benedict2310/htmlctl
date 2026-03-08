@@ -70,6 +70,17 @@ func ValidateUpstreamURL(raw string) (string, error) {
 	if parsed.Fragment != "" {
 		return "", fmt.Errorf("upstream URL must not include a fragment")
 	}
+	if parsed.Path != "" && parsed.Path != "/" {
+		return "", fmt.Errorf("upstream URL must not include a path")
+	}
+	if parsed.RawPath != "" && parsed.RawPath != "/" {
+		return "", fmt.Errorf("upstream URL must not include a path")
+	}
+	if parsed.Path == "/" || parsed.RawPath == "/" {
+		parsed.Path = ""
+		parsed.RawPath = ""
+		return parsed.String(), nil
+	}
 
 	return value, nil
 }

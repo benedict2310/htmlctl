@@ -23,6 +23,11 @@ Schema location:
 Catalog location:
 - `extensions/`
 
+Validation and compatibility gate:
+- `htmlctl extension validate <extension-dir-or-manifest>` validates manifest structure and checks `minHTMLCTL` against the local CLI version.
+- `htmlctl extension validate <extension-dir-or-manifest> --remote --context <ctx>` also checks `minHTMLSERVD` against the selected remote `htmlservd`.
+- Compatibility metadata is not enforced implicitly during `backend add`; operators should run the validation command before adopting or upgrading an extension.
+
 ## Security Baseline
 
 Official extensions must document and satisfy:
@@ -51,6 +56,7 @@ Install artifacts:
 - `extensions/newsletter/ops/env/prod.env.example`
 
 Post-install checks:
+- `htmlctl extension validate extensions/newsletter --remote --context <ctx>`
 - `systemctl status` for staging and prod units
 - loopback-only listener verification via `ss -tlnp`
 - `/healthz` probes on staging/prod loopback ports

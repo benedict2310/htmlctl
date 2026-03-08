@@ -135,3 +135,26 @@ Include explicit post-install checks for:
   - Docker E2E apply + domain routing check (`E2E_OK`)
   - Re-validated in containerized checks (2026-03-06):
     - `bash -n extensions/newsletter/ops/setup-newsletter-extension.sh` inside `golang:1.24-bookworm`
+
+## 10. Campaign Ops Update (2026-03-08)
+
+- Installer/env contract now includes:
+  - `NEWSLETTER_RESEND_FROM`
+  - `NEWSLETTER_LINK_SECRET`
+- Installer auto-generates per-environment `NEWSLETTER_LINK_SECRET` values when operators do not provide them explicitly.
+- Runbook now documents:
+  - legacy import command
+  - campaign upsert flow
+  - preview send flow
+  - low-tier Resend pacing example (`--interval 30s`)
+  - unsubscribe verification expectations on `/newsletter/unsubscribe`
+
+## 11. Installer and Runbook Hardening Update (2026-03-08)
+
+- Installer validation now enforces:
+  - minimum 32-character `NEWSLETTER_*_LINK_SECRET`
+  - sender-address shape for `NEWSLETTER_*_RESEND_FROM`
+- Env examples now document the sender-address and link-secret expectations inline.
+- Hetzner runbook removed stale placeholder-route language and now consistently describes the real signup, verify, unsubscribe, import, preview, and paced-send workflow.
+- Added dedicated review log:
+  - `docs/review-logs/E12-newsletter-extension-hardening-2026-03-08.md`

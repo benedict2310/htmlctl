@@ -72,6 +72,31 @@ validate_no_whitespace() {
   fi
 }
 
+validate_min_length() {
+  local key="$1"
+  local value="$2"
+  local min_len="$3"
+  if (( ${#value} < min_len )); then
+    echo "error: ${key} must be at least ${min_len} characters" >&2
+    exit 1
+  fi
+}
+
+validate_sender_address() {
+  local key="$1"
+  local value="$2"
+  local bare_pattern='^[^[:space:]<>]+@[^[:space:]<>]+$'
+  local named_pattern='^.+[[:space:]]<[^[:space:]<>]+@[^[:space:]<>]+>$'
+  if [[ "${value}" =~ ${bare_pattern} ]]; then
+    return
+  fi
+  if [[ "${value}" =~ ${named_pattern} ]]; then
+    return
+  fi
+  echo "error: ${key} must be a valid sender address (for example Team <newsletter@example.com>)" >&2
+  exit 1
+}
+
 validate_identifier() {
   local key="$1"
   local value="$2"
@@ -158,26 +183,47 @@ url_encode() {
   printf '%s' "${out}"
 }
 
+generate_urlsafe_secret() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -base64 48 | tr '+/' '-_' | tr -d '=\n'
+    return
+  fi
+  dd if=/dev/urandom bs=48 count=1 2>/dev/null | base64 | tr '+/' '-_' | tr -d '=\n'
+}
+
 require_env "NEWSLETTER_BINARY_PATH"
 require_env "NEWSLETTER_STAGING_DB_PASSWORD"
 require_env "NEWSLETTER_PROD_DB_PASSWORD"
 require_env "NEWSLETTER_STAGING_RESEND_API_KEY"
 require_env "NEWSLETTER_PROD_RESEND_API_KEY"
+require_env "NEWSLETTER_STAGING_RESEND_FROM"
+require_env "NEWSLETTER_PROD_RESEND_FROM"
 require_env "NEWSLETTER_STAGING_PUBLIC_BASE_URL"
 require_env "NEWSLETTER_PROD_PUBLIC_BASE_URL"
+
+NEWSLETTER_STAGING_LINK_SECRET="${NEWSLETTER_STAGING_LINK_SECRET:-$(generate_urlsafe_secret)}"
+NEWSLETTER_PROD_LINK_SECRET="${NEWSLETTER_PROD_LINK_SECRET:-$(generate_urlsafe_secret)}"
 
 validate_no_single_quote "NEWSLETTER_STAGING_DB_PASSWORD" "${NEWSLETTER_STAGING_DB_PASSWORD}"
 validate_no_single_quote "NEWSLETTER_PROD_DB_PASSWORD" "${NEWSLETTER_PROD_DB_PASSWORD}"
 validate_no_single_quote "NEWSLETTER_STAGING_RESEND_API_KEY" "${NEWSLETTER_STAGING_RESEND_API_KEY}"
 validate_no_single_quote "NEWSLETTER_PROD_RESEND_API_KEY" "${NEWSLETTER_PROD_RESEND_API_KEY}"
+validate_no_single_quote "NEWSLETTER_STAGING_LINK_SECRET" "${NEWSLETTER_STAGING_LINK_SECRET}"
+validate_no_single_quote "NEWSLETTER_PROD_LINK_SECRET" "${NEWSLETTER_PROD_LINK_SECRET}"
 validate_no_single_quote "NEWSLETTER_STAGING_PUBLIC_BASE_URL" "${NEWSLETTER_STAGING_PUBLIC_BASE_URL}"
 validate_no_single_quote "NEWSLETTER_PROD_PUBLIC_BASE_URL" "${NEWSLETTER_PROD_PUBLIC_BASE_URL}"
 validate_no_whitespace "NEWSLETTER_STAGING_DB_PASSWORD" "${NEWSLETTER_STAGING_DB_PASSWORD}"
 validate_no_whitespace "NEWSLETTER_PROD_DB_PASSWORD" "${NEWSLETTER_PROD_DB_PASSWORD}"
 validate_no_whitespace "NEWSLETTER_STAGING_RESEND_API_KEY" "${NEWSLETTER_STAGING_RESEND_API_KEY}"
 validate_no_whitespace "NEWSLETTER_PROD_RESEND_API_KEY" "${NEWSLETTER_PROD_RESEND_API_KEY}"
+validate_no_whitespace "NEWSLETTER_STAGING_LINK_SECRET" "${NEWSLETTER_STAGING_LINK_SECRET}"
+validate_no_whitespace "NEWSLETTER_PROD_LINK_SECRET" "${NEWSLETTER_PROD_LINK_SECRET}"
 validate_no_whitespace "NEWSLETTER_STAGING_PUBLIC_BASE_URL" "${NEWSLETTER_STAGING_PUBLIC_BASE_URL}"
 validate_no_whitespace "NEWSLETTER_PROD_PUBLIC_BASE_URL" "${NEWSLETTER_PROD_PUBLIC_BASE_URL}"
+validate_min_length "NEWSLETTER_STAGING_LINK_SECRET" "${NEWSLETTER_STAGING_LINK_SECRET}" 32
+validate_min_length "NEWSLETTER_PROD_LINK_SECRET" "${NEWSLETTER_PROD_LINK_SECRET}" 32
+validate_sender_address "NEWSLETTER_STAGING_RESEND_FROM" "${NEWSLETTER_STAGING_RESEND_FROM}"
+validate_sender_address "NEWSLETTER_PROD_RESEND_FROM" "${NEWSLETTER_PROD_RESEND_FROM}"
 validate_https_origin "NEWSLETTER_STAGING_PUBLIC_BASE_URL" "${NEWSLETTER_STAGING_PUBLIC_BASE_URL}"
 validate_https_origin "NEWSLETTER_PROD_PUBLIC_BASE_URL" "${NEWSLETTER_PROD_PUBLIC_BASE_URL}"
 
@@ -252,6 +298,8 @@ NEWSLETTER_HTTP_ADDR=${STAGING_HTTP_ADDR}
 NEWSLETTER_DATABASE_URL=postgres://${ROLE_STAGING}:${STAGING_DB_PASSWORD_URL}@${DB_HOST}:${DB_PORT}/${DB_STAGING}?sslmode=disable
 NEWSLETTER_PUBLIC_BASE_URL=${NEWSLETTER_STAGING_PUBLIC_BASE_URL}
 NEWSLETTER_RESEND_API_KEY=${NEWSLETTER_STAGING_RESEND_API_KEY}
+NEWSLETTER_RESEND_FROM=${NEWSLETTER_STAGING_RESEND_FROM}
+NEWSLETTER_LINK_SECRET=${NEWSLETTER_STAGING_LINK_SECRET}
 ENV
 run_root install -m 640 -o root -g "${NEWSLETTER_GROUP}" "${staging_env_tmp}" "${NEWSLETTER_ETC_DIR}/staging.env"
 rm -f "${staging_env_tmp}"
@@ -263,6 +311,8 @@ NEWSLETTER_HTTP_ADDR=${PROD_HTTP_ADDR}
 NEWSLETTER_DATABASE_URL=postgres://${ROLE_PROD}:${PROD_DB_PASSWORD_URL}@${DB_HOST}:${DB_PORT}/${DB_PROD}?sslmode=disable
 NEWSLETTER_PUBLIC_BASE_URL=${NEWSLETTER_PROD_PUBLIC_BASE_URL}
 NEWSLETTER_RESEND_API_KEY=${NEWSLETTER_PROD_RESEND_API_KEY}
+NEWSLETTER_RESEND_FROM=${NEWSLETTER_PROD_RESEND_FROM}
+NEWSLETTER_LINK_SECRET=${NEWSLETTER_PROD_LINK_SECRET}
 ENV
 run_root install -m 640 -o root -g "${NEWSLETTER_GROUP}" "${prod_env_tmp}" "${NEWSLETTER_ETC_DIR}/prod.env"
 rm -f "${prod_env_tmp}"

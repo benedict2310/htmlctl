@@ -2,9 +2,9 @@ apiVersion: htmlctl.dev/extensions/v1
 kind: Extension
 metadata:
   name: newsletter
-  version: 0.3.1
+  version: 0.4.0
 spec:
-  summary: Optional newsletter companion service with a standalone reference runtime.
+  summary: Optional newsletter companion service with signup, verification, unsubscribe, legacy import, and paced campaign delivery.
   homepage: https://github.com/benedict2310/htmlctl/tree/main/extensions/newsletter
   compatibility:
     minHTMLCTL: 0.11.0
@@ -39,6 +39,14 @@ spec:
       required: true
       secret: true
       description: Resend API key used for newsletter email delivery.
+    - name: NEWSLETTER_RESEND_FROM
+      required: true
+      secret: false
+      description: Valid sender address used for verification and campaign delivery (for example `Team <newsletter@example.com>`).
+    - name: NEWSLETTER_LINK_SECRET
+      required: true
+      secret: true
+      description: High-entropy secret (minimum 32 characters) used to generate and validate signed unsubscribe links.
   security:
     listenerPolicy: loopback-only
     requiresRateLimiting: true

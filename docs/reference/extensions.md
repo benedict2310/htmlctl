@@ -42,7 +42,7 @@ Official extensions must document and satisfy:
 - `newsletter` (reference implementation available)
   - Contract: `extensions/newsletter/extension.yaml`
   - Service module: `extensions/newsletter/service`
-  - Runtime binary command: `htmlctl-newsletter <serve|migrate>`
+  - Runtime binary command: `htmlctl-newsletter <serve|migrate|import-legacy|campaign>`
   - Installer assets: `extensions/newsletter/ops/`
   - Hetzner runbook: `docs/guides/newsletter-extension-hetzner.md`
 
@@ -61,4 +61,11 @@ Post-install checks:
 - loopback-only listener verification via `ss -tlnp`
 - `/healthz` probes on staging/prod loopback ports
 - env file mode verification (`640 root htmlctl-newsletter`)
+- env contract verification:
+  - `NEWSLETTER_RESEND_FROM` is a valid sender address
+  - `NEWSLETTER_LINK_SECRET` is unique per environment and at least 32 characters
 - staging/prod DB isolation query checks (`has_database_privilege`)
+- campaign workflow verification:
+  - `htmlctl-newsletter campaign upsert --slug <slug> --subject ... --html-file ... --text-file ...`
+  - `htmlctl-newsletter campaign preview --slug <slug> --to you@example.com`
+  - `htmlctl-newsletter campaign send --slug <slug> --mode all --interval 30s --confirm`

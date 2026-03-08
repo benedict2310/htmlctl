@@ -4,11 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/mail"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
 )
+
+const minLinkSecretLength = 32
 
 type ServeConfig struct {
 	Environment   string
@@ -16,6 +19,8 @@ type ServeConfig struct {
 	DatabaseURL   string
 	PublicBaseURL string
 	ResendAPIKey  string
+	ResendFrom    string
+	LinkSecret    string
 }
 
 type MigrateConfig struct {
@@ -50,9 +55,19 @@ func LoadServeFromEnv() (ServeConfig, error) {
 		return ServeConfig{}, fmt.Errorf("NEWSLETTER_PUBLIC_BASE_URL: %w", err)
 	}
 
-	resendAPIKey := strings.TrimSpace(os.Getenv("NEWSLETTER_RESEND_API_KEY"))
-	if resendAPIKey == "" {
-		return ServeConfig{}, errors.New("NEWSLETTER_RESEND_API_KEY is required")
+	linkSecret := strings.TrimSpace(os.Getenv("NEWSLETTER_LINK_SECRET"))
+	if linkSecret == "" {
+		return ServeConfig{}, errors.New("NEWSLETTER_LINK_SECRET is required")
+	}
+	if len(linkSecret) < minLinkSecretLength {
+		return ServeConfig{}, fmt.Errorf("NEWSLETTER_LINK_SECRET must be at least %d characters", minLinkSecretLength)
+	}
+	resendFrom := strings.TrimSpace(os.Getenv("NEWSLETTER_RESEND_FROM"))
+	if resendFrom == "" {
+		return ServeConfig{}, errors.New("NEWSLETTER_RESEND_FROM is required")
+	}
+	if _, err := mail.ParseAddress(resendFrom); err != nil {
+		return ServeConfig{}, fmt.Errorf("NEWSLETTER_RESEND_FROM: invalid address: %w", err)
 	}
 
 	return ServeConfig{
@@ -60,7 +75,9 @@ func LoadServeFromEnv() (ServeConfig, error) {
 		HTTPAddr:      addr,
 		DatabaseURL:   dbURL,
 		PublicBaseURL: publicBaseURL,
-		ResendAPIKey:  resendAPIKey,
+		ResendAPIKey:  strings.TrimSpace(os.Getenv("NEWSLETTER_RESEND_API_KEY")),
+		ResendFrom:    resendFrom,
+		LinkSecret:    linkSecret,
 	}, nil
 }
 

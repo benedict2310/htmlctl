@@ -141,4 +141,37 @@ Enforce and document:
   - Re-validated (2026-03-06):
     - local PostgreSQL container + host-loopback `htmlctl-newsletter serve`
     - `/healthz` returned `200`
-    - routed `/newsletter/verify` via htmlservd backend returned expected `501` placeholder
+    - routed `/newsletter/verify` via htmlservd backend returned the extension-owned verification response
+
+## 10. Campaign Hardening Update (2026-03-08)
+
+- Extended the reference runtime beyond the original foundation baseline:
+  - public unsubscribe endpoint (`GET /newsletter/unsubscribe?token=...`)
+  - operator `campaign upsert`
+  - operator `campaign preview`
+  - operator `campaign send`
+  - operator `import-legacy`
+- Added signed unsubscribe links via `NEWSLETTER_LINK_SECRET`.
+- Added resumable/idempotent campaign send claims backed by `campaign_sends.updated_at` and `attempt_count`.
+- Added generic campaign footer behavior:
+  - preview sends show a preview-only unsubscribe note
+  - live sends append recipient-specific unsubscribe links automatically
+- Added legacy subscriber import support for the common `subscribers` source schema (`email`, `status`, `subscribed_at`, `confirmed_at`, `unsubscribed_at`, `updated_at`).
+- Updated extension metadata and docs to reflect the richer operator/runtime contract.
+
+## 11. Extension Review Hardening Update (2026-03-08)
+
+- Removed the remaining adopter-specific UI leak from public verify/unsubscribe pages:
+  - CTA now resolves from `NEWSLETTER_PUBLIC_BASE_URL`
+  - button label is generic (`Back to site`)
+- Hardened config validation:
+  - `NEWSLETTER_LINK_SECRET` must now be at least 32 characters
+  - `NEWSLETTER_RESEND_FROM` must parse as a valid sender address
+- Added/updated tests to cover:
+  - weak link-secret rejection
+  - invalid sender rejection
+  - generic HTML CTA rendering
+  - `ClaimCampaignSend` store behavior (`claimed` vs skipped active claim)
+  - `ImportLegacySubscribers` dry-run summary behavior (insert/update/skip)
+- Added dedicated review documentation:
+  - `docs/review-logs/E12-newsletter-extension-hardening-2026-03-08.md`

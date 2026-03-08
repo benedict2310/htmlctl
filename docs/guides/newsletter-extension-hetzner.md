@@ -42,6 +42,8 @@ ssh hetzner '
   export NEWSLETTER_PROD_DB_PASSWORD=<prod-db-password>
   export NEWSLETTER_STAGING_RESEND_API_KEY=<staging-resend-key>
   export NEWSLETTER_PROD_RESEND_API_KEY=<prod-resend-key>
+  export NEWSLETTER_STAGING_RESEND_FROM="Team <newsletter@staging.example.com>"
+  export NEWSLETTER_PROD_RESEND_FROM="Team <newsletter@example.com>"
   export NEWSLETTER_STAGING_PUBLIC_BASE_URL=https://staging.example.com
   export NEWSLETTER_PROD_PUBLIC_BASE_URL=https://example.com
   export NEWSLETTER_STAGING_UNIT_PATH=/tmp/htmlctl-newsletter-staging.service
@@ -53,6 +55,8 @@ ssh hetzner '
 Input constraints enforced by installer:
 - `NEWSLETTER_STAGING_HTTP_ADDR` / `NEWSLETTER_PROD_HTTP_ADDR` must be loopback addresses (`localhost`, `127.x.x.x`, or `[::1]`).
 - Public base URLs must be `https://` origins with no path, query, fragment, or userinfo.
+- `NEWSLETTER_STAGING_RESEND_FROM` / `NEWSLETTER_PROD_RESEND_FROM` must be valid sender addresses.
+- `NEWSLETTER_STAGING_LINK_SECRET` / `NEWSLETTER_PROD_LINK_SECRET` must be high-entropy secrets at least 32 characters long.
 - DB passwords are URL-encoded before `NEWSLETTER_DATABASE_URL` is written.
 - DB passwords and API keys must not contain whitespace or single quotes.
 
@@ -64,6 +68,7 @@ Installer results:
 - Writes env files:
 - `/etc/htmlctl-newsletter/staging.env`
 - `/etc/htmlctl-newsletter/prod.env`
+- Adds a generated `NEWSLETTER_LINK_SECRET` per environment when not supplied explicitly.
 - Installs/enables/restarts:
 - `htmlctl-newsletter-staging.service`
 - `htmlctl-newsletter-prod.service`
@@ -103,8 +108,7 @@ Expected: both return `f`.
 
 ## 4. Pilot Backend Validation (Staging First)
 
-Current foundation routes `/newsletter/*` subpaths to a placeholder response (`501 Not Implemented`). Validate plumbing with this expected response until full endpoints ship.
-Note: `/newsletter/*` does not match the bare `/newsletter` path; probe `/newsletter/verify`.
+The current runtime serves real signup, verification, and unsubscribe flows. Probe `/newsletter/verify` and `/newsletter/unsubscribe` with expected safe failures when no token is provided.
 Preflight compatibility gate:
 
 ```bash
@@ -117,9 +121,10 @@ Add staging backend:
 htmlctl backend add website/<site> --env staging --path /newsletter/* --upstream http://127.0.0.1:9501
 htmlctl backend list website/<site> --env staging
 curl -s -o /dev/null -w '%{http_code}\n' https://staging.example.com/newsletter/verify
+curl -s -o /dev/null -w '%{http_code}\n' https://staging.example.com/newsletter/unsubscribe
 ```
 
-Expected status code for current foundation: `501`.
+Expected status code without tokens: `400`.
 
 Failure-mode checks (required):
 
@@ -171,8 +176,9 @@ Upgrade sequence:
 
 1. Build/install new binary to `/usr/local/bin/htmlctl-newsletter`.
 2. Run migration per environment (`NEWSLETTER_ENV=<env> ... htmlctl-newsletter migrate`).
-3. Restart staging and verify health + route behavior.
-4. Restart prod and verify the same checks.
+3. Restart staging and verify health + public route behavior.
+4. Validate campaign preview and unsubscribe flow on staging.
+5. Restart prod and verify the same checks.
 
 Commands:
 
@@ -194,7 +200,27 @@ ssh hetzner "sudo journalctl -u htmlctl-newsletter-staging -n 200 --no-pager"
 ssh hetzner "sudo journalctl -u htmlctl-newsletter-prod -n 200 --no-pager"
 ```
 
-## 7. Troubleshooting
+## 7. Campaign Operator Workflow
+
+Store campaign content:
+
+```bash
+ssh hetzner 'sudo python3 - <<\"PY\"\nimport os, subprocess\nfor env_path in (\"/etc/htmlctl-newsletter/staging.env\",):\n    env = os.environ.copy()\n    with open(env_path, \"r\", encoding=\"utf-8\") as f:\n        for line in f:\n            line = line.strip()\n            if not line or line.startswith(\"#\") or \"=\" not in line:\n                continue\n            k, v = line.split(\"=\", 1)\n            env[k] = v\n    subprocess.run([\n        \"/usr/local/bin/htmlctl-newsletter\", \"campaign\", \"upsert\",\n        \"--slug\", \"launch\",\n        \"--subject\", \"Launch update\",\n        \"--html-file\", \"/srv/newsletter/launch.html\",\n        \"--text-file\", \"/srv/newsletter/launch.txt\",\n    ], check=True, env=env)\nPY'
+```
+
+Preview send from staging:
+
+```bash
+ssh hetzner 'sudo python3 - <<\"PY\"\nimport os, subprocess\nenv = os.environ.copy()\nwith open(\"/etc/htmlctl-newsletter/staging.env\", \"r\", encoding=\"utf-8\") as f:\n    for line in f:\n        line = line.strip()\n        if not line or line.startswith(\"#\") or \"=\" not in line:\n            continue\n        k, v = line.split(\"=\", 1)\n        env[k] = v\nsubprocess.run([\n    \"/usr/local/bin/htmlctl-newsletter\", \"campaign\", \"preview\",\n    \"--slug\", \"launch\",\n    \"--to\", \"you@example.com\",\n], check=True, env=env)\nPY'
+```
+
+Full send with low-tier Resend pacing:
+
+```bash
+ssh hetzner 'sudo python3 - <<\"PY\"\nimport os, subprocess\nenv = os.environ.copy()\nwith open(\"/etc/htmlctl-newsletter/prod.env\", \"r\", encoding=\"utf-8\") as f:\n    for line in f:\n        line = line.strip()\n        if not line or line.startswith(\"#\") or \"=\" not in line:\n            continue\n        k, v = line.split(\"=\", 1)\n        env[k] = v\nsubprocess.run([\n    \"/usr/local/bin/htmlctl-newsletter\", \"campaign\", \"send\",\n    \"--slug\", \"launch\",\n    \"--mode\", \"all\",\n    \"--interval\", \"30s\",\n    \"--confirm\",\n], check=True, env=env)\nPY'
+```
+
+## 8. Troubleshooting
 
 `502` on `/newsletter/*`:
 - check backend mappings (`htmlctl backend list ...`)

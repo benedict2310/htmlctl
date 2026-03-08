@@ -2,7 +2,10 @@ package migrate
 
 import (
 	"context"
+	"io/fs"
+	"path"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 
@@ -22,27 +25,40 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
   applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );`)).
 		WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectBegin()
-	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT (version) DO NOTHING`)).
-		WithArgs("001_foundation.sql").
-		WillReturnResult(sqlmock.NewResult(1, 1))
-
-	migrationBytes, err := migrationFS.ReadFile("sql/001_foundation.sql")
+	entries, err := fs.Glob(migrationFS, "sql/*.sql")
 	if err != nil {
-		t.Fatalf("ReadFile() error = %v", err)
+		t.Fatalf("Glob() error = %v", err)
 	}
-	for _, stmt := range splitStatements(string(migrationBytes)) {
-		mock.ExpectExec(regexp.QuoteMeta(stmt)).
-			WillReturnResult(sqlmock.NewResult(0, 0))
+	sort.Strings(entries)
+	for _, file := range entries {
+		version := path.Base(file)
+		mock.ExpectBegin()
+		mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT (version) DO NOTHING`)).
+			WithArgs(version).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		migrationBytes, err := migrationFS.ReadFile(file)
+		if err != nil {
+			t.Fatalf("ReadFile(%s) error = %v", file, err)
+		}
+		for _, stmt := range splitStatements(string(migrationBytes)) {
+			mock.ExpectExec(regexp.QuoteMeta(stmt)).
+				WillReturnResult(sqlmock.NewResult(0, 0))
+		}
+		mock.ExpectCommit()
 	}
-	mock.ExpectCommit()
 
 	applied, err := Apply(context.Background(), db)
 	if err != nil {
 		t.Fatalf("Apply() first run error = %v", err)
 	}
-	if len(applied) != 1 || applied[0] != "001_foundation.sql" {
+	if len(applied) != len(entries) {
 		t.Fatalf("unexpected applied versions from first run: %v", applied)
+	}
+	for i, version := range entries {
+		if applied[i] != path.Base(version) {
+			t.Fatalf("unexpected applied order at %d: got %q want %q", i, applied[i], path.Base(version))
+		}
 	}
 
 	mock.ExpectExec(regexp.QuoteMeta(`
@@ -51,11 +67,13 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
   applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );`)).
 		WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectBegin()
-	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT (version) DO NOTHING`)).
-		WithArgs("001_foundation.sql").
-		WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectRollback()
+	for _, file := range entries {
+		mock.ExpectBegin()
+		mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT (version) DO NOTHING`)).
+			WithArgs(path.Base(file)).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectRollback()
+	}
 
 	applied, err = Apply(context.Background(), db)
 	if err != nil {

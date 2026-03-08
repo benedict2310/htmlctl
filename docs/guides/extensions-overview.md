@@ -44,9 +44,28 @@ Reference implementation:
 - `curl -sf http://127.0.0.1:9501/healthz` and `:9502/healthz`
 - `ss -tlnp` confirms loopback bind only
 - env files mode `640 root htmlctl-newsletter`
+- env files include both `NEWSLETTER_RESEND_FROM` and `NEWSLETTER_LINK_SECRET`
+- `NEWSLETTER_RESEND_FROM` is a valid sender address and `NEWSLETTER_LINK_SECRET` is a distinct high-entropy secret per environment (minimum 32 characters)
 4. Add staging backend and validate route behavior.
 5. Validate failure mode handling (upstream down, wrong mapping).
 6. Add prod backend only after staging checks are clean.
+
+Operator workflow after install:
+
+```bash
+# import from a legacy database with a compatible `subscribers` table
+NEWSLETTER_ENV=prod NEWSLETTER_DATABASE_URL='postgres://target...' \
+htmlctl-newsletter import-legacy --source-database-url 'postgres://source...'
+
+# store campaign content
+NEWSLETTER_ENV=staging NEWSLETTER_DATABASE_URL='postgres://...' \
+htmlctl-newsletter campaign upsert --slug launch --subject 'Launch update' \
+  --html-file ./campaigns/launch.html --text-file ./campaigns/launch.txt
+
+# preview and then send with pacing
+NEWSLETTER_ENV=staging ... htmlctl-newsletter campaign preview --slug launch --to you@example.com
+NEWSLETTER_ENV=prod ... htmlctl-newsletter campaign send --slug launch --mode all --interval 30s --confirm
+```
 
 ## Production Cutover Checklist
 
@@ -58,6 +77,10 @@ Reference implementation:
 - expected app response on `/newsletter/*`
 - expected upstream failure response during a controlled outage test
 - rollback command tested (`htmlctl backend remove ...`) and documented.
+- campaign tests pass:
+- preview delivery succeeds from staging
+- unsubscribe link in delivered message resolves cleanly
+- full send uses explicit interval pacing (`--interval 30s` on low-tier Resend plans)
 
 ## Rollback and Failure Drills
 

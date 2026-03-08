@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0 (2026-03-08)
+
+- Replaced the placeholder runtime with full public signup, verification, and unsubscribe flows.
+- Added operator workflows:
+  - `htmlctl-newsletter import-legacy`
+  - `htmlctl-newsletter campaign upsert`
+  - `htmlctl-newsletter campaign preview`
+  - `htmlctl-newsletter campaign send`
+- Added signed unsubscribe links via `NEWSLETTER_LINK_SECRET`.
+- Added paced/idempotent campaign delivery with resend-safe interval control and resumable send claims.
+- Added legacy subscriber import workflow against the common legacy `subscribers` schema.
+- Added follow-up migration `003_campaign_send_state.sql` for send claim timestamps and attempt counts.
+
 ## 0.3.1 (2026-03-06)
 
 - Hardened service config validation: `NEWSLETTER_HTTP_ADDR` now requires explicit numeric port `1..65535`.

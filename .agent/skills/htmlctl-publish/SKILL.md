@@ -38,6 +38,20 @@ The server is the **source of truth**. `htmlservd` stores all desired state in S
 
 See `references/resource-schemas.md` for the full schema.
 
+## Authoring Patterns
+
+Use these terms consistently when working in an `htmlctl` site:
+
+- **Reusable section component**: shared chrome or repeated sections such as `nav`, `footer`, `projects`, or `newsletter-inline`.
+- **Page-body component**: page-specific body content such as a bespoke marketing page or a single article body. These are valid even when they are not reused elsewhere.
+- **Composed page**: a `pages/*.page.yaml` layout that assembles multiple components in order.
+
+Important consequence:
+- `Page` resources currently compose layout items only. There is no separate inline page-body file type.
+- So a route like `/ora` or a single blog post may legitimately use a dedicated page-body component.
+- But if the same block appears across multiple pages, extract it into a reusable component and compose it in page YAML instead of copying the markup.
+- If a page-specific route needs to be split into `*-header` and `*-body` so a shared block can sit between them, move the shared typography/layout CSS into `styles/default.css` and keep inline or sidecar component CSS only for page-specific visuals.
+
 ## OG Image Generation (automatic)
 
 The server auto-generates a 1200×630 social preview PNG for every page at build time and serves it at `/og/<pagename>.png`.
@@ -147,7 +161,7 @@ Environment retention lets operators prune old immutable releases and optionally
 | Change type | Workflow |
 |-------------|----------|
 | Content update (copy, cards, links, small edits to existing components) | Apply directly to staging → verify → promote to prod |
-| New standalone subpage (new component + new page, no changes to shared components) | Apply directly to staging → verify → promote to prod |
+| New standalone subpage (page YAML + either a dedicated page-body component or a composition of reusable components) | Apply directly to staging → verify → promote to prod |
 | Website-level metadata change (`website.yaml`, `branding/`, favicon, robots, sitemap, `llms.txt`, structured data) | Verify server version first → apply to staging → verify generated artifacts → promote to prod |
 | Environment backend change (`htmlctl backend add/remove`) | Update the target environment directly → verify the proxied route on that environment |
 | Dynamic extension onboarding (for example newsletter via `/newsletter/*`) | Install and verify extension runtime first → add staging backend and run failure drills → add prod backend and verify |

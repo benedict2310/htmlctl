@@ -131,6 +131,16 @@ spec:
 - JSON-LD blocks render in manifest order, wrapped in `<script type="application/ld+json">`
 - URL fields in `spec.head` accept only `http(s)://` or relative paths
 
+### Page authoring patterns
+
+- A page can be assembled from many reusable section components:
+  - `nav -> hero -> projects -> footer`
+- A page can also use a dedicated **page-body component** when the body is unique:
+  - `nav -> post-s06-body -> footer`
+  - `htmlctl` or `ora` style product pages
+- There is currently no separate inline page-body resource type. If a route needs custom body markup, that body still lives in `components/`.
+- Prefer composition when content repeats across pages. For example, a shared signup CTA should be its own component and be included in page layout rather than copied into each article body.
+
 ### OG image auto-generation
 
 At build time the server generates a 1200×630 PNG card for every page and places it in the release at `og/<pagename>.png`. The `openGraph.image` and `twitter.image` fields are then auto-populated **only when each field is absent** and `canonicalURL` is an absolute `http(s)://` URL. Explicitly set fields are never overwritten.
@@ -167,6 +177,13 @@ An HTML fragment inserted into a page layout. Stored as a plain `.html` file in 
 - If the component is anchor-navigable (linked from nav), root **must** have `id="<componentName>"`.
 - **No `<script>` tags** inside components. JS belongs in `scripts/site.js`.
 - **No inline event handler attributes** (`onclick`, `onload`, `onmouseover`, etc.) — rejected at validation time.
+
+Practical guidance:
+
+- Keep truly reusable UI pieces small and shared.
+- It is acceptable for a large page-specific article or product body to live in one component file, but treat it as a **page-body component**, not as a generic reusable component.
+- When a page-specific body grows large and needs composition in the middle of the flow, split it into page-specific `*-header` / `*-body` components and compose shared blocks such as newsletter CTAs in the page YAML.
+- If several page-body components repeat the same typography or layout `<style>` block, move the shared styling into `styles/default.css` or a shared component-sidecar pattern instead of cloning the CSS into every page-body component.
 
 ---
 

@@ -269,6 +269,8 @@ Backend rules:
 Newsletter extension backend example:
 
 ```bash
+htmlctl extension validate extensions/newsletter --remote --context staging
+
 htmlctl backend add website/<name> \
   --env staging \
   --path /newsletter/* \
@@ -277,9 +279,11 @@ htmlctl backend add website/<name> \
 
 htmlctl backend list website/<name> --env staging --context staging
 curl -s -o /dev/null -w '%{http_code}\n' https://staging.example.com/newsletter/verify
+curl -s -o /dev/null -w '%{http_code}\n' https://staging.example.com/newsletter/unsubscribe
 ```
 
-Foundation expectation: `/newsletter/verify` currently returns `501` (placeholder response) when routing is correct.
+Expected safe probe result: `/newsletter/verify` and `/newsletter/unsubscribe` return `400` when routing is correct but the token is missing.
+Expected happy-path signup result: `POST /newsletter/signup` returns `202`.
 Note: backend path `/newsletter/*` routes subpaths, not the bare `/newsletter` path.
 For cutover safety, run one controlled failure drill before prod:
 - stop newsletter service (or point upstream to an unused port) and verify gateway failure behavior

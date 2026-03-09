@@ -125,6 +125,6 @@ Verification evidence:
 - `bash -n extensions/newsletter/ops/setup-newsletter-extension.sh` passed
 - Docker E2E deploy + backend smoke/failure drill passed (`E2E_OK`)
 - Re-validated in local Docker matrix (2026-03-06):
-  - backend route `/newsletter/*` verified via `/newsletter/verify` probe (`501` placeholder from extension)
+  - backend route `/newsletter/*` verified via `/newsletter/verify` probe (current runtime now returns `400` on missing-token probes instead of the earlier placeholder behavior)
   - controlled failure drill (service stopped) returned expected upstream failure (`502`)
   - guidance/docs corrected to use `/newsletter/verify` because `/newsletter/*` does not include bare `/newsletter`

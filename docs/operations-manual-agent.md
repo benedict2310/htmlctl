@@ -293,9 +293,10 @@ htmlctl extension validate extensions/newsletter --remote --context staging
 htmlctl backend add website/sample --env staging --path /newsletter/* --upstream http://127.0.0.1:9501 --context staging
 htmlctl backend list website/sample --env staging --context staging
 curl -s -o /dev/null -w '%{http_code}\n' https://staging.example.com/newsletter/verify
+curl -s -o /dev/null -w '%{http_code}\n' https://staging.example.com/newsletter/unsubscribe
 ```
 
-For the foundation newsletter service, `/newsletter/verify` currently returns `501` as the expected placeholder response. Validate route plumbing and failure handling before any public cutover.
+For the current newsletter extension runtime, `/newsletter/verify` and `/newsletter/unsubscribe` return `400` when the route is wired correctly but no token is supplied. A healthy signup POST should return `202`. Validate route plumbing and failure handling before any public cutover.
 Note: backend path `/newsletter/*` routes subpaths, not the bare `/newsletter` path.
 Note: backend upstreams are origin-only targets. Do not configure values such as `http://127.0.0.1:9501/base`.
 
@@ -520,7 +521,9 @@ Retention operations:
 - `502 Bad Gateway` on `/newsletter/...`:
   - verify newsletter unit is running, verify upstream port mapping, and verify backend path is `/newsletter/*`.
 - `/newsletter/verify` returns unexpected status code:
-  - with foundation build, expected is `501`; if `404`, verify backend mapping exists and points at newsletter listener.
+  - missing-token probes should return `400`; if `404`, verify backend mapping exists and points at newsletter listener.
+- `POST /newsletter/signup` returns unexpected status code:
+  - healthy requests should return `202`; `400` usually means invalid payload, `404` means missing backend mapping, and `502` means the extension listener is unhealthy or unreachable.
 - `domain verify` TLS fail in local/dev:
   - expected unless public DNS/TLS is valid; for local HTTP set `HTMLSERVD_CADDY_AUTO_HTTPS=false`.
 - cleanup blocked by ownership in `.tmp`:

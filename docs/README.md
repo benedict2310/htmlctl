@@ -36,3 +36,4 @@
 - `docs/review-logs/` stores PI/code review artifacts.
 - `docs/review-logs/E12-newsletter-extension-adoption-validation-2026-03-06.md` - pilot validation evidence, security observations, and follow-up backlog for newsletter extension adoption.
 - `docs/review-logs/E12-extension-core-hardening-2026-03-08.md` - core extension-system hardening for backend rollback safety, upstream validation, and compatibility enforcement.
+- `docs/review-logs/E12-newsletter-extension-hardening-2026-03-08.md` - newsletter extension hardening notes covering import, unsubscribe, campaign send tracking, and installer/config validation.

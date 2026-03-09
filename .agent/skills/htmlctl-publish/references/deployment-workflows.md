@@ -348,12 +348,14 @@ Goal: validate and cut over a dynamic extension path (`/newsletter/*`) safely.
 ssh <host> "sudo systemctl status htmlctl-newsletter-staging --no-pager"
 ssh <host> "curl -sf http://127.0.0.1:9501/healthz"
 ssh <host> "sudo ss -tlnp | grep ':9501'"
+htmlctl extension validate extensions/newsletter --remote --context staging
 ```
 
 Checks:
 - unit active
 - loopback-only listener
 - health endpoint responds
+- manifest compatibility validated against the target `htmlservd`
 
 ### 2. Add staging backend and validate route
 
@@ -361,9 +363,10 @@ Checks:
 htmlctl backend add website/sample --env staging --path /newsletter/* --upstream http://127.0.0.1:9501 --context staging
 htmlctl backend list website/sample --env staging --context staging
 curl -s -o /dev/null -w '%{http_code}\n' https://staging.example.com/newsletter/verify
+curl -s -o /dev/null -w '%{http_code}\n' https://staging.example.com/newsletter/unsubscribe
 ```
 
-Foundation expectation for current newsletter reference: HTTP `501` placeholder response on `/newsletter/verify`.
+Expected safe probe result: HTTP `400` from `/newsletter/verify` and `/newsletter/unsubscribe` when the route is correct but no token is supplied.
 Note: backend path `/newsletter/*` routes subpaths, not the bare `/newsletter` path.
 
 ### 3. Run controlled failure drills
@@ -386,6 +389,7 @@ Expected during outage/wrong upstream: gateway failure (typically `502`).
 htmlctl backend remove website/sample --env staging --path /newsletter/* --context staging
 htmlctl backend add website/sample --env staging --path /newsletter/* --upstream http://127.0.0.1:9501 --context staging
 
+htmlctl extension validate extensions/newsletter --remote --context prod
 htmlctl backend add website/sample --env prod --path /newsletter/* --upstream http://127.0.0.1:9502 --context prod
 htmlctl backend list website/sample --env prod --context prod
 curl -s -o /dev/null -w '%{http_code}\n' https://example.com/newsletter/verify

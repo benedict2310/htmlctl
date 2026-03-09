@@ -100,15 +100,24 @@ Environment backends let a static site call dynamic services through relative pa
 The official newsletter extension is an optional companion service routed through backends (usually `/newsletter/*`).
 
 - Keep newsletter services loopback-bound and managed separately from `htmlservd`.
-- Configure backend routes per environment:
+- Validate compatibility before every new environment cutover:
 
 ```bash
 htmlctl extension validate extensions/newsletter --remote --context staging
+htmlctl extension validate extensions/newsletter --remote --context prod
+```
+
+- Configure backend routes per environment:
+
+```bash
 htmlctl backend add website/<name> --env staging --path /newsletter/* --upstream http://127.0.0.1:9501 --context staging
 htmlctl backend add website/<name> --env prod --path /newsletter/* --upstream http://127.0.0.1:9502 --context prod
 ```
 
-- Validate behavior on staging before prod cutover.
+- Validate behavior on staging before prod cutover:
+  - `GET /newsletter/verify` without a token should return `400`
+  - `GET /newsletter/unsubscribe` without a token should return `400`
+  - healthy signup submissions should return `202`
 - Validate failure handling with a controlled outage (stop service or bad upstream) and keep rollback command ready.
 
 ## Runtime Auth Policies

@@ -23,7 +23,7 @@
 </p>
 
 Deploy static HTML/CSS/JS sites like infrastructure.
-`htmlctl` (CLI) pairs with `htmlservd` (daemon) to give you immutable releases, atomic rollback, environment promotion, and automatic TLS — on any VPS.
+`htmlctl` (CLI) pairs with `htmlservd` (daemon) to give you immutable releases, atomic rollback, exact promotion, preview URLs, runtime path controls, and optional extensions such as a same-origin newsletter service — on any VPS.
 
 ---
 
@@ -47,6 +47,16 @@ Per-environment backends are managed separately from release content, so `/api/*
 
 Optional dynamic companion services are handled as **extensions** (for example newsletter). Extensions are separate deployable services integrated via environment backends, not plugins loaded into `htmlctl` or `htmlservd` runtime. See [`extensions/README.md`](extensions/README.md) and [`docs/reference/extensions.md`](docs/reference/extensions.md).
 Run `htmlctl extension validate extensions/<name> --remote --context <ctx>` before wiring an extension into a live environment.
+
+## Highlights
+
+- **Pinned Git input**: deploy from a local folder or a pinned commit SHA with `htmlctl apply --from-git`.
+- **Preview URLs**: create expiring review hosts pinned to a specific release with `htmlctl preview create`.
+- **Exact promotion**: promote the exact artifact bytes from staging to prod. No rebuild, no drift.
+- **Runtime controls**: add environment-specific backends and auth policies without baking them into site content.
+- **Extensions**: keep dynamic services independent and route them through explicit backend prefixes such as `/newsletter/*`.
+- **Operational safety**: `htmlctl doctor`, instant rollback, release retention, and stricter backend rollback semantics keep live changes auditable and reversible.
+- **Built-in discoverability**: favicon publication, `robots.txt`, `sitemap.xml`, `llms.txt`, structured data, and automatic OG image generation are part of the release build.
 
 ---
 
@@ -240,11 +250,11 @@ htmlctl backend add website/mysite \
   --upstream http://127.0.0.1:9501 \
   --context staging
 
-# foundation response probe
+# route probe
 curl -s -o /dev/null -w '%{http_code}\n' https://staging.example.com/newsletter/verify
 ```
 
-Current foundation expectation: `/newsletter/verify` returns `501`.
+Current route expectation: `/newsletter/verify` and `/newsletter/unsubscribe` return `400` when routing is correct but the token is missing, and healthy `POST /newsletter/signup` requests return `202`.
 Note: backend path `/newsletter/*` routes subpaths, not bare `/newsletter`.
 See [`extensions/README.md`](extensions/README.md), [`docs/reference/extensions.md`](docs/reference/extensions.md), and [`docs/guides/newsletter-extension-hetzner.md`](docs/guides/newsletter-extension-hetzner.md).
 

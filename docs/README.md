@@ -15,6 +15,7 @@
 - `docs/guides/first-deploy-docker.md` - first deployment path using Docker images and SSH transport, including telemetry-ready local host binding (`127.0.0.1.nip.io`).
 - `docs/guides/extensions-overview.md` - extension model overview and operator integration checks.
 - `docs/guides/newsletter-extension-hetzner.md` - newsletter extension install/verify/runbook for Ubuntu/Hetzner hosts.
+- `docs/guides/telemetry-collector-extension-hetzner.md` - browser telemetry collector install/verify/runbook for Ubuntu/Hetzner hosts.
 - `docs/reference/docker-images.md` - Docker build targets, runtime defaults, and hardening notes.
 - `docs/operations-manual-agent.md` - end-to-end operations runbook for agents (local, Docker, remote SSH, release lifecycle, domains, VPS).
 
@@ -37,3 +38,4 @@
 - `docs/review-logs/E12-newsletter-extension-adoption-validation-2026-03-06.md` - pilot validation evidence, security observations, and follow-up backlog for newsletter extension adoption.
 - `docs/review-logs/E12-extension-core-hardening-2026-03-08.md` - core extension-system hardening for backend rollback safety, upstream validation, and compatibility enforcement.
 - `docs/review-logs/E12-newsletter-extension-hardening-2026-03-08.md` - newsletter extension hardening notes covering import, unsubscribe, campaign send tracking, and installer/config validation.
+- `docs/review-logs/E12-telemetry-collector-extension-2026-03-09.md` - browser telemetry collector review findings, fixes, and staging/prod validation evidence.

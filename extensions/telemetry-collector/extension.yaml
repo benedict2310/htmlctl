@@ -1,0 +1,56 @@
+apiVersion: htmlctl.dev/extensions/v1
+kind: Extension
+metadata:
+  name: telemetry-collector
+  version: 0.1.0
+spec:
+  summary: Optional browser-facing telemetry collector that validates same-origin website events and forwards them into htmlservd's authenticated telemetry ingest.
+  homepage: https://github.com/benedict2310/htmlctl/tree/main/extensions/telemetry-collector
+  compatibility:
+    minHTMLCTL: 0.11.0
+    minHTMLSERVD: 0.11.0
+  runtime:
+    requires:
+      - systemd
+    healthEndpoints:
+      - /healthz
+  integration:
+    backendPaths:
+      - /site-telemetry/*
+  env:
+    - name: TELEMETRY_COLLECTOR_ENV
+      required: true
+      secret: false
+      description: Deployment environment (staging or prod).
+    - name: TELEMETRY_COLLECTOR_HTTP_ADDR
+      required: false
+      secret: false
+      description: Loopback bind address for this service instance (defaults to 127.0.0.1:9601 for staging, 127.0.0.1:9602 for prod).
+    - name: TELEMETRY_COLLECTOR_PUBLIC_BASE_URL
+      required: true
+      secret: false
+      description: Public origin that is allowed to submit browser telemetry for this environment.
+    - name: TELEMETRY_COLLECTOR_HTMLSERVD_BASE_URL
+      required: false
+      secret: false
+      description: Loopback htmlservd base URL that receives forwarded authenticated telemetry (defaults to http://127.0.0.1:9400).
+    - name: TELEMETRY_COLLECTOR_HTMLSERVD_TOKEN
+      required: true
+      secret: true
+      description: htmlservd bearer token used when forwarding browser telemetry into POST /collect/v1/events.
+    - name: TELEMETRY_COLLECTOR_ALLOWED_EVENTS
+      required: false
+      secret: false
+      description: Optional comma-separated event allowlist (defaults to page_view, link_click, cta_click, newsletter_signup).
+    - name: TELEMETRY_COLLECTOR_MAX_BODY_BYTES
+      required: false
+      secret: false
+      description: Optional maximum request body size in bytes.
+    - name: TELEMETRY_COLLECTOR_MAX_EVENTS
+      required: false
+      secret: false
+      description: Optional maximum number of events allowed per request.
+  security:
+    listenerPolicy: loopback-only
+    requiresRateLimiting: true
+    requiresSanitized5xx: true

@@ -23,7 +23,7 @@
 </p>
 
 Deploy static HTML/CSS/JS sites like infrastructure.
-`htmlctl` (CLI) pairs with `htmlservd` (daemon) to give you immutable releases, atomic rollback, exact promotion, preview URLs, runtime path controls, and optional extensions such as a same-origin newsletter service — on any VPS.
+`htmlctl` (CLI) pairs with `htmlservd` (daemon) to give you immutable releases, atomic rollback, exact promotion, preview URLs, runtime path controls, and optional extensions such as a same-origin newsletter service or browser telemetry collector — on any VPS.
 
 ---
 
@@ -45,7 +45,7 @@ Write your site as declarative YAML resources. `htmlctl` renders them determinis
 **Environments** (`staging`, `prod`) each have their own active release pointer. Promotion copies the exact artifact bytes — no rebuild, guaranteed hash parity.
 Per-environment backends are managed separately from release content, so `/api/*` can point at different upstreams in staging and prod without changing the promoted static artifact.
 
-Optional dynamic companion services are handled as **extensions** (for example newsletter). Extensions are separate deployable services integrated via environment backends, not plugins loaded into `htmlctl` or `htmlservd` runtime. See [`extensions/README.md`](extensions/README.md) and [`docs/reference/extensions.md`](docs/reference/extensions.md).
+Optional dynamic companion services are handled as **extensions** (for example newsletter or browser telemetry collection). Extensions are separate deployable services integrated via environment backends, not plugins loaded into `htmlctl` or `htmlservd` runtime. See [`extensions/README.md`](extensions/README.md) and [`docs/reference/extensions.md`](docs/reference/extensions.md).
 Run `htmlctl extension validate extensions/<name> --remote --context <ctx>` before wiring an extension into a live environment.
 
 ## Highlights
@@ -54,7 +54,7 @@ Run `htmlctl extension validate extensions/<name> --remote --context <ctx>` befo
 - **Preview URLs**: create expiring review hosts pinned to a specific release with `htmlctl preview create`.
 - **Exact promotion**: promote the exact artifact bytes from staging to prod. No rebuild, no drift.
 - **Runtime controls**: add environment-specific backends and auth policies without baking them into site content.
-- **Extensions**: keep dynamic services independent and route them through explicit backend prefixes such as `/newsletter/*`.
+- **Extensions**: keep dynamic services independent and route them through explicit backend prefixes such as `/newsletter/*` and `/site-telemetry/*`.
 - **Operational safety**: `htmlctl doctor`, instant rollback, release retention, and stricter backend rollback semantics keep live changes auditable and reversible.
 - **Built-in discoverability**: favicon publication, `robots.txt`, `sitemap.xml`, `llms.txt`, structured data, and automatic OG image generation are part of the release build.
 
@@ -256,7 +256,30 @@ curl -s -o /dev/null -w '%{http_code}\n' https://staging.example.com/newsletter/
 
 Current route expectation: `/newsletter/verify` and `/newsletter/unsubscribe` return `400` when routing is correct but the token is missing, and healthy `POST /newsletter/signup` requests return `202`.
 Note: backend path `/newsletter/*` routes subpaths, not bare `/newsletter`.
-See [`extensions/README.md`](extensions/README.md), [`docs/reference/extensions.md`](docs/reference/extensions.md), and [`docs/guides/newsletter-extension-hetzner.md`](docs/guides/newsletter-extension-hetzner.md).
+
+Telemetry collector example:
+
+```bash
+# service health on host
+curl -sf http://127.0.0.1:9601/healthz
+
+# route browser telemetry path on staging
+htmlctl backend add website/mysite \
+  --env staging \
+  --path /site-telemetry/* \
+  --upstream http://127.0.0.1:9601 \
+  --context staging
+
+# route probe
+curl -i -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://staging.example.com' \
+  --data '{"events":[{"name":"page_view","path":"/"}]}' \
+  https://staging.example.com/site-telemetry/v1/events
+```
+
+Current telemetry route expectation: site JavaScript posts to `/site-telemetry/v1/events`, a valid same-origin event returns `202`, and the stored event is then queryable through the telemetry API for the matching website/environment.
+See [`extensions/README.md`](extensions/README.md), [`docs/reference/extensions.md`](docs/reference/extensions.md), [`docs/guides/newsletter-extension-hetzner.md`](docs/guides/newsletter-extension-hetzner.md), and [`docs/guides/telemetry-collector-extension-hetzner.md`](docs/guides/telemetry-collector-extension-hetzner.md).
 
 ### Page
 

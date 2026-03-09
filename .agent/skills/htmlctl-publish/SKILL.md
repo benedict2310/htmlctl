@@ -134,6 +134,32 @@ htmlctl backend add website/<name> --env prod --path /newsletter/* --upstream ht
   - healthy signup submissions should return `202`
 - Validate failure handling with a controlled outage (stop service or bad upstream) and keep rollback command ready.
 
+### Telemetry Collector Extension Pattern
+
+The official telemetry collector extension is the browser-facing path for same-origin site telemetry. It keeps `POST /collect/v1/events` bearer-authenticated inside `htmlservd` and exposes `/site-telemetry/*` publicly through a separate loopback service.
+
+- Keep telemetry collector services loopback-bound and managed separately from `htmlservd`.
+- Do not post browser events directly to `htmlservd` `POST /collect/v1/events`; route them through `/site-telemetry/v1/events` instead.
+- Validate compatibility before cutover:
+
+```bash
+htmlctl extension validate extensions/telemetry-collector --remote --context staging
+htmlctl extension validate extensions/telemetry-collector --remote --context prod
+```
+
+- Configure backend routes per environment:
+
+```bash
+htmlctl backend add website/<name> --env staging --path /site-telemetry/* --upstream http://127.0.0.1:9601 --context staging
+htmlctl backend add website/<name> --env prod --path /site-telemetry/* --upstream http://127.0.0.1:9602 --context prod
+```
+
+- Validate behavior on staging before prod cutover:
+  - site JS posts to `/site-telemetry/v1/events`
+  - a valid same-origin event returns `202`
+  - `htmlctl` telemetry reporting shows the stored event under the correct website/environment
+- Validate failure handling with a controlled outage (stop service or bad upstream) and keep rollback command ready.
+
 ## Runtime Auth Policies
 
 Environment auth policies let you challenge selected paths such as `/docs/*` or `/preview/*` with HTTP Basic Auth.

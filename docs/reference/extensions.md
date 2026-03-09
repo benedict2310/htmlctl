@@ -45,6 +45,12 @@ Official extensions must document and satisfy:
   - Runtime binary command: `htmlctl-newsletter <serve|migrate|import-legacy|campaign>`
   - Installer assets: `extensions/newsletter/ops/`
   - Hetzner runbook: `docs/guides/newsletter-extension-hetzner.md`
+- `telemetry-collector` (reference implementation available)
+  - Contract: `extensions/telemetry-collector/extension.yaml`
+  - Service module: `extensions/telemetry-collector/service`
+  - Runtime binary command: `htmlctl-telemetry-collector <serve>`
+  - Installer assets: `extensions/telemetry-collector/ops/`
+  - Hetzner runbook: `docs/guides/telemetry-collector-extension-hetzner.md`
 
 ## Newsletter Install and Verify
 
@@ -69,3 +75,27 @@ Post-install checks:
   - `htmlctl-newsletter campaign upsert --slug <slug> --subject ... --html-file ... --text-file ...`
   - `htmlctl-newsletter campaign preview --slug <slug> --to you@example.com`
   - `htmlctl-newsletter campaign send --slug <slug> --mode all --interval 30s --confirm`
+
+## Telemetry Collector Install and Verify
+
+Install artifacts:
+- `extensions/telemetry-collector/ops/setup-telemetry-collector-extension.sh`
+- `extensions/telemetry-collector/ops/systemd/htmlctl-telemetry-collector-staging.service`
+- `extensions/telemetry-collector/ops/systemd/htmlctl-telemetry-collector-prod.service`
+- `extensions/telemetry-collector/ops/env/staging.env.example`
+- `extensions/telemetry-collector/ops/env/prod.env.example`
+
+Post-install checks:
+- `htmlctl extension validate extensions/telemetry-collector --remote --context <ctx>`
+- `systemctl status` for staging and prod units
+- loopback-only listener verification via `ss -tlnp`
+- `/healthz` probes on staging/prod loopback ports
+- env file mode verification (`640 root htmlctl-telemetry`)
+- env contract verification:
+  - `TELEMETRY_COLLECTOR_PUBLIC_BASE_URL` is the exact public `https://` origin for that environment
+  - `TELEMETRY_COLLECTOR_HTMLSERVD_BASE_URL` stays loopback-only
+  - `TELEMETRY_COLLECTOR_HTMLSERVD_TOKEN` is stored server-side only
+- telemetry route verification:
+  - browser/site JS posts to `/site-telemetry/v1/events`
+  - a valid same-origin event returns `202`
+  - `GET /api/v1/websites/<site>/environments/<env>/telemetry/events` shows the stored event

@@ -134,6 +134,50 @@ curl -sf -H "Host: 127.0.0.1.nip.io" http://127.0.0.1:18080/sitemap.xml
 curl -sf -H "Host: 127.0.0.1.nip.io" http://127.0.0.1:18080/favicon.svg
 ```
 
+
+### Optional: verify browser telemetry collector routing
+
+Use this when site JavaScript should post browser telemetry through the official telemetry collector extension.
+
+```bash
+(
+  export TELEMETRY_COLLECTOR_ENV=staging
+  export TELEMETRY_COLLECTOR_HTTP_ADDR=127.0.0.1:19601
+  export TELEMETRY_COLLECTOR_PUBLIC_BASE_URL=http://127.0.0.1.nip.io:18080
+  export TELEMETRY_COLLECTOR_HTMLSERVD_BASE_URL=http://host.docker.internal:19420
+  export TELEMETRY_COLLECTOR_HTMLSERVD_TOKEN="${API_TOKEN}"
+  cd extensions/telemetry-collector/service
+  go run ./cmd/htmlctl-telemetry-collector serve
+) &
+COLLECTOR_PID=$!
+trap 'kill ${COLLECTOR_PID}' EXIT
+
+HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
+HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
+htmlctl backend add website/sample \
+  --env staging \
+  --path /site-telemetry/* \
+  --upstream http://host.docker.internal:19601 \
+  --context local-staging
+
+curl -i \
+  -H 'Host: 127.0.0.1.nip.io:18080' \
+  -H 'Origin: http://127.0.0.1.nip.io:18080' \
+  -H 'Content-Type: application/json' \
+  --data '{"events":[{"name":"page_view","path":"/"}]}' \
+  http://127.0.0.1:18080/site-telemetry/v1/events
+
+curl -sS \
+  -H "Authorization: Bearer ${API_TOKEN}" \
+  "http://127.0.0.1:19420/api/v1/websites/sample/environments/staging/telemetry/events?limit=20"
+
+HTMLCTL_CONFIG="$PWD/.tmp/first-deploy/htmlctl-config.yaml" \
+HTMLCTL_SSH_KNOWN_HOSTS_PATH="$PWD/.tmp/first-deploy/known_hosts" \
+htmlctl backend remove website/sample --env staging --path /site-telemetry/* --context local-staging
+```
+
+A valid event should return `202` and then appear in the telemetry API for the staging environment.
+
 ### Optional: verify environment backend routing
 
 Backends are environment-scoped runtime config. They are not part of `site/` and are not copied by `promote`.

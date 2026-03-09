@@ -196,5 +196,6 @@ by guarding the field with `sync.RWMutex`. All 428 tests pass clean under `-race
 | 12.2 | Newsletter extension reference implementation (Implemented) | [E12-S2](stories/E12-S2-newsletter-extension-reference-implementation.md) |
 | 12.3 | Newsletter extension installer and ops runbook (Implemented) | [E12-S3](stories/E12-S3-newsletter-extension-installer-and-ops-runbook.md) |
 | 12.4 | Newsletter extension adoption validation and docs integration (Implemented) | [E12-S4](stories/E12-S4-newsletter-extension-adoption-validation.md) |
+| 12.5 | Telemetry collector extension for browser event ingest (Done 2026-03-09) | [E12-S5](stories/E12-S5-telemetry-collector-extension.md) |
 
 **Done when:** operators can install an official newsletter extension package, route it through Epic 9 backends, and operate it safely with documented staging/prod isolation and security checks, without any mandatory core binary changes.

@@ -1,0 +1,21 @@
+[Unit]
+Description=htmlctl telemetry collector (prod)
+After=network.target htmlservd.service
+Wants=network-online.target
+
+[Service]
+User=htmlctl-telemetry
+Group=htmlctl-telemetry
+EnvironmentFile=/etc/htmlctl-telemetry-collector/prod.env
+ExecStart=/usr/local/bin/htmlctl-telemetry-collector serve
+Restart=on-failure
+RestartSec=2s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run
+WorkingDirectory=/var/lib/htmlctl-telemetry-collector
+
+[Install]
+WantedBy=multi-user.target

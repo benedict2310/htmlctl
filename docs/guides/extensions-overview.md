@@ -67,7 +67,44 @@ NEWSLETTER_ENV=staging ... htmlctl-newsletter campaign preview --slug launch --t
 NEWSLETTER_ENV=prod ... htmlctl-newsletter campaign send --slug launch --mode all --interval 30s --confirm
 ```
 
-## Production Cutover Checklist
+
+## Telemetry Collector Quickstart (Browser Ingest)
+
+Reference implementation:
+- Service module: `extensions/telemetry-collector/service`
+- Installer and ops assets: `extensions/telemetry-collector/ops`
+- Host runbook: `docs/guides/telemetry-collector-extension-hetzner.md`
+
+1. Install staging/prod collector units and env files with `extensions/telemetry-collector/ops/setup-telemetry-collector-extension.sh`.
+2. Validate manifest compatibility before routing:
+- `htmlctl extension validate extensions/telemetry-collector --remote --context staging`
+3. Verify service invariants before routing:
+- `systemctl status htmlctl-telemetry-collector-{staging,prod}`
+- `curl -sf http://127.0.0.1:9601/healthz` and `:9602/healthz`
+- `ss -tlnp` confirms loopback bind only
+- env files mode `640 root htmlctl-telemetry`
+- `TELEMETRY_COLLECTOR_PUBLIC_BASE_URL` matches the exact public `https://` origin
+- `TELEMETRY_COLLECTOR_HTMLSERVD_BASE_URL` stays loopback-only and `TELEMETRY_COLLECTOR_HTMLSERVD_TOKEN` exists only in the env file
+4. Add staging backend and validate route behavior.
+5. Verify a real telemetry event is queryable through htmlservd telemetry reporting.
+6. Add prod backend only after staging checks are clean.
+
+Routing and verification example:
+
+```bash
+htmlctl extension validate extensions/telemetry-collector --remote --context staging
+htmlctl backend add website/<site> --env staging --path /site-telemetry/* --upstream http://127.0.0.1:9601
+curl -i -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://staging.example.com' \
+  --data '{"events":[{"name":"page_view","path":"/"}]}' \
+  https://staging.example.com/site-telemetry/v1/events
+curl -sS \
+  -H 'Authorization: Bearer <token>' \
+  'http://127.0.0.1:9400/api/v1/websites/<site>/environments/staging/telemetry/events?limit=20'
+```
+
+## Newsletter Production Cutover Checklist
 
 - Staging and prod use separate databases, DB roles, and API keys.
 - Health probes succeed on both local loopback ports.
@@ -82,7 +119,7 @@ NEWSLETTER_ENV=prod ... htmlctl-newsletter campaign send --slug launch --mode al
 - unsubscribe link in delivered message resolves cleanly
 - full send uses explicit interval pacing (`--interval 30s` on low-tier Resend plans)
 
-## Rollback and Failure Drills
+## Newsletter Rollback and Failure Drills
 
 If cutover introduces issues:
 
@@ -97,7 +134,7 @@ Recommended drills before public launch:
 - test incorrect upstream mapping in staging, then restore correct mapping
 - confirm failed backend mutations are rejected instead of silently persisting
 
-## Upgrade Path
+## Newsletter Upgrade Path
 
 1. Build and install new `htmlctl-newsletter` binary.
 2. Run migrations with the target environment config (`NEWSLETTER_ENV=<env> ... migrate`).

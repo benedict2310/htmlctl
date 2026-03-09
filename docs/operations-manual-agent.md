@@ -300,6 +300,23 @@ For the current newsletter extension runtime, `/newsletter/verify` and `/newslet
 Note: backend path `/newsletter/*` routes subpaths, not the bare `/newsletter` path.
 Note: backend upstreams are origin-only targets. Do not configure values such as `http://127.0.0.1:9501/base`.
 
+Telemetry collector extension pattern:
+
+```bash
+htmlctl extension validate extensions/telemetry-collector --remote --context staging
+htmlctl backend add website/sample --env staging --path /site-telemetry/* --upstream http://127.0.0.1:9601 --context staging
+htmlctl backend list website/sample --env staging --context staging
+curl -i -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://staging.example.com' \
+  --data '{"events":[{"name":"page_view","path":"/"}]}' \
+  https://staging.example.com/site-telemetry/v1/events
+```
+
+For the current telemetry collector extension runtime, browser/site JS must post to `/site-telemetry/v1/events`, not directly to htmlservd `POST /collect/v1/events`. A valid same-origin event should return `202`, and the stored event should then appear in `GET /api/v1/websites/<site>/environments/<env>/telemetry/events`.
+Note: backend path `/site-telemetry/*` routes subpaths, not the bare `/site-telemetry` path.
+Note: collector listeners must remain loopback-only, and the htmlservd bearer token stays server-side in the collector env file.
+
 Required extension gate before prod routing:
 - extension listener is loopback-only
 - extension health checks pass on local listener

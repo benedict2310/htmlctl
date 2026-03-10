@@ -1,4 +1,4 @@
-# Telemetry Collector Extension on Hetzner (Ubuntu 24.04)
+# Telemetry Collector Extension on Ubuntu VPS
 
 This runbook installs the official `htmlctl-telemetry-collector` extension as two loopback-only systemd services (`staging`, `prod`) and routes public browser telemetry through `/site-telemetry/*` without exposing the htmlservd bearer token to browsers.
 
@@ -16,7 +16,8 @@ From local workstation:
 ```bash
 cd /Users/bene/Dev-Source-NoBackup/htmlctl/extensions/telemetry-collector/service
 go test ./...
-TARGET_ARCH_RAW="$(ssh hetzner 'uname -m')"
+TARGET_HOST="user@host.example.com"
+TARGET_ARCH_RAW="$(ssh "${TARGET_HOST}" 'uname -m')"
 case "${TARGET_ARCH_RAW}" in
   x86_64) TARGET_GOARCH=amd64 ;;
   aarch64|arm64) TARGET_GOARCH=arm64 ;;
@@ -28,16 +29,16 @@ GOOS=linux GOARCH="${TARGET_GOARCH}" CGO_ENABLED=0 go build -o htmlctl-telemetry
 Upload binary + ops assets:
 
 ```bash
-scp htmlctl-telemetry-collector hetzner:/tmp/
-scp /Users/bene/Dev-Source-NoBackup/htmlctl/extensions/telemetry-collector/ops/setup-telemetry-collector-extension.sh hetzner:/tmp/
-scp /Users/bene/Dev-Source-NoBackup/htmlctl/extensions/telemetry-collector/ops/systemd/htmlctl-telemetry-collector-staging.service hetzner:/tmp/
-scp /Users/bene/Dev-Source-NoBackup/htmlctl/extensions/telemetry-collector/ops/systemd/htmlctl-telemetry-collector-prod.service hetzner:/tmp/
+scp htmlctl-telemetry-collector "${TARGET_HOST}":/tmp/
+scp /Users/bene/Dev-Source-NoBackup/htmlctl/extensions/telemetry-collector/ops/setup-telemetry-collector-extension.sh "${TARGET_HOST}":/tmp/
+scp /Users/bene/Dev-Source-NoBackup/htmlctl/extensions/telemetry-collector/ops/systemd/htmlctl-telemetry-collector-staging.service "${TARGET_HOST}":/tmp/
+scp /Users/bene/Dev-Source-NoBackup/htmlctl/extensions/telemetry-collector/ops/systemd/htmlctl-telemetry-collector-prod.service "${TARGET_HOST}":/tmp/
 ```
 
 ## 2. Run Installer Script
 
 ```bash
-ssh hetzner '
+ssh "${TARGET_HOST}" '
   export TELEMETRY_COLLECTOR_BINARY_PATH=/tmp/htmlctl-telemetry-collector
   export TELEMETRY_COLLECTOR_STAGING_PUBLIC_BASE_URL=https://staging.example.com
   export TELEMETRY_COLLECTOR_PROD_PUBLIC_BASE_URL=https://example.com
@@ -70,11 +71,11 @@ Installer results:
 Service/process checks:
 
 ```bash
-ssh hetzner "sudo systemctl status htmlctl-telemetry-collector-staging --no-pager"
-ssh hetzner "sudo systemctl status htmlctl-telemetry-collector-prod --no-pager"
-ssh hetzner "curl -sf http://127.0.0.1:9601/healthz"
-ssh hetzner "curl -sf http://127.0.0.1:9602/healthz"
-ssh hetzner "sudo ss -tlnp | grep ':9601\|:9602'"
+ssh "${TARGET_HOST}" "sudo systemctl status htmlctl-telemetry-collector-staging --no-pager"
+ssh "${TARGET_HOST}" "sudo systemctl status htmlctl-telemetry-collector-prod --no-pager"
+ssh "${TARGET_HOST}" "curl -sf http://127.0.0.1:9601/healthz"
+ssh "${TARGET_HOST}" "curl -sf http://127.0.0.1:9602/healthz"
+ssh "${TARGET_HOST}" "sudo ss -tlnp | grep ':9601\|:9602'"
 ```
 
 Expected:
@@ -84,7 +85,7 @@ Expected:
 Env permission checks:
 
 ```bash
-ssh hetzner "stat -c '%a %U %G %n' /etc/htmlctl-telemetry-collector/staging.env /etc/htmlctl-telemetry-collector/prod.env"
+ssh "${TARGET_HOST}" "stat -c '%a %U %G %n' /etc/htmlctl-telemetry-collector/staging.env /etc/htmlctl-telemetry-collector/prod.env"
 ```
 
 Expected: `640 root htmlctl-telemetry`.
@@ -129,9 +130,9 @@ Expected: the posted event appears under the target website/environment.
 Failure-mode checks (required):
 
 ```bash
-ssh hetzner "sudo systemctl stop htmlctl-telemetry-collector-staging"
+ssh "${TARGET_HOST}" "sudo systemctl stop htmlctl-telemetry-collector-staging"
 curl -s -o /dev/null -w '%{http_code}\n' https://staging.example.com/site-telemetry/v1/events
-ssh hetzner "sudo systemctl start htmlctl-telemetry-collector-staging"
+ssh "${TARGET_HOST}" "sudo systemctl start htmlctl-telemetry-collector-staging"
 
 htmlctl backend remove website/<site> --env staging --path /site-telemetry/*
 htmlctl backend add website/<site> --env staging --path /site-telemetry/* --upstream http://127.0.0.1:9699
@@ -182,13 +183,13 @@ Upgrade sequence:
 Commands:
 
 ```bash
-ssh hetzner "sudo systemctl restart htmlctl-telemetry-collector-staging"
-ssh hetzner "sudo systemctl restart htmlctl-telemetry-collector-prod"
+ssh "${TARGET_HOST}" "sudo systemctl restart htmlctl-telemetry-collector-staging"
+ssh "${TARGET_HOST}" "sudo systemctl restart htmlctl-telemetry-collector-prod"
 ```
 
 Logs:
 
 ```bash
-ssh hetzner "sudo journalctl -u htmlctl-telemetry-collector-staging -n 200 --no-pager"
-ssh hetzner "sudo journalctl -u htmlctl-telemetry-collector-prod -n 200 --no-pager"
+ssh "${TARGET_HOST}" "sudo journalctl -u htmlctl-telemetry-collector-staging -n 200 --no-pager"
+ssh "${TARGET_HOST}" "sudo journalctl -u htmlctl-telemetry-collector-prod -n 200 --no-pager"
 ```

@@ -279,7 +279,7 @@ curl -i -X POST \
 ```
 
 Current telemetry route expectation: site JavaScript posts to `/site-telemetry/v1/events`, a valid same-origin event returns `202`, and the stored event is then queryable through the telemetry API for the matching website/environment.
-See [`extensions/README.md`](extensions/README.md), [`docs/reference/extensions.md`](docs/reference/extensions.md), [`docs/guides/newsletter-extension-hetzner.md`](docs/guides/newsletter-extension-hetzner.md), and [`docs/guides/telemetry-collector-extension-hetzner.md`](docs/guides/telemetry-collector-extension-hetzner.md).
+See [`extensions/README.md`](extensions/README.md), [`docs/reference/extensions.md`](docs/reference/extensions.md), [`docs/guides/newsletter-extension-vps.md`](docs/guides/newsletter-extension-vps.md), and [`docs/guides/telemetry-collector-extension-vps.md`](docs/guides/telemetry-collector-extension-vps.md).
 
 ### Page
 

@@ -25,7 +25,7 @@
 - Added `extensions/newsletter/ops/setup-newsletter-extension.sh` bootstrap installer.
 - Added systemd unit templates for staging/prod service instances.
 - Added non-secret env templates for staging/prod.
-- Added Hetzner-focused operator runbook (`docs/guides/newsletter-extension-hetzner.md`).
+- Added Hetzner-focused operator runbook (`docs/guides/newsletter-extension-vps.md`).
 
 ## 0.2.0 (2026-03-06)
 

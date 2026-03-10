@@ -55,3 +55,9 @@ Because of that tooling behavior, the final sign-off used:
 ## Result
 
 No unresolved implementation or security issues remain from this review pass.
+
+Follow-up doc hygiene on 2026-03-10:
+
+- Re-checked the extension package and extension docs for adopter-specific leakage after rollout.
+- Found no committed credentials, tokens, secrets, host IPs, or login material in the telemetry collector files.
+- Renamed the telemetry/newsletter extension runbooks from provider-specific `*-hetzner.md` names to generic `*-vps.md` names and replaced `ssh hetzner` examples with placeholder `TARGET_HOST` usage so the extension docs stay operator-neutral.

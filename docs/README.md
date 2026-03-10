@@ -14,8 +14,8 @@
 
 - `docs/guides/first-deploy-docker.md` - first deployment path using Docker images and SSH transport, including telemetry-ready local host binding (`127.0.0.1.nip.io`).
 - `docs/guides/extensions-overview.md` - extension model overview and operator integration checks.
-- `docs/guides/newsletter-extension-hetzner.md` - newsletter extension install/verify/runbook for Ubuntu/Hetzner hosts.
-- `docs/guides/telemetry-collector-extension-hetzner.md` - browser telemetry collector install/verify/runbook for Ubuntu/Hetzner hosts.
+- `docs/guides/newsletter-extension-vps.md` - newsletter extension install/verify/runbook for Ubuntu VPS hosts.
+- `docs/guides/telemetry-collector-extension-vps.md` - browser telemetry collector install/verify/runbook for Ubuntu VPS hosts.
 - `docs/reference/docker-images.md` - Docker build targets, runtime defaults, and hardening notes.
 - `docs/operations-manual-agent.md` - end-to-end operations runbook for agents (local, Docker, remote SSH, release lifecycle, domains, VPS).
 

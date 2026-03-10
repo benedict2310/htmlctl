@@ -52,7 +52,7 @@ Update `htmlctl-publish` references with:
 ### Files to Modify
 
 - `docs/guides/extensions-overview.md`
-- `docs/guides/newsletter-extension-hetzner.md`
+- `docs/guides/newsletter-extension-vps.md`
 - `docs/operations-manual-agent.md`
 - `.agent/skills/htmlctl-publish/SKILL.md`
 - `.agent/skills/htmlctl-publish/references/commands.md`
@@ -102,7 +102,7 @@ Update `htmlctl-publish` references with:
 
 - Updated operator docs:
   - `docs/guides/extensions-overview.md`
-  - `docs/guides/newsletter-extension-hetzner.md`
+  - `docs/guides/newsletter-extension-vps.md`
   - `docs/operations-manual-agent.md`
 - Updated `htmlctl-publish` skill references:
   - `.agent/skills/htmlctl-publish/SKILL.md`

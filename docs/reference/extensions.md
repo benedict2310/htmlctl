@@ -44,13 +44,13 @@ Official extensions must document and satisfy:
   - Service module: `extensions/newsletter/service`
   - Runtime binary command: `htmlctl-newsletter <serve|migrate|import-legacy|campaign>`
   - Installer assets: `extensions/newsletter/ops/`
-  - Hetzner runbook: `docs/guides/newsletter-extension-hetzner.md`
+  - VPS runbook: `docs/guides/newsletter-extension-vps.md`
 - `telemetry-collector` (reference implementation available)
   - Contract: `extensions/telemetry-collector/extension.yaml`
   - Service module: `extensions/telemetry-collector/service`
   - Runtime binary command: `htmlctl-telemetry-collector <serve>`
   - Installer assets: `extensions/telemetry-collector/ops/`
-  - Hetzner runbook: `docs/guides/telemetry-collector-extension-hetzner.md`
+  - VPS runbook: `docs/guides/telemetry-collector-extension-vps.md`
 
 ## Newsletter Install and Verify
 

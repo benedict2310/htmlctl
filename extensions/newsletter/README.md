@@ -9,5 +9,5 @@ Current contents:
 - `CHANGELOG.md`: extension release notes.
 - adopter docs:
   - `docs/guides/extensions-overview.md`
-  - `docs/guides/newsletter-extension-hetzner.md`
+  - `docs/guides/newsletter-extension-vps.md`
   - `docs/review-logs/E12-newsletter-extension-adoption-validation-2026-03-06.md`

@@ -1,4 +1,4 @@
-# Newsletter Extension on Hetzner (Ubuntu 24.04)
+# Newsletter Extension on Ubuntu VPS
 
 This runbook installs the official `htmlctl-newsletter` extension as two loopback-only systemd services (`staging`, `prod`) with isolated PostgreSQL credentials and databases.
 
@@ -15,7 +15,8 @@ From local workstation:
 ```bash
 cd /Users/bene/Dev-Source-NoBackup/htmlctl/extensions/newsletter/service
 go test ./...
-TARGET_ARCH_RAW="$(ssh hetzner 'uname -m')"
+TARGET_HOST="user@host.example.com"
+TARGET_ARCH_RAW="$(ssh "${TARGET_HOST}" 'uname -m')"
 case "${TARGET_ARCH_RAW}" in
   x86_64) TARGET_GOARCH=amd64 ;;
   aarch64|arm64) TARGET_GOARCH=arm64 ;;
@@ -27,16 +28,16 @@ GOOS=linux GOARCH="${TARGET_GOARCH}" CGO_ENABLED=0 go build -o htmlctl-newslette
 Upload binary + ops assets:
 
 ```bash
-scp htmlctl-newsletter hetzner:/tmp/
-scp /Users/bene/Dev-Source-NoBackup/htmlctl/extensions/newsletter/ops/setup-newsletter-extension.sh hetzner:/tmp/
-scp /Users/bene/Dev-Source-NoBackup/htmlctl/extensions/newsletter/ops/systemd/htmlctl-newsletter-staging.service hetzner:/tmp/
-scp /Users/bene/Dev-Source-NoBackup/htmlctl/extensions/newsletter/ops/systemd/htmlctl-newsletter-prod.service hetzner:/tmp/
+scp htmlctl-newsletter "${TARGET_HOST}":/tmp/
+scp /Users/bene/Dev-Source-NoBackup/htmlctl/extensions/newsletter/ops/setup-newsletter-extension.sh "${TARGET_HOST}":/tmp/
+scp /Users/bene/Dev-Source-NoBackup/htmlctl/extensions/newsletter/ops/systemd/htmlctl-newsletter-staging.service "${TARGET_HOST}":/tmp/
+scp /Users/bene/Dev-Source-NoBackup/htmlctl/extensions/newsletter/ops/systemd/htmlctl-newsletter-prod.service "${TARGET_HOST}":/tmp/
 ```
 
 ## 2. Run Installer Script
 
 ```bash
-ssh hetzner '
+ssh "${TARGET_HOST}" '
   export NEWSLETTER_BINARY_PATH=/tmp/htmlctl-newsletter
   export NEWSLETTER_STAGING_DB_PASSWORD=<staging-db-password>
   export NEWSLETTER_PROD_DB_PASSWORD=<prod-db-password>
@@ -78,11 +79,11 @@ Installer results:
 Service/process checks:
 
 ```bash
-ssh hetzner "sudo systemctl status htmlctl-newsletter-staging --no-pager"
-ssh hetzner "sudo systemctl status htmlctl-newsletter-prod --no-pager"
-ssh hetzner "curl -sf http://127.0.0.1:9501/healthz"
-ssh hetzner "curl -sf http://127.0.0.1:9502/healthz"
-ssh hetzner "sudo ss -tlnp | grep ':9501\\|:9502'"
+ssh "${TARGET_HOST}" "sudo systemctl status htmlctl-newsletter-staging --no-pager"
+ssh "${TARGET_HOST}" "sudo systemctl status htmlctl-newsletter-prod --no-pager"
+ssh "${TARGET_HOST}" "curl -sf http://127.0.0.1:9501/healthz"
+ssh "${TARGET_HOST}" "curl -sf http://127.0.0.1:9502/healthz"
+ssh "${TARGET_HOST}" "sudo ss -tlnp | grep ':9501\\|:9502'"
 ```
 
 Expected:
@@ -92,7 +93,7 @@ Expected:
 Env permission checks:
 
 ```bash
-ssh hetzner "stat -c '%a %U %G %n' /etc/htmlctl-newsletter/staging.env /etc/htmlctl-newsletter/prod.env"
+ssh "${TARGET_HOST}" "stat -c '%a %U %G %n' /etc/htmlctl-newsletter/staging.env /etc/htmlctl-newsletter/prod.env"
 ```
 
 Expected: `640 root htmlctl-newsletter`.
@@ -100,8 +101,8 @@ Expected: `640 root htmlctl-newsletter`.
 DB isolation checks:
 
 ```bash
-ssh hetzner "sudo -u postgres psql -Atqc \"SELECT has_database_privilege('htmlctl_newsletter_staging','htmlctl_newsletter_prod','CONNECT');\""
-ssh hetzner "sudo -u postgres psql -Atqc \"SELECT has_database_privilege('htmlctl_newsletter_prod','htmlctl_newsletter_staging','CONNECT');\""
+ssh "${TARGET_HOST}" "sudo -u postgres psql -Atqc \"SELECT has_database_privilege('htmlctl_newsletter_staging','htmlctl_newsletter_prod','CONNECT');\""
+ssh "${TARGET_HOST}" "sudo -u postgres psql -Atqc \"SELECT has_database_privilege('htmlctl_newsletter_prod','htmlctl_newsletter_staging','CONNECT');\""
 ```
 
 Expected: both return `f`.
@@ -129,9 +130,9 @@ Expected status code without tokens: `400`.
 Failure-mode checks (required):
 
 ```bash
-ssh hetzner "sudo systemctl stop htmlctl-newsletter-staging"
+ssh "${TARGET_HOST}" "sudo systemctl stop htmlctl-newsletter-staging"
 curl -s -o /dev/null -w '%{http_code}\n' https://staging.example.com/newsletter/verify
-ssh hetzner "sudo systemctl start htmlctl-newsletter-staging"
+ssh "${TARGET_HOST}" "sudo systemctl start htmlctl-newsletter-staging"
 
 htmlctl backend remove website/<site> --env staging --path /newsletter/*
 htmlctl backend add website/<site> --env staging --path /newsletter/* --upstream http://127.0.0.1:9599
@@ -183,8 +184,8 @@ Upgrade sequence:
 Commands:
 
 ```bash
-ssh hetzner "sudo systemctl restart htmlctl-newsletter-staging"
-ssh hetzner "sudo systemctl restart htmlctl-newsletter-prod"
+ssh "${TARGET_HOST}" "sudo systemctl restart htmlctl-newsletter-staging"
+ssh "${TARGET_HOST}" "sudo systemctl restart htmlctl-newsletter-prod"
 ```
 
 Binary rollback:
@@ -196,8 +197,8 @@ Binary rollback:
 Logs:
 
 ```bash
-ssh hetzner "sudo journalctl -u htmlctl-newsletter-staging -n 200 --no-pager"
-ssh hetzner "sudo journalctl -u htmlctl-newsletter-prod -n 200 --no-pager"
+ssh "${TARGET_HOST}" "sudo journalctl -u htmlctl-newsletter-staging -n 200 --no-pager"
+ssh "${TARGET_HOST}" "sudo journalctl -u htmlctl-newsletter-prod -n 200 --no-pager"
 ```
 
 ## 7. Campaign Operator Workflow
@@ -205,19 +206,19 @@ ssh hetzner "sudo journalctl -u htmlctl-newsletter-prod -n 200 --no-pager"
 Store campaign content:
 
 ```bash
-ssh hetzner 'sudo python3 - <<\"PY\"\nimport os, subprocess\nfor env_path in (\"/etc/htmlctl-newsletter/staging.env\",):\n    env = os.environ.copy()\n    with open(env_path, \"r\", encoding=\"utf-8\") as f:\n        for line in f:\n            line = line.strip()\n            if not line or line.startswith(\"#\") or \"=\" not in line:\n                continue\n            k, v = line.split(\"=\", 1)\n            env[k] = v\n    subprocess.run([\n        \"/usr/local/bin/htmlctl-newsletter\", \"campaign\", \"upsert\",\n        \"--slug\", \"launch\",\n        \"--subject\", \"Launch update\",\n        \"--html-file\", \"/srv/newsletter/launch.html\",\n        \"--text-file\", \"/srv/newsletter/launch.txt\",\n    ], check=True, env=env)\nPY'
+ssh "${TARGET_HOST}" 'sudo python3 - <<\"PY\"\nimport os, subprocess\nfor env_path in (\"/etc/htmlctl-newsletter/staging.env\",):\n    env = os.environ.copy()\n    with open(env_path, \"r\", encoding=\"utf-8\") as f:\n        for line in f:\n            line = line.strip()\n            if not line or line.startswith(\"#\") or \"=\" not in line:\n                continue\n            k, v = line.split(\"=\", 1)\n            env[k] = v\n    subprocess.run([\n        \"/usr/local/bin/htmlctl-newsletter\", \"campaign\", \"upsert\",\n        \"--slug\", \"launch\",\n        \"--subject\", \"Launch update\",\n        \"--html-file\", \"/srv/newsletter/launch.html\",\n        \"--text-file\", \"/srv/newsletter/launch.txt\",\n    ], check=True, env=env)\nPY'
 ```
 
 Preview send from staging:
 
 ```bash
-ssh hetzner 'sudo python3 - <<\"PY\"\nimport os, subprocess\nenv = os.environ.copy()\nwith open(\"/etc/htmlctl-newsletter/staging.env\", \"r\", encoding=\"utf-8\") as f:\n    for line in f:\n        line = line.strip()\n        if not line or line.startswith(\"#\") or \"=\" not in line:\n            continue\n        k, v = line.split(\"=\", 1)\n        env[k] = v\nsubprocess.run([\n    \"/usr/local/bin/htmlctl-newsletter\", \"campaign\", \"preview\",\n    \"--slug\", \"launch\",\n    \"--to\", \"you@example.com\",\n], check=True, env=env)\nPY'
+ssh "${TARGET_HOST}" 'sudo python3 - <<\"PY\"\nimport os, subprocess\nenv = os.environ.copy()\nwith open(\"/etc/htmlctl-newsletter/staging.env\", \"r\", encoding=\"utf-8\") as f:\n    for line in f:\n        line = line.strip()\n        if not line or line.startswith(\"#\") or \"=\" not in line:\n            continue\n        k, v = line.split(\"=\", 1)\n        env[k] = v\nsubprocess.run([\n    \"/usr/local/bin/htmlctl-newsletter\", \"campaign\", \"preview\",\n    \"--slug\", \"launch\",\n    \"--to\", \"you@example.com\",\n], check=True, env=env)\nPY'
 ```
 
 Full send with low-tier Resend pacing:
 
 ```bash
-ssh hetzner 'sudo python3 - <<\"PY\"\nimport os, subprocess\nenv = os.environ.copy()\nwith open(\"/etc/htmlctl-newsletter/prod.env\", \"r\", encoding=\"utf-8\") as f:\n    for line in f:\n        line = line.strip()\n        if not line or line.startswith(\"#\") or \"=\" not in line:\n            continue\n        k, v = line.split(\"=\", 1)\n        env[k] = v\nsubprocess.run([\n    \"/usr/local/bin/htmlctl-newsletter\", \"campaign\", \"send\",\n    \"--slug\", \"launch\",\n    \"--mode\", \"all\",\n    \"--interval\", \"30s\",\n    \"--confirm\",\n], check=True, env=env)\nPY'
+ssh "${TARGET_HOST}" 'sudo python3 - <<\"PY\"\nimport os, subprocess\nenv = os.environ.copy()\nwith open(\"/etc/htmlctl-newsletter/prod.env\", \"r\", encoding=\"utf-8\") as f:\n    for line in f:\n        line = line.strip()\n        if not line or line.startswith(\"#\") or \"=\" not in line:\n            continue\n        k, v = line.split(\"=\", 1)\n        env[k] = v\nsubprocess.run([\n    \"/usr/local/bin/htmlctl-newsletter\", \"campaign\", \"send\",\n    \"--slug\", \"launch\",\n    \"--mode\", \"all\",\n    \"--interval\", \"30s\",\n    \"--confirm\",\n], check=True, env=env)\nPY'
 ```
 
 ## 8. Troubleshooting

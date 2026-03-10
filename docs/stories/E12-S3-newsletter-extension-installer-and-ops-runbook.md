@@ -58,7 +58,7 @@ Include explicit post-install checks for:
 - `extensions/newsletter/ops/systemd/htmlctl-newsletter-prod.service`
 - `extensions/newsletter/ops/env/staging.env.example`
 - `extensions/newsletter/ops/env/prod.env.example`
-- `docs/guides/newsletter-extension-hetzner.md`
+- `docs/guides/newsletter-extension-vps.md`
 
 ### Files to Modify
 
@@ -122,7 +122,7 @@ Include explicit post-install checks for:
   - systemd unit install, enable, restart
   - printed post-install verification commands
 - Added runbook:
-  - `docs/guides/newsletter-extension-hetzner.md`
+  - `docs/guides/newsletter-extension-vps.md`
   - includes install, verification, backend wiring, restart/rollback, troubleshooting
 - Updated extension reference docs:
   - `docs/reference/extensions.md`
@@ -155,6 +155,6 @@ Include explicit post-install checks for:
   - minimum 32-character `NEWSLETTER_*_LINK_SECRET`
   - sender-address shape for `NEWSLETTER_*_RESEND_FROM`
 - Env examples now document the sender-address and link-secret expectations inline.
-- Hetzner runbook removed stale placeholder-route language and now consistently describes the real signup, verify, unsubscribe, import, preview, and paced-send workflow.
+- VPS runbook removed stale placeholder-route language and now consistently describes the real signup, verify, unsubscribe, import, preview, and paced-send workflow.
 - Added dedicated review log:
   - `docs/review-logs/E12-newsletter-extension-hardening-2026-03-08.md`

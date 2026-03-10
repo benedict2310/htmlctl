@@ -33,7 +33,7 @@ Backend constraints and failure semantics:
 Reference implementation:
 - Service module: `extensions/newsletter/service`
 - Installer and ops assets: `extensions/newsletter/ops`
-- Host runbook: `docs/guides/newsletter-extension-hetzner.md`
+- Host runbook: `docs/guides/newsletter-extension-vps.md`
 - Adoption validation log: `docs/review-logs/E12-newsletter-extension-adoption-validation-2026-03-06.md`
 
 1. Install staging/prod service units and env files with `extensions/newsletter/ops/setup-newsletter-extension.sh`.
@@ -73,7 +73,7 @@ NEWSLETTER_ENV=prod ... htmlctl-newsletter campaign send --slug launch --mode al
 Reference implementation:
 - Service module: `extensions/telemetry-collector/service`
 - Installer and ops assets: `extensions/telemetry-collector/ops`
-- Host runbook: `docs/guides/telemetry-collector-extension-hetzner.md`
+- Host runbook: `docs/guides/telemetry-collector-extension-vps.md`
 
 1. Install staging/prod collector units and env files with `extensions/telemetry-collector/ops/setup-telemetry-collector-extension.sh`.
 2. Validate manifest compatibility before routing:

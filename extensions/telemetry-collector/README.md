@@ -9,4 +9,4 @@ Current contents:
 - `CHANGELOG.md`: extension release notes.
 - adopter docs:
   - `docs/guides/extensions-overview.md`
-  - `docs/guides/telemetry-collector-extension-hetzner.md`
+  - `docs/guides/telemetry-collector-extension-vps.md`

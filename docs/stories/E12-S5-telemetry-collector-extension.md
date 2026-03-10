@@ -106,7 +106,7 @@ Update `htmlctl-publish` skill guidance so agents know:
 - `extensions/telemetry-collector/ops/systemd/htmlctl-telemetry-collector-prod.service`
 - `extensions/telemetry-collector/ops/env/staging.env.example`
 - `extensions/telemetry-collector/ops/env/prod.env.example`
-- `docs/guides/telemetry-collector-extension-hetzner.md`
+- `docs/guides/telemetry-collector-extension-vps.md`
 - `docs/review-logs/E12-telemetry-collector-extension-<date>.md`
 
 ### Files to Modify
@@ -225,7 +225,7 @@ Required test coverage:
   - manifest
   - loopback-only Go service
   - installer/env/systemd assets
-  - Hetzner runbook
+  - VPS runbook
 - Collector public contract:
   - `GET /healthz`
   - `POST /site-telemetry/v1/events`
@@ -246,3 +246,6 @@ Required test coverage:
   - updated `site/scripts/site.js` to post to `/site-telemetry/v1/events`
   - verified staging public `202` ingest plus stored-event query
   - promoted the same site asset to prod and verified the same flow there
+- Follow-up doc hardening:
+  - renamed the extension runbook from provider-specific `*-hetzner.md` naming to generic `*-vps.md`
+  - replaced adopter-specific `ssh hetzner` examples with `TARGET_HOST="user@host.example.com"` patterns

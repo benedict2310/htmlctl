@@ -13,6 +13,7 @@
 ## Deployment Guides
 
 - `docs/guides/first-deploy-docker.md` - first deployment path using Docker images and SSH transport, including telemetry-ready local host binding (`127.0.0.1.nip.io`).
+- `docs/guides/site-discovery-and-export.md` - zero-context discovery, inspect, bootstrap, partial apply, and remote source export workflow for operators and AI agents.
 - `docs/guides/extensions-overview.md` - extension model overview and operator integration checks.
 - `docs/guides/newsletter-extension-vps.md` - newsletter extension install/verify/runbook for Ubuntu VPS hosts.
 - `docs/guides/telemetry-collector-extension-vps.md` - browser telemetry collector install/verify/runbook for Ubuntu VPS hosts.

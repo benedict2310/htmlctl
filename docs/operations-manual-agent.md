@@ -13,6 +13,7 @@ Status model:
 Primary references:
 - `docs/technical-spec.md`
 - `docs/guides/first-deploy-docker.md`
+- `docs/guides/site-discovery-and-export.md`
 - `docs/reference/docker-images.md`
 - `docs/operations/domain-hardening.md`
 

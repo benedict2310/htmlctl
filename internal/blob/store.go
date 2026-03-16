@@ -69,3 +69,20 @@ func (s *Store) Put(ctx context.Context, hashHex string, content []byte) (bool, 
 	}
 	return true, nil
 }
+
+func (s *Store) Read(ctx context.Context, hashHex string) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if !hashHexPattern.MatchString(hashHex) {
+		return nil, fmt.Errorf("invalid hash %q", hashHex)
+	}
+	content, err := os.ReadFile(s.Path(hashHex))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("blob %s not found", hashHex)
+		}
+		return nil, fmt.Errorf("read blob %s: %w", hashHex, err)
+	}
+	return content, nil
+}

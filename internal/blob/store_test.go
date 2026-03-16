@@ -50,3 +50,20 @@ func TestStorePutInvalidHash(t *testing.T) {
 		t.Fatalf("expected invalid hash error")
 	}
 }
+
+func TestStoreRead(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "blobs", "sha256")
+	s := NewStore(root)
+	hash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	if _, err := s.Put(context.Background(), hash, []byte("hello")); err != nil {
+		t.Fatalf("Put() error = %v", err)
+	}
+
+	content, err := s.Read(context.Background(), hash)
+	if err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+	if string(content) != "hello" {
+		t.Fatalf("unexpected content %q", string(content))
+	}
+}

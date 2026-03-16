@@ -450,6 +450,83 @@ func TestGetDesiredStateManifestBuildsExpectedRequest(t *testing.T) {
 	}
 }
 
+func TestGetResourcesBuildsExpectedRequest(t *testing.T) {
+	mock := &mockTransport{
+		doFn: func(ctx context.Context, req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodGet {
+				t.Fatalf("expected GET, got %s", req.Method)
+			}
+			if req.URL.Path != "/api/v1/websites/sample/environments/staging/resources" {
+				t.Fatalf("unexpected path %s", req.URL.Path)
+			}
+			return jsonResponse(http.StatusOK, `{
+  "website":"sample",
+  "environment":"staging",
+  "site":{"name":"sample","defaultStyleBundle":"default","baseTemplate":"default","seo":{"publicBaseURL":"https://example.com/"},"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z"},
+  "pages":[{"name":"index","route":"/","title":"Home","description":"Home page","layout":[{"include":"header"}],"contentHash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z"}],
+  "components":[{"name":"header","scope":"global","hasCss":true,"hasJs":false,"contentHash":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","cssHash":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z"}],
+  "styles":[{"name":"default","files":[{"path":"styles/default.css","hash":"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}],"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z"}],
+  "assets":[{"path":"assets/logo.svg","contentType":"image/svg+xml","sizeBytes":11,"contentHash":"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","createdAt":"2026-01-01T00:00:00Z"}],
+  "branding":[{"slot":"svg","sourcePath":"branding/favicon.svg","contentType":"image/svg+xml","sizeBytes":12,"contentHash":"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z"}],
+  "resourceCounts":{"pages":1,"components":1,"styles":1,"assets":1,"scripts":0}
+}`), nil
+		},
+	}
+
+	api := New(mock)
+	out, err := api.GetResources(context.Background(), "sample", "staging")
+	if err != nil {
+		t.Fatalf("GetResources() error = %v", err)
+	}
+	if out.Site.SEO == nil || out.Site.SEO.PublicBaseURL != "https://example.com/" {
+		t.Fatalf("unexpected site seo: %#v", out.Site.SEO)
+	}
+	if len(out.Pages) != 1 || out.Pages[0].Layout[0].Include != "header" {
+		t.Fatalf("unexpected pages response: %#v", out.Pages)
+	}
+	if len(out.Components) != 1 || !out.Components[0].HasCSS {
+		t.Fatalf("unexpected components response: %#v", out.Components)
+	}
+	if len(out.Styles) != 1 || out.Styles[0].Files[0].Path != "styles/default.css" {
+		t.Fatalf("unexpected styles response: %#v", out.Styles)
+	}
+	if len(out.Branding) != 1 || out.Branding[0].SourcePath != "branding/favicon.svg" {
+		t.Fatalf("unexpected branding response: %#v", out.Branding)
+	}
+}
+
+func TestGetSourceArchiveBuildsExpectedRequest(t *testing.T) {
+	mock := &mockTransport{
+		doFn: func(ctx context.Context, req *http.Request) (*http.Response, error) {
+			if req.Method != http.MethodGet {
+				t.Fatalf("expected GET, got %s", req.Method)
+			}
+			if req.URL.Path != "/api/v1/websites/sample/environments/staging/source" {
+				t.Fatalf("unexpected path %s", req.URL.Path)
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader("archive-bytes")),
+				Header:     make(http.Header),
+			}, nil
+		},
+	}
+
+	api := New(mock)
+	out, err := api.GetSourceArchive(context.Background(), "sample", "staging")
+	if err != nil {
+		t.Fatalf("GetSourceArchive() error = %v", err)
+	}
+	defer out.Close()
+	body, err := io.ReadAll(out)
+	if err != nil {
+		t.Fatalf("ReadAll() error = %v", err)
+	}
+	if string(body) != "archive-bytes" {
+		t.Fatalf("unexpected archive body %q", string(body))
+	}
+}
+
 func TestDomainBindingClientMethods(t *testing.T) {
 	var gotCreateBody string
 	mock := &mockTransport{

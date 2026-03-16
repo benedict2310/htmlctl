@@ -178,13 +178,64 @@ func TestGetBackendsYAMLOutput(t *testing.T) {
 	}
 }
 
+func TestGetPagesTableOutput(t *testing.T) {
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			if req.Path != "/api/v1/websites/sample/environments/staging/resources" {
+				t.Fatalf("unexpected request: %#v", req)
+			}
+			return jsonHTTPResponse(200, inspectResourcesJSON), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"get", "pages"}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(out, "index") || !strings.Contains(out, "/") {
+		t.Fatalf("unexpected output: %s", out)
+	}
+}
+
+func TestGetComponentsJSONOutput(t *testing.T) {
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			return jsonHTTPResponse(200, inspectResourcesJSON), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"get", "components", "--output", "json"}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(out, `"hasCss": true`) || !strings.Contains(out, `"name": "header"`) {
+		t.Fatalf("unexpected JSON output: %s", out)
+	}
+}
+
+func TestGetWebsiteTableOutput(t *testing.T) {
+	tr := &scriptedTransport{
+		handle: func(call int, req recordedRequest) (*http.Response, error) {
+			return jsonHTTPResponse(200, inspectResourcesJSON), nil
+		},
+	}
+
+	out, _, err := runCommandWithTransport(t, []string{"get", "website"}, tr)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(out, "default_style_bundle") || !strings.Contains(out, "robots_enabled") || !strings.Contains(out, "scripts") {
+		t.Fatalf("unexpected output: %s", out)
+	}
+}
+
 func TestGetUnsupportedResourceTypeProvidesSupportedList(t *testing.T) {
 	tr := &scriptedTransport{}
-	_, _, err := runCommandWithTransport(t, []string{"get", "pages"}, tr)
+	_, _, err := runCommandWithTransport(t, []string{"get", "widgets"}, tr)
 	if err == nil {
 		t.Fatalf("expected unsupported resource type error")
 	}
-	if !strings.Contains(err.Error(), "supported: websites, environments, releases, domains, backends") {
+	if !strings.Contains(err.Error(), "supported: websites, website, environments, releases, pages, components, styles, assets, branding, domains, backends") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

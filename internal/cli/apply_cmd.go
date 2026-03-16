@@ -31,6 +31,12 @@ func newApplyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "apply -f <site-path>",
 		Short: "Apply local site resources to a remote environment",
+		Long:  "Apply local desired state to the selected remote environment.\n\nSupported --from values:\n- site root directory\n- website.yaml\n- pages/*.page.yaml\n- components/<name>.html\n- components/<name>.css\n- components/<name>.js\n- styles/tokens.css\n- styles/default.css\n- scripts/site.js\n- assets/**\n- branding/**\n\nFile-level apply sends only the selected resource and any required companion files. For page files, referenced components are included automatically. For component CSS/JS sidecars, htmlctl sends the owning component HTML plus any present sidecars together.",
+		Example: "  htmlctl apply -f ./site --context staging\n" +
+			"  htmlctl apply -f pages/index.page.yaml --context staging\n" +
+			"  htmlctl apply -f components/hero.css --context staging\n" +
+			"  htmlctl apply --from-git /path/to/repo --ref <commit-sha> --subdir site --context staging\n" +
+			"  htmlctl apply -f ./site --dry-run --context staging",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			sourceDir, source, cleanup, err := resolveApplySource(cmd.Context(), from, fromGit, ref, subdir)
 			if err != nil {

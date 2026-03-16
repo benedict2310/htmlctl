@@ -199,3 +199,20 @@ by guarding the field with `sync.RWMutex`. All 428 tests pass clean under `-race
 | 12.5 | Telemetry collector extension for browser event ingest (Done 2026-03-09) | [E12-S5](stories/E12-S5-telemetry-collector-extension.md) |
 
 **Done when:** operators can install an official newsletter extension package, route it through Epic 9 backends, and operate it safely with documented staging/prod isolation and security checks, without any mandatory core binary changes.
+
+---
+
+## Epic 13 — Agent-Native Site Discoverability
+
+**Goal:** Let a zero-context operator or AI agent discover a site's structure, authoring model, and current desired state from `htmlctl` itself instead of relying on out-of-band docs or repository context.
+**Status:** Proposed
+
+**Motivation:** Epics 1-12 built a capable control plane, but the CLI is still strongest for day-2 release operations, not for self-discovery. A fresh operator can list websites and environments, but cannot easily answer core publishing questions from the CLI alone: which routes exist, which components compose a page, which styles and branding assets are active, what the authoring model expects, or how to reconstruct current desired state when the server is the source of truth. Epic 13 closes that gap with first-class inspect, guide, and export workflows.
+
+| # | Story | File |
+|---|-------|------|
+| 13.1 | Agent-native site inventory and inspect commands | [E13-S1](stories/E13-S1-agent-native-site-inventory-and-inspect.md) |
+| 13.2 | CLI authoring guide and site bootstrap | [E13-S2](stories/E13-S2-cli-authoring-guide-and-site-bootstrap.md) |
+| 13.3 | Remote site export and canonical source reconstruction | [E13-S3](stories/E13-S3-remote-site-export-and-reconstruction.md) |
+
+**Done when:** a zero-context operator can use `htmlctl` alone to inspect remote site structure, understand the supported page/component/design model, scaffold a valid starting site locally, and export a canonical source snapshot from the server that round-trips cleanly through `render`, `diff`, and `apply`.

@@ -1,5 +1,7 @@
 package client
 
+import "github.com/benedict2310/htmlctl/pkg/model"
+
 type Website struct {
 	Name               string `json:"name" yaml:"name"`
 	DefaultStyleBundle string `json:"defaultStyleBundle" yaml:"defaultStyleBundle"`
@@ -62,7 +64,86 @@ type StatusResponse struct {
 	Environment            string         `json:"environment" yaml:"environment"`
 	ActiveReleaseID        *string        `json:"activeReleaseId,omitempty" yaml:"activeReleaseId,omitempty"`
 	ActiveReleaseTimestamp *string        `json:"activeReleaseTimestamp,omitempty" yaml:"activeReleaseTimestamp,omitempty"`
+	DefaultStyleBundle     string         `json:"defaultStyleBundle,omitempty" yaml:"defaultStyleBundle,omitempty"`
+	BaseTemplate           string         `json:"baseTemplate,omitempty" yaml:"baseTemplate,omitempty"`
 	ResourceCounts         ResourceCounts `json:"resourceCounts" yaml:"resourceCounts"`
+}
+
+type WebsiteResource struct {
+	Name               string             `json:"name" yaml:"name"`
+	DefaultStyleBundle string             `json:"defaultStyleBundle" yaml:"defaultStyleBundle"`
+	BaseTemplate       string             `json:"baseTemplate" yaml:"baseTemplate"`
+	Head               *model.WebsiteHead `json:"head,omitempty" yaml:"head,omitempty"`
+	SEO                *model.WebsiteSEO  `json:"seo,omitempty" yaml:"seo,omitempty"`
+	ContentHash        string             `json:"contentHash,omitempty" yaml:"contentHash,omitempty"`
+	CreatedAt          string             `json:"createdAt" yaml:"createdAt"`
+	UpdatedAt          string             `json:"updatedAt" yaml:"updatedAt"`
+}
+
+type PageResource struct {
+	Name        string                 `json:"name" yaml:"name"`
+	Route       string                 `json:"route" yaml:"route"`
+	Title       string                 `json:"title" yaml:"title"`
+	Description string                 `json:"description" yaml:"description"`
+	Layout      []model.PageLayoutItem `json:"layout" yaml:"layout"`
+	Head        *model.PageHead        `json:"head,omitempty" yaml:"head,omitempty"`
+	ContentHash string                 `json:"contentHash" yaml:"contentHash"`
+	CreatedAt   string                 `json:"createdAt" yaml:"createdAt"`
+	UpdatedAt   string                 `json:"updatedAt" yaml:"updatedAt"`
+}
+
+type ComponentResource struct {
+	Name        string `json:"name" yaml:"name"`
+	Scope       string `json:"scope" yaml:"scope"`
+	HasCSS      bool   `json:"hasCss" yaml:"hasCss"`
+	HasJS       bool   `json:"hasJs" yaml:"hasJs"`
+	ContentHash string `json:"contentHash" yaml:"contentHash"`
+	CSSHash     string `json:"cssHash,omitempty" yaml:"cssHash,omitempty"`
+	JSHash      string `json:"jsHash,omitempty" yaml:"jsHash,omitempty"`
+	CreatedAt   string `json:"createdAt" yaml:"createdAt"`
+	UpdatedAt   string `json:"updatedAt" yaml:"updatedAt"`
+}
+
+type StyleFile struct {
+	Path string `json:"path" yaml:"path"`
+	Hash string `json:"hash" yaml:"hash"`
+}
+
+type StyleResource struct {
+	Name      string      `json:"name" yaml:"name"`
+	Files     []StyleFile `json:"files" yaml:"files"`
+	CreatedAt string      `json:"createdAt" yaml:"createdAt"`
+	UpdatedAt string      `json:"updatedAt" yaml:"updatedAt"`
+}
+
+type AssetResource struct {
+	Path        string `json:"path" yaml:"path"`
+	ContentType string `json:"contentType" yaml:"contentType"`
+	SizeBytes   int64  `json:"sizeBytes" yaml:"sizeBytes"`
+	ContentHash string `json:"contentHash" yaml:"contentHash"`
+	CreatedAt   string `json:"createdAt" yaml:"createdAt"`
+}
+
+type BrandingResource struct {
+	Slot        string `json:"slot" yaml:"slot"`
+	SourcePath  string `json:"sourcePath" yaml:"sourcePath"`
+	ContentType string `json:"contentType" yaml:"contentType"`
+	SizeBytes   int64  `json:"sizeBytes" yaml:"sizeBytes"`
+	ContentHash string `json:"contentHash" yaml:"contentHash"`
+	CreatedAt   string `json:"createdAt" yaml:"createdAt"`
+	UpdatedAt   string `json:"updatedAt" yaml:"updatedAt"`
+}
+
+type ResourcesResponse struct {
+	Website        string              `json:"website" yaml:"website"`
+	Environment    string              `json:"environment" yaml:"environment"`
+	Site           WebsiteResource     `json:"site" yaml:"site"`
+	Pages          []PageResource      `json:"pages" yaml:"pages"`
+	Components     []ComponentResource `json:"components" yaml:"components"`
+	Styles         []StyleResource     `json:"styles" yaml:"styles"`
+	Assets         []AssetResource     `json:"assets" yaml:"assets"`
+	Branding       []BrandingResource  `json:"branding" yaml:"branding"`
+	ResourceCounts ResourceCounts      `json:"resourceCounts" yaml:"resourceCounts"`
 }
 
 type DesiredStateManifestFile struct {

@@ -196,6 +196,36 @@ func (c *APIClient) GetDesiredStateManifest(ctx context.Context, website, enviro
 	return out, nil
 }
 
+func (c *APIClient) GetResources(ctx context.Context, website, environment string) (ResourcesResponse, error) {
+	path := fmt.Sprintf(
+		"/api/v1/websites/%s/environments/%s/resources",
+		url.PathEscape(strings.TrimSpace(website)),
+		url.PathEscape(strings.TrimSpace(environment)),
+	)
+	req, err := c.newRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return ResourcesResponse{}, err
+	}
+	var out ResourcesResponse
+	if err := c.do(req, &out); err != nil {
+		return ResourcesResponse{}, err
+	}
+	return out, nil
+}
+
+func (c *APIClient) GetSourceArchive(ctx context.Context, website, environment string) (io.ReadCloser, error) {
+	path := fmt.Sprintf(
+		"/api/v1/websites/%s/environments/%s/source",
+		url.PathEscape(strings.TrimSpace(website)),
+		url.PathEscape(strings.TrimSpace(environment)),
+	)
+	req, err := c.newRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	return c.doStream(req)
+}
+
 func (c *APIClient) ApplyBundle(ctx context.Context, website, environment string, bundle io.Reader, dryRun bool) (ApplyUploadResponse, error) {
 	path := fmt.Sprintf(
 		"/api/v1/websites/%s/environments/%s/apply",
@@ -600,6 +630,18 @@ func (c *APIClient) do(req *http.Request, out any) error {
 		return fmt.Errorf("decode api response: %w", err)
 	}
 	return nil
+}
+
+func (c *APIClient) doStream(req *http.Request) (io.ReadCloser, error) {
+	resp, err := c.transport.Do(req.Context(), req)
+	if err != nil {
+		return nil, mapTransportError(err)
+	}
+	if resp.StatusCode >= http.StatusBadRequest {
+		defer resp.Body.Close()
+		return nil, mapAPIError(resp)
+	}
+	return resp.Body, nil
 }
 
 type apiErrorPayload struct {

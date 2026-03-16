@@ -7,6 +7,22 @@ description: Publish content to an htmlctl-managed website. Use when an agent ne
 
 Publish pages, components, styles, website metadata, and branding to a site managed by `htmlctl` / `htmlservd`.
 
+Before making changes on an unfamiliar site, prefer the built-in discovery flow:
+
+```bash
+htmlctl site explain
+htmlctl get website --context staging
+htmlctl get pages --context staging
+htmlctl inspect page index --context staging
+htmlctl inspect component hero --context staging
+```
+
+If the server is the only source of truth, reconstruct the current site locally first:
+
+```bash
+htmlctl site export -o ./exported-site --context staging
+```
+
 ## Deployment Model
 
 The server is the **source of truth**. `htmlservd` stores all desired state in SQLite and maintains a full, immutable release history. Rollback is a symlink switch — under a second. No git repository is required for day-to-day content management.

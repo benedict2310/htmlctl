@@ -46,6 +46,12 @@ Context fields:
 ## Local Operations
 
 ```bash
+# Explain the site model and discover valid authoring paths
+htmlctl site explain
+
+# Scaffold a minimal valid site tree
+htmlctl site init ./site --template minimal
+
 # Render site to a local output directory (deterministic, no server required)
 htmlctl render -f ./site -o ./dist
 
@@ -113,12 +119,14 @@ htmlctl status website/<name> --context prod
 
 Inspect server state for specific resources.
 
-**Supported resource types:** `websites`, `environments`, `releases`, `domains`, `backends`.
-`pages`, `components`, `styles`, and `assets` are not queryable via `get` — use `htmlctl diff` to compare local vs server state, or `htmlctl status` for summary counts.
+**Supported resource types:** `websites`, `website`, `environments`, `releases`, `pages`, `components`, `styles`, `assets`, `branding`, `domains`, `backends`.
 
 ```bash
 # List all releases for a website/environment
 htmlctl get releases --context staging
+
+# Show site-level metadata and resource counts for the active context website/environment
+htmlctl get website --context staging
 
 # List all websites on the server
 htmlctl get websites --context staging
@@ -126,12 +134,58 @@ htmlctl get websites --context staging
 # List all environments
 htmlctl get environments --context staging
 
+# List page/component/style/asset inventory for the active context website/environment
+htmlctl get pages --context staging
+htmlctl get components --context staging
+htmlctl get styles --context staging
+htmlctl get assets --context staging
+htmlctl get branding --context staging
+
 # List domain bindings for the active context website/environment
 htmlctl get domains --context staging
 
 # List environment backends for the active context website/environment
 htmlctl get backends --context staging
 ```
+
+---
+
+## Inspect
+
+Inspect composes richer reports over the same desired-state inventory that powers `get`.
+
+```bash
+# Inspect site-level metadata, design settings, and resource counts
+htmlctl inspect website --context staging
+
+# Inspect a page's route, layout, canonical URL, and social metadata
+htmlctl inspect page index --context staging
+
+# Inspect a component's sidecars and referencing pages
+htmlctl inspect component hero --context staging
+```
+
+---
+
+## Site Export
+
+Pull canonical source back out of the server for the active context website/environment.
+
+```bash
+# Export into a local source tree
+htmlctl site export -o ./exported-site --context staging
+
+# Save the streamed tar.gz alongside the extracted tree
+htmlctl site export -o ./exported-site --archive ./exported-site/source.tar.gz --context staging
+
+# Download archive only
+htmlctl site export --archive ./sample-staging.tar.gz --context staging
+```
+
+Notes:
+- Export preserves stored `website.yaml` and `pages/*.page.yaml` bytes when available, so comments/formatting round-trip for previously uploaded files.
+- Export writes a `.htmlctl-export` marker file and only allows `--force` replacement of a prior export tree.
+- Export currently rejects sites with multiple style bundles because the v1 source layout can represent only one bundle.
 
 ---
 

@@ -19,6 +19,9 @@ func newDiffCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "diff -f <site-dir>",
 		Short: "Show file-level desired-state diff against a remote environment",
+		Long:  "Show file-level desired-state diff between a local site root or supported site file path and the current remote desired state. Omit website/environment flags by configuring them on the active context.",
+		Example: "  htmlctl diff -f ./site --context staging\n" +
+			"  htmlctl diff -f pages/index.page.yaml --context staging",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if strings.TrimSpace(from) == "" {
 				fmt.Fprint(cmd.ErrOrStderr(), cmd.UsageString())

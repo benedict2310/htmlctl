@@ -94,9 +94,11 @@ func NewRootCmd(version string) *cobra.Command {
 
 	cmd.AddCommand(newContextCmd())
 	cmd.AddCommand(newConfigCmd())
+	cmd.AddCommand(newSiteCmd())
 	cmd.AddCommand(newRenderCmd())
 	cmd.AddCommand(newServeCmd())
 	cmd.AddCommand(newGetCmd())
+	cmd.AddCommand(newInspectCmd())
 	cmd.AddCommand(newStatusCmd())
 	cmd.AddCommand(newDiffCmd())
 	cmd.AddCommand(newApplyCmd())
@@ -199,6 +201,13 @@ func validateTransportContextRequirements(cmd *cobra.Command, args []string, res
 			return err
 		}
 		switch resourceType {
+		case "website", "pages", "components", "styles", "assets", "branding":
+			if _, err := requireContextWebsiteValue(resolved.Website); err != nil {
+				return err
+			}
+			if _, err := requireContextEnvironmentValue(resolved.Environment); err != nil {
+				return err
+			}
 		case "environments":
 			if _, err := requireContextWebsiteValue(resolved.Website); err != nil {
 				return err
@@ -210,6 +219,13 @@ func validateTransportContextRequirements(cmd *cobra.Command, args []string, res
 			if _, err := requireContextEnvironmentValue(resolved.Environment); err != nil {
 				return err
 			}
+		}
+	case "htmlctl inspect website", "htmlctl inspect page", "htmlctl inspect component", "htmlctl site export":
+		if _, err := requireContextWebsiteValue(resolved.Website); err != nil {
+			return err
+		}
+		if _, err := requireContextEnvironmentValue(resolved.Environment); err != nil {
+			return err
 		}
 	case "htmlctl status", "htmlctl logs", "htmlctl rollout history", "htmlctl rollout undo":
 		if _, err := resolveRemoteWebsiteValue(args, resolved.Website); err != nil {

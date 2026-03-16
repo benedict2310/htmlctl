@@ -17,6 +17,9 @@ func newRenderCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "render",
 		Short: "Render a site directory into static output",
+		Long:  "Load a local site directory, validate component rules, and render deterministic static output. Use this before larger structural changes or when verifying a freshly initialized site.",
+		Example: "  htmlctl render -f ./site -o ./dist\n" +
+			"  htmlctl site init ./site --template minimal && htmlctl render -f ./site -o ./dist",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if strings.TrimSpace(from) == "" {
 				fmt.Fprint(cmd.ErrOrStderr(), cmd.UsageString())

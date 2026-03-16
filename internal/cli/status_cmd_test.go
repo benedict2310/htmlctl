@@ -17,6 +17,8 @@ func TestStatusCommandTableOutput(t *testing.T) {
   "environment":"staging",
   "activeReleaseId":"01ARZ3NDEKTSV4RRFFQ69G5FAV",
   "activeReleaseTimestamp":"2026-01-02T00:00:00Z",
+  "defaultStyleBundle":"default",
+  "baseTemplate":"default",
   "resourceCounts":{"pages":1,"components":1,"styles":1,"assets":1,"scripts":0}
 }`), nil
 		},
@@ -31,6 +33,9 @@ func TestStatusCommandTableOutput(t *testing.T) {
 	}
 	if !strings.Contains(out, "components") || !strings.Contains(out, "1") {
 		t.Fatalf("expected resource counts in output, got: %s", out)
+	}
+	if !strings.Contains(out, "default_style_bundle") || !strings.Contains(out, "base_template") {
+		t.Fatalf("expected style/template summary in output, got: %s", out)
 	}
 }
 

@@ -1,6 +1,8 @@
 package release
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -8,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net"
@@ -36,6 +39,12 @@ type NotFoundError struct {
 }
 
 func (e *NotFoundError) Error() string { return e.msg }
+
+type UnsupportedSourceExportError struct {
+	msg string
+}
+
+func (e *UnsupportedSourceExportError) Error() string { return e.msg }
 
 type BuildResult struct {
 	ReleaseID         string
@@ -135,7 +144,7 @@ func (b *Builder) Build(ctx context.Context, websiteName, envName string) (out B
 	log := newBuildLog()
 	log.Addf("starting release build website=%s env=%s release=%s", website.Name, env.Name, releaseID)
 
-	snapshot, err := b.loadDesiredState(ctx, readQ, website, env)
+	snapshot, err := b.loadDesiredState(ctx, readQ, website, env, true)
 	if err != nil {
 		return b.recordFailedAndReturn(ctx, q, out, log, "{}", err)
 	}
@@ -196,7 +205,7 @@ func (b *Builder) Build(ctx context.Context, websiteName, envName string) (out B
 	}()
 
 	log.Addf("materializing source state from sqlite + blob store")
-	if err := b.materializeSource(ctx, sourceDir, snapshot); err != nil {
+	if err := b.materializeSource(ctx, sourceDir, snapshot, false); err != nil {
 		return b.recordFailedAndReturn(ctx, q, out, log, manifestJSON, err)
 	}
 
@@ -427,7 +436,7 @@ func (s desiredState) Manifest() manifestSnapshot {
 	}
 }
 
-func (b *Builder) loadDesiredState(ctx context.Context, q *dbpkg.Queries, website dbpkg.WebsiteRow, env dbpkg.EnvironmentRow) (desiredState, error) {
+func (b *Builder) loadDesiredState(ctx context.Context, q *dbpkg.Queries, website dbpkg.WebsiteRow, env dbpkg.EnvironmentRow, requirePages bool) (desiredState, error) {
 	pages, err := q.ListPagesByWebsite(ctx, website.ID)
 	if err != nil {
 		return desiredState{}, fmt.Errorf("load pages for release build: %w", err)
@@ -448,7 +457,7 @@ func (b *Builder) loadDesiredState(ctx context.Context, q *dbpkg.Queries, websit
 	if err != nil {
 		return desiredState{}, fmt.Errorf("load website icons for release build: %w", err)
 	}
-	if len(pages) == 0 {
+	if requirePages && len(pages) == 0 {
 		return desiredState{}, fmt.Errorf("website %q has no pages to build", website.Name)
 	}
 	return desiredState{
@@ -462,32 +471,41 @@ func (b *Builder) loadDesiredState(ctx context.Context, q *dbpkg.Queries, websit
 	}, nil
 }
 
-func (b *Builder) materializeSource(ctx context.Context, sourceDir string, state desiredState) error {
+func (b *Builder) materializeSource(ctx context.Context, sourceDir string, state desiredState, preserveOriginalYAML bool) error {
 	if err := os.MkdirAll(sourceDir, 0o755); err != nil {
 		return fmt.Errorf("create source directory %s: %w", sourceDir, err)
 	}
-	websiteDoc := model.Website{
-		APIVersion: model.APIVersionV1,
-		Kind:       model.KindWebsite,
-		Metadata:   model.Metadata{Name: state.Website.Name},
-		Spec: model.WebsiteSpec{
-			DefaultStyleBundle: state.Website.DefaultStyleBundle,
-			BaseTemplate:       state.Website.BaseTemplate,
-		},
-	}
-	websiteHead, err := parseWebsiteHeadJSON(state.Website.HeadJSON)
-	if err != nil {
-		return err
-	}
-	websiteDoc.Spec.Head = websiteHead
-	websiteSEO, err := parseWebsiteSEOJSON(state.Website.SEOJSON)
-	if err != nil {
-		return err
-	}
-	websiteDoc.Spec.SEO = websiteSEO
-	websiteBytes, err := yaml.Marshal(websiteDoc)
-	if err != nil {
-		return fmt.Errorf("marshal website yaml: %w", err)
+	var websiteBytes []byte
+	var err error
+	if preserveOriginalYAML {
+		websiteBytes, err = b.exportWebsiteYAML(ctx, state.Website)
+		if err != nil {
+			return err
+		}
+	} else {
+		websiteDoc := model.Website{
+			APIVersion: model.APIVersionV1,
+			Kind:       model.KindWebsite,
+			Metadata:   model.Metadata{Name: state.Website.Name},
+			Spec: model.WebsiteSpec{
+				DefaultStyleBundle: state.Website.DefaultStyleBundle,
+				BaseTemplate:       state.Website.BaseTemplate,
+			},
+		}
+		websiteHead, err := parseWebsiteHeadJSON(state.Website.HeadJSON)
+		if err != nil {
+			return err
+		}
+		websiteDoc.Spec.Head = websiteHead
+		websiteSEO, err := parseWebsiteSEOJSON(state.Website.SEOJSON)
+		if err != nil {
+			return err
+		}
+		websiteDoc.Spec.SEO = websiteSEO
+		websiteBytes, err = yaml.Marshal(websiteDoc)
+		if err != nil {
+			return fmt.Errorf("marshal website yaml: %w", err)
+		}
 	}
 	if err := writeFile(filepath.Join(sourceDir, "website.yaml"), websiteBytes); err != nil {
 		return fmt.Errorf("write website.yaml: %w", err)
@@ -536,25 +554,33 @@ func (b *Builder) materializeSource(ctx context.Context, sourceDir string, state
 				return fmt.Errorf("parse layout json for page %q: %w", row.Name, err)
 			}
 		}
-		head, err := parsePageHeadJSON(row.Name, row.HeadJSON)
-		if err != nil {
-			return err
-		}
-		pageDoc := model.Page{
-			APIVersion: model.APIVersionV1,
-			Kind:       model.KindPage,
-			Metadata:   model.Metadata{Name: pageName},
-			Spec: model.PageSpec{
-				Route:       row.Route,
-				Title:       row.Title,
-				Description: row.Description,
-				Layout:      layout,
-				Head:        head,
-			},
-		}
-		pageBytes, err := yaml.Marshal(pageDoc)
-		if err != nil {
-			return fmt.Errorf("marshal page %q yaml: %w", row.Name, err)
+		var pageBytes []byte
+		if preserveOriginalYAML {
+			pageBytes, err = b.exportPageYAML(ctx, row, pageName, layout)
+			if err != nil {
+				return err
+			}
+		} else {
+			head, err := parsePageHeadJSON(row.Name, row.HeadJSON)
+			if err != nil {
+				return err
+			}
+			pageDoc := model.Page{
+				APIVersion: model.APIVersionV1,
+				Kind:       model.KindPage,
+				Metadata:   model.Metadata{Name: pageName},
+				Spec: model.PageSpec{
+					Route:       row.Route,
+					Title:       row.Title,
+					Description: row.Description,
+					Layout:      layout,
+					Head:        head,
+				},
+			}
+			pageBytes, err = yaml.Marshal(pageDoc)
+			if err != nil {
+				return fmt.Errorf("marshal page %q yaml: %w", row.Name, err)
+			}
 		}
 		if err := writeFile(filepath.Join(sourceDir, "pages", pageName+".page.yaml"), pageBytes); err != nil {
 			return fmt.Errorf("write page %q file: %w", row.Name, err)
@@ -605,6 +631,60 @@ func (b *Builder) materializeSource(ctx context.Context, sourceDir string, state
 	return nil
 }
 
+func (b *Builder) WriteSourceArchive(ctx context.Context, websiteName, envName string, dst io.Writer) error {
+	websiteName = strings.TrimSpace(websiteName)
+	envName = strings.TrimSpace(envName)
+	if websiteName == "" || envName == "" {
+		return fmt.Errorf("website and environment are required")
+	}
+	if dst == nil {
+		return fmt.Errorf("source archive writer is required")
+	}
+
+	readTx, err := b.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return fmt.Errorf("begin source export transaction: %w", err)
+	}
+	defer readTx.Rollback()
+	readQ := dbpkg.NewQueries(readTx)
+
+	website, err := readQ.GetWebsiteByName(ctx, websiteName)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return &NotFoundError{msg: fmt.Sprintf("website %q not found", websiteName)}
+		}
+		return fmt.Errorf("load website %q: %w", websiteName, err)
+	}
+	env, err := readQ.GetEnvironmentByName(ctx, website.ID, envName)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return &NotFoundError{msg: fmt.Sprintf("environment %q not found", envName)}
+		}
+		return fmt.Errorf("load environment %q: %w", envName, err)
+	}
+
+	snapshot, err := b.loadDesiredState(ctx, readQ, website, env, false)
+	if err != nil {
+		return fmt.Errorf("load desired state for export: %w", err)
+	}
+	if len(snapshot.Pages) == 0 {
+		return &UnsupportedSourceExportError{msg: fmt.Sprintf("source export requires at least one page; website %q has no pages", websiteName)}
+	}
+	if len(snapshot.StyleBundles) > 1 {
+		return &UnsupportedSourceExportError{msg: fmt.Sprintf("source export supports exactly one style bundle; website %q has %d", websiteName, len(snapshot.StyleBundles))}
+	}
+	sourceDir, err := os.MkdirTemp("", "htmlctl-source-export-*")
+	if err != nil {
+		return fmt.Errorf("create source export temp dir: %w", err)
+	}
+	defer os.RemoveAll(sourceDir)
+
+	if err := b.materializeSource(ctx, sourceDir, snapshot, true); err != nil {
+		return err
+	}
+	return archiveDirectory(sourceDir, dst)
+}
+
 func resolveDefaultStyleRefs(defaultName string, bundles []dbpkg.StyleBundleRow) (map[string]string, error) {
 	name := strings.TrimSpace(defaultName)
 	if name == "" {
@@ -638,6 +718,73 @@ func resolveDefaultStyleRefs(defaultName string, bundles []dbpkg.StyleBundleRow)
 	return files, nil
 }
 
+func (b *Builder) exportWebsiteYAML(ctx context.Context, row dbpkg.WebsiteRow) ([]byte, error) {
+	if strings.TrimSpace(row.ContentHash) != "" {
+		content, err := b.readBlob(ctx, row.ContentHash)
+		if err != nil {
+			return nil, fmt.Errorf("load website source blob: %w", err)
+		}
+		return content, nil
+	}
+
+	websiteDoc := model.Website{
+		APIVersion: model.APIVersionV1,
+		Kind:       model.KindWebsite,
+		Metadata:   model.Metadata{Name: row.Name},
+		Spec: model.WebsiteSpec{
+			DefaultStyleBundle: row.DefaultStyleBundle,
+			BaseTemplate:       row.BaseTemplate,
+		},
+	}
+	websiteHead, err := parseWebsiteHeadJSON(row.HeadJSON)
+	if err != nil {
+		return nil, err
+	}
+	websiteDoc.Spec.Head = websiteHead
+	websiteSEO, err := parseWebsiteSEOJSON(row.SEOJSON)
+	if err != nil {
+		return nil, err
+	}
+	websiteDoc.Spec.SEO = websiteSEO
+	websiteBytes, err := yaml.Marshal(websiteDoc)
+	if err != nil {
+		return nil, fmt.Errorf("marshal website yaml: %w", err)
+	}
+	return websiteBytes, nil
+}
+
+func (b *Builder) exportPageYAML(ctx context.Context, row dbpkg.PageRow, pageName string, layout []model.PageLayoutItem) ([]byte, error) {
+	if strings.TrimSpace(row.ContentHash) != "" {
+		content, err := b.readBlob(ctx, row.ContentHash)
+		if err != nil {
+			return nil, fmt.Errorf("load page %q source blob: %w", row.Name, err)
+		}
+		return content, nil
+	}
+
+	head, err := parsePageHeadJSON(row.Name, row.HeadJSON)
+	if err != nil {
+		return nil, err
+	}
+	pageDoc := model.Page{
+		APIVersion: model.APIVersionV1,
+		Kind:       model.KindPage,
+		Metadata:   model.Metadata{Name: pageName},
+		Spec: model.PageSpec{
+			Route:       row.Route,
+			Title:       row.Title,
+			Description: row.Description,
+			Layout:      layout,
+			Head:        head,
+		},
+	}
+	pageBytes, err := yaml.Marshal(pageDoc)
+	if err != nil {
+		return nil, fmt.Errorf("marshal page %q yaml: %w", row.Name, err)
+	}
+	return pageBytes, nil
+}
+
 func (b *Builder) readBlob(ctx context.Context, contentHash string) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -646,13 +793,9 @@ func (b *Builder) readBlob(ctx context.Context, contentHash string) ([]byte, err
 	if err != nil {
 		return nil, fmt.Errorf("invalid content hash %q: %w", contentHash, err)
 	}
-	blobPath := b.blobs.Path(hashHex)
-	content, err := os.ReadFile(blobPath)
+	content, err := b.blobs.Read(ctx, hashHex)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("blob %s not found", hashHex)
-		}
-		return nil, fmt.Errorf("read blob file %s: %w", blobPath, err)
+		return nil, err
 	}
 	return content, nil
 }
@@ -1052,4 +1195,59 @@ func parseWebsiteSEOJSON(raw string) (*model.WebsiteSEO, error) {
 		return nil, fmt.Errorf("parse website seo json: %w", err)
 	}
 	return &seo, nil
+}
+
+func archiveDirectory(root string, dst io.Writer) error {
+	entries := []string{}
+	if err := filepath.WalkDir(root, func(current string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, current)
+		if err != nil {
+			return err
+		}
+		entries = append(entries, filepath.ToSlash(rel))
+		return nil
+	}); err != nil {
+		return fmt.Errorf("walk source export directory: %w", err)
+	}
+	sort.Strings(entries)
+
+	gzw := gzip.NewWriter(dst)
+	tw := tar.NewWriter(gzw)
+	for _, rel := range entries {
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			_ = tw.Close()
+			_ = gzw.Close()
+			return fmt.Errorf("read source export file %s: %w", rel, err)
+		}
+		hdr := &tar.Header{
+			Name: rel,
+			Mode: 0o644,
+			Size: int64(len(content)),
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			_ = tw.Close()
+			_ = gzw.Close()
+			return fmt.Errorf("write source export tar header %s: %w", rel, err)
+		}
+		if _, err := tw.Write(content); err != nil {
+			_ = tw.Close()
+			_ = gzw.Close()
+			return fmt.Errorf("write source export tar body %s: %w", rel, err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		_ = gzw.Close()
+		return fmt.Errorf("close source export tar: %w", err)
+	}
+	if err := gzw.Close(); err != nil {
+		return fmt.Errorf("close source export gzip: %w", err)
+	}
+	return nil
 }

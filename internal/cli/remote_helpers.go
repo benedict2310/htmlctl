@@ -91,18 +91,32 @@ func parseWebsiteRef(v string) (string, error) {
 
 func normalizeResourceType(v string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(v)) {
-	case "website", "websites", "ws":
+	case "website":
+		return "website", nil
+	case "websites", "ws":
 		return "websites", nil
+	case "site":
+		return "website", nil
 	case "environment", "environments", "env", "envs":
 		return "environments", nil
 	case "release", "releases":
 		return "releases", nil
+	case "page", "pages":
+		return "pages", nil
+	case "component", "components":
+		return "components", nil
+	case "style", "styles":
+		return "styles", nil
+	case "asset", "assets":
+		return "assets", nil
+	case "branding", "brand":
+		return "branding", nil
 	case "domain", "domains":
 		return "domains", nil
 	case "backend", "backends":
 		return "backends", nil
 	default:
-		return "", fmt.Errorf("unsupported resource type %q (supported: websites, environments, releases, domains, backends)", v)
+		return "", fmt.Errorf("unsupported resource type %q (supported: websites, website, environments, releases, pages, components, styles, assets, branding, domains, backends)", v)
 	}
 }
 

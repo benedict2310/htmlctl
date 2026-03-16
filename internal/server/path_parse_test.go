@@ -21,6 +21,12 @@ func TestParsePathsWithValidNames(t *testing.T) {
 	if gotWebsite, gotEnv, ok, err := parseManifestPath("/api/v1/websites/" + website + "/environments/" + env + "/manifest"); !ok || err != nil || gotWebsite != website || gotEnv != env {
 		t.Fatalf("parseManifestPath() = (%q, %q, %v, %v)", gotWebsite, gotEnv, ok, err)
 	}
+	if gotWebsite, gotEnv, ok, err := parseResourcesPath("/api/v1/websites/" + website + "/environments/" + env + "/resources"); !ok || err != nil || gotWebsite != website || gotEnv != env {
+		t.Fatalf("parseResourcesPath() = (%q, %q, %v, %v)", gotWebsite, gotEnv, ok, err)
+	}
+	if gotWebsite, gotEnv, ok, err := parseSourcePath("/api/v1/websites/" + website + "/environments/" + env + "/source"); !ok || err != nil || gotWebsite != website || gotEnv != env {
+		t.Fatalf("parseSourcePath() = (%q, %q, %v, %v)", gotWebsite, gotEnv, ok, err)
+	}
 	if gotWebsite, gotEnv, ok, err := parseBackendsPath("/api/v1/websites/" + website + "/environments/" + env + "/backends"); !ok || err != nil || gotWebsite != website || gotEnv != env {
 		t.Fatalf("parseBackendsPath() = (%q, %q, %v, %v)", gotWebsite, gotEnv, ok, err)
 	}
@@ -68,6 +74,12 @@ func TestParsePathsRejectInvalidNames(t *testing.T) {
 	}
 	if _, _, ok, err := parseManifestPath("/api/v1/websites/sample/environments/staging%1/manifest"); ok || err == nil {
 		t.Fatalf("expected manifest path name validation error, got ok=%v err=%v", ok, err)
+	}
+	if _, _, ok, err := parseResourcesPath("/api/v1/websites/sample/environments/staging%1/resources"); ok || err == nil {
+		t.Fatalf("expected resources path name validation error, got ok=%v err=%v", ok, err)
+	}
+	if _, _, ok, err := parseSourcePath("/api/v1/websites/sample/environments/staging%1/source"); ok || err == nil {
+		t.Fatalf("expected source path name validation error, got ok=%v err=%v", ok, err)
 	}
 	if _, _, ok, err := parseBackendsPath("/api/v1/websites/sample/environments/staging%1/backends"); ok || err == nil {
 		t.Fatalf("expected backends path name validation error, got ok=%v err=%v", ok, err)

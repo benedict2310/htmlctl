@@ -24,6 +24,10 @@ func (s *Server) handleWebsiteAPI(w http.ResponseWriter, r *http.Request) {
 		s.handleRollback(w, r)
 	case strings.HasSuffix(r.URL.Path, "/manifest"):
 		s.handleManifest(w, r)
+	case strings.HasSuffix(r.URL.Path, "/resources"):
+		s.handleResources(w, r)
+	case strings.HasSuffix(r.URL.Path, "/source"):
+		s.handleSource(w, r)
 	case strings.HasSuffix(r.URL.Path, "/logs"):
 		s.handleLogs(w, r)
 	case strings.HasSuffix(r.URL.Path, "/backends"):

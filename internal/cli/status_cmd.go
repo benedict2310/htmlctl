@@ -11,7 +11,7 @@ func newStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status [website/<name>]",
 		Short: "Show environment status for a website",
-		Long:  "Show environment status for a website. Omit website/<name> to use the active context website.",
+		Long:  "Show environment status for a website. Omit website/<name> to use the active context website. Use `inspect website` or `get pages/components` when you need deeper content-level detail.",
 		Example: "  htmlctl status website/sample\n" +
 			"  htmlctl status",
 		Args: cobra.MaximumNArgs(1),
@@ -46,6 +46,8 @@ func newStatusCmd() *cobra.Command {
 				{"environment", status.Environment},
 				{"active_release", output.OrNone(status.ActiveReleaseID)},
 				{"release_timestamp", output.OrNone(status.ActiveReleaseTimestamp)},
+				{"default_style_bundle", stringOrNone(status.DefaultStyleBundle)},
+				{"base_template", stringOrNone(status.BaseTemplate)},
 				{"pages", itoa(status.ResourceCounts.Pages)},
 				{"components", itoa(status.ResourceCounts.Components)},
 				{"styles", itoa(status.ResourceCounts.Styles)},

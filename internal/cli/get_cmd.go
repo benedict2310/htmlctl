@@ -2,7 +2,9 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/benedict2310/htmlctl/internal/client"
 	"github.com/benedict2310/htmlctl/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -13,7 +15,12 @@ func newGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get <resource-type>",
 		Short: "List remote resources",
-		Args:  cobra.ExactArgs(1),
+		Long:  "List remote resources. Use `get` for inventory and `inspect` for deeper page/component/website details.\n\nSupported resource types: websites, website, environments, releases, pages, components, styles, assets, branding, domains, backends.",
+		Example: "  htmlctl get websites\n" +
+			"  htmlctl get pages --context staging\n" +
+			"  htmlctl get assets --output json\n" +
+			"  htmlctl inspect page index --context staging",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rt, api, err := runtimeAndClientFromCommand(cmd)
 			if err != nil {
@@ -51,6 +58,16 @@ func newGetCmd() *cobra.Command {
 					})
 				}
 				return output.WriteTable(cmd.OutOrStdout(), []string{"NAME", "DEFAULT_STYLE", "BASE_TEMPLATE", "UPDATED_AT"}, rows)
+
+			case "website":
+				resources, err := loadResourcesForContext(cmd)
+				if err != nil {
+					return err
+				}
+				if format != output.FormatTable {
+					return output.WriteStructured(cmd.OutOrStdout(), format, resources.Site)
+				}
+				return writeWebsiteTable(cmd, resources.Site, resources.ResourceCounts)
 
 			case "environments":
 				website, err := requireContextWebsite(rt)
@@ -112,6 +129,121 @@ func newGetCmd() *cobra.Command {
 					})
 				}
 				return output.WriteTable(cmd.OutOrStdout(), []string{"RELEASE_ID", "STATUS", "ACTIVE", "CREATED_AT"}, rows)
+
+			case "pages":
+				resources, err := loadResourcesForContext(cmd)
+				if err != nil {
+					return err
+				}
+				if format != output.FormatTable {
+					return output.WriteStructured(cmd.OutOrStdout(), format, resources.Pages)
+				}
+				if len(resources.Pages) == 0 {
+					fmt.Fprintln(cmd.OutOrStdout(), "No pages found.")
+					return nil
+				}
+				rows := make([][]string, 0, len(resources.Pages))
+				for _, page := range resources.Pages {
+					rows = append(rows, []string{
+						page.Name,
+						page.Route,
+						itoa(len(page.Layout)),
+						page.UpdatedAt,
+					})
+				}
+				return output.WriteTable(cmd.OutOrStdout(), []string{"NAME", "ROUTE", "LAYOUT_ITEMS", "UPDATED_AT"}, rows)
+
+			case "components":
+				resources, err := loadResourcesForContext(cmd)
+				if err != nil {
+					return err
+				}
+				if format != output.FormatTable {
+					return output.WriteStructured(cmd.OutOrStdout(), format, resources.Components)
+				}
+				if len(resources.Components) == 0 {
+					fmt.Fprintln(cmd.OutOrStdout(), "No components found.")
+					return nil
+				}
+				rows := make([][]string, 0, len(resources.Components))
+				for _, component := range resources.Components {
+					rows = append(rows, []string{
+						component.Name,
+						component.Scope,
+						boolWord(component.HasCSS),
+						boolWord(component.HasJS),
+						component.UpdatedAt,
+					})
+				}
+				return output.WriteTable(cmd.OutOrStdout(), []string{"NAME", "SCOPE", "CSS", "JS", "UPDATED_AT"}, rows)
+
+			case "styles":
+				resources, err := loadResourcesForContext(cmd)
+				if err != nil {
+					return err
+				}
+				if format != output.FormatTable {
+					return output.WriteStructured(cmd.OutOrStdout(), format, resources.Styles)
+				}
+				if len(resources.Styles) == 0 {
+					fmt.Fprintln(cmd.OutOrStdout(), "No styles found.")
+					return nil
+				}
+				rows := make([][]string, 0, len(resources.Styles))
+				for _, style := range resources.Styles {
+					rows = append(rows, []string{
+						style.Name,
+						itoa(len(style.Files)),
+						style.UpdatedAt,
+					})
+				}
+				return output.WriteTable(cmd.OutOrStdout(), []string{"NAME", "FILES", "UPDATED_AT"}, rows)
+
+			case "assets":
+				resources, err := loadResourcesForContext(cmd)
+				if err != nil {
+					return err
+				}
+				if format != output.FormatTable {
+					return output.WriteStructured(cmd.OutOrStdout(), format, resources.Assets)
+				}
+				if len(resources.Assets) == 0 {
+					fmt.Fprintln(cmd.OutOrStdout(), "No assets found.")
+					return nil
+				}
+				rows := make([][]string, 0, len(resources.Assets))
+				for _, asset := range resources.Assets {
+					rows = append(rows, []string{
+						asset.Path,
+						asset.ContentType,
+						itoa64(asset.SizeBytes),
+						asset.ContentHash,
+					})
+				}
+				return output.WriteTable(cmd.OutOrStdout(), []string{"PATH", "TYPE", "SIZE_BYTES", "HASH"}, rows)
+
+			case "branding":
+				resources, err := loadResourcesForContext(cmd)
+				if err != nil {
+					return err
+				}
+				if format != output.FormatTable {
+					return output.WriteStructured(cmd.OutOrStdout(), format, resources.Branding)
+				}
+				if len(resources.Branding) == 0 {
+					fmt.Fprintln(cmd.OutOrStdout(), "No branding assets found.")
+					return nil
+				}
+				rows := make([][]string, 0, len(resources.Branding))
+				for _, asset := range resources.Branding {
+					rows = append(rows, []string{
+						asset.Slot,
+						asset.SourcePath,
+						asset.ContentType,
+						itoa64(asset.SizeBytes),
+					})
+				}
+				return output.WriteTable(cmd.OutOrStdout(), []string{"SLOT", "SOURCE_PATH", "TYPE", "SIZE_BYTES"}, rows)
 
 			case "domains":
 				website, err := requireContextWebsite(rt)
@@ -183,4 +315,45 @@ func newGetCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&outputMode, "output", "o", "table", "Output format (table|json|yaml)")
 
 	return cmd
+}
+
+func boolWord(v bool) string {
+	if v {
+		return "yes"
+	}
+	return "no"
+}
+
+func itoa64(v int64) string {
+	return fmt.Sprintf("%d", v)
+}
+
+func writeWebsiteTable(cmd *cobra.Command, site client.WebsiteResource, counts client.ResourceCounts) error {
+	seo := site.SEO
+	head := site.Head
+	rows := [][]string{
+		{"name", site.Name},
+		{"default_style_bundle", site.DefaultStyleBundle},
+		{"base_template", site.BaseTemplate},
+		{"content_hash", stringOrNone(site.ContentHash)},
+		{"icons_configured", boolWord(head != nil && head.Icons != nil)},
+		{"public_base_url", stringOrNone(optionalPublicBaseURL(site))},
+		{"robots_enabled", boolWord(seo != nil && seo.Robots != nil && seo.Robots.Enabled)},
+		{"sitemap_enabled", boolWord(seo != nil && seo.Sitemap != nil && seo.Sitemap.Enabled)},
+		{"llms_txt_enabled", boolWord(seo != nil && seo.LLMsTxt != nil && seo.LLMsTxt.Enabled)},
+		{"structured_data_enabled", boolWord(seo != nil && seo.StructuredData != nil && seo.StructuredData.Enabled)},
+		{"pages", itoa(counts.Pages)},
+		{"components", itoa(counts.Components)},
+		{"styles", itoa(counts.Styles)},
+		{"assets", itoa(counts.Assets)},
+		{"scripts", itoa(counts.Scripts)},
+	}
+	return output.WriteTable(cmd.OutOrStdout(), []string{"FIELD", "VALUE"}, rows)
+}
+
+func optionalPublicBaseURL(site client.WebsiteResource) string {
+	if site.SEO == nil {
+		return ""
+	}
+	return strings.TrimSpace(site.SEO.PublicBaseURL)
 }

@@ -78,8 +78,8 @@ jobs:
           docker run --rm --network htmlctl-net -v "$STATE_DIR:/work" alpine:3.20 sh -lc '
             apk add --no-cache openssh-client >/dev/null
             ssh-keyscan -p 22 -H htmlservd-first-deploy > /work/known_hosts
+            chmod 0644 /work/known_hosts
           '
-          chmod 0644 "$STATE_DIR/known_hosts"
 
           cat > "$STATE_DIR/htmlctl-config.yaml" <<'YAML'
           apiVersion: htmlctl.dev/v1

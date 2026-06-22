@@ -16,6 +16,7 @@ jobs:
       - name: Entrypoint Security Validation
         run: |
           bash scripts/test-entrypoint-security.sh
+          bash scripts/test-docker-e2e-workflow.sh
 
       - name: Build Docker Images
         run: |
@@ -32,6 +33,7 @@ jobs:
           chmod 0777 "$STATE_DIR/data" "$STATE_DIR/caddy"
 
           ssh-keygen -t ed25519 -N '' -f "$STATE_DIR/id_ed25519" >/dev/null
+          chmod 0644 "$STATE_DIR/id_ed25519"
 
           docker network create htmlctl-net >/dev/null 2>&1 || true
           docker rm -f htmlservd-first-deploy >/dev/null 2>&1 || true
@@ -77,6 +79,7 @@ jobs:
             apk add --no-cache openssh-client >/dev/null
             ssh-keyscan -p 22 -H htmlservd-first-deploy > /work/known_hosts
           '
+          chmod 0644 "$STATE_DIR/known_hosts"
 
           cat > "$STATE_DIR/htmlctl-config.yaml" <<'YAML'
           apiVersion: htmlctl.dev/v1

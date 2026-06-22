@@ -116,6 +116,11 @@ func TestWrapHandlerRecordsTimestampsAndHTTPStatusAttributes(t *testing.T) {
 	if got, ok := intAttribute(span.Attributes(), "http.response.status_code"); !ok || got != http.StatusTeapot {
 		t.Fatalf("http.response.status_code attribute = %d, %t; want %d, true", got, ok, http.StatusTeapot)
 	}
+	for _, key := range []string{"timestamp", "span.start_time", "span.end_time"} {
+		if got, ok := stringAttribute(span.Attributes(), key); !ok || got == "" {
+			t.Fatalf("%s attribute = %q, %t; want non-empty timestamp", key, got, ok)
+		}
+	}
 }
 
 func TestOTelLogWriterEmitsTimestampedRecords(t *testing.T) {
@@ -155,6 +160,15 @@ func intAttribute(attrs []attribute.KeyValue, key string) (int, bool) {
 		}
 	}
 	return 0, false
+}
+
+func stringAttribute(attrs []attribute.KeyValue, key string) (string, bool) {
+	for _, attr := range attrs {
+		if string(attr.Key) == key {
+			return attr.Value.AsString(), true
+		}
+	}
+	return "", false
 }
 
 type recordingLogExporter struct {

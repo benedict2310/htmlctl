@@ -151,19 +151,31 @@ type statusAnnotatingHandler struct {
 }
 
 func (h statusAnnotatingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	start := time.Now().UTC()
+	span := trace.SpanFromContext(r.Context())
+	if span.IsRecording() {
+		span.SetAttributes(
+			attribute.String("timestamp", start.Format(time.RFC3339Nano)),
+			attribute.String("span.start_time", start.Format(time.RFC3339Nano)),
+			attribute.Int64("span.start_time_unix_nano", start.UnixNano()),
+		)
+	}
+
 	metrics := httpsnoop.CaptureMetrics(h.handler, w, r)
 	status := metrics.Code
 	if status == 0 {
 		status = http.StatusOK
 	}
 
-	span := trace.SpanFromContext(r.Context())
 	if !span.IsRecording() {
 		return
 	}
+	end := time.Now().UTC()
 	span.SetAttributes(
 		attribute.Int("http.status_code", status),
 		attribute.Int("http.response.status_code", status),
+		attribute.String("span.end_time", end.Format(time.RFC3339Nano)),
+		attribute.Int64("span.end_time_unix_nano", end.UnixNano()),
 	)
 	if status >= http.StatusInternalServerError {
 		span.SetStatus(codes.Error, http.StatusText(status))

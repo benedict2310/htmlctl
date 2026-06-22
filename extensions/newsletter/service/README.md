@@ -66,6 +66,11 @@ NEWSLETTER_LINK_SECRET='replace-with-32-plus-random-chars' \
 
 - `NEWSLETTER_HTTP_ADDR` (defaults by env: `127.0.0.1:9501` for staging, `127.0.0.1:9502` for prod)
 - `NEWSLETTER_RESEND_API_KEY` (required for real verification/campaign delivery; staging may omit it only when no outbound mail should be sent)
+- `OTEL_EXPORTER_OTLP_ENDPOINT` enables OpenTelemetry trace export when set
+- `OTEL_EXPORTER_OTLP_PROTOCOL` must be `http/protobuf` when telemetry is enabled
+- `OTEL_EXPORTER_OTLP_HEADERS` carries the OTLP authorization header; keep the real token only in the host env file or secret store
+- `OTEL_SERVICE_NAME` defaults to `htmlctl-newsletter` if unset
+- `OTEL_RESOURCE_ATTRIBUTES` can set deployment-specific attributes such as `service.namespace=htmlctl,deployment.environment=staging|prod`
 
 ## Security Defaults
 

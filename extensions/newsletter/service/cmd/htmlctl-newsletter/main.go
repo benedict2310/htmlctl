@@ -22,6 +22,7 @@ import (
 	"github.com/benedict2310/htmlctl/extensions/newsletter/service/internal/config"
 	"github.com/benedict2310/htmlctl/extensions/newsletter/service/internal/migrate"
 	"github.com/benedict2310/htmlctl/extensions/newsletter/service/internal/server"
+	"github.com/benedict2310/htmlctl/extensions/newsletter/service/internal/telemetry"
 )
 
 func main() {
@@ -56,6 +57,22 @@ func runServe() error {
 		return err
 	}
 
+	otelShutdown, otelConfig, err := telemetry.Init(context.Background(), telemetry.Options{
+		ServiceName: "htmlctl-newsletter",
+		Environment: cfg.Environment,
+		Logger:      log.Default(),
+	})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := otelShutdown(ctx); err != nil {
+			log.Printf("opentelemetry shutdown failed: %v", err)
+		}
+	}()
+
 	db, err := openDB(cfg.DatabaseURL)
 	if err != nil {
 		return err
@@ -88,16 +105,21 @@ func runServe() error {
 	}
 	defer ln.Close()
 
+	handler := server.New(server.Options{
+		Store:         store,
+		Mailer:        mailer,
+		Logger:        log.Default(),
+		Environment:   cfg.Environment,
+		PublicBaseURL: cfg.PublicBaseURL,
+		LinkSecret:    cfg.LinkSecret,
+	})
+	if otelConfig.Enabled {
+		handler = telemetry.WrapHandler(handler, otelConfig.ServiceName)
+	}
+
 	httpServer := &http.Server{
-		Addr: cfg.HTTPAddr,
-		Handler: server.New(server.Options{
-			Store:         store,
-			Mailer:        mailer,
-			Logger:        log.Default(),
-			Environment:   cfg.Environment,
-			PublicBaseURL: cfg.PublicBaseURL,
-			LinkSecret:    cfg.LinkSecret,
-		}),
+		Addr:              cfg.HTTPAddr,
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,
